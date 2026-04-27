@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>闪电飞车 Web 试玩版</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <header class="window-frame">
+        <span class="frame-corner">▮</span>
+        <h1 class="frame-title">闪电飞车</h1>
+        <nav class="frame-buttons">
+          <span title="more">•••</span>
+          <span title="min">━</span>
+          <span title="full">⛶</span>
+          <span title="record">⊙</span>
+        </nav>
+      </header>
+
+      <div class="rotate-tip">
+        <strong>请横屏试玩</strong>
+        <span>横屏后画面和按钮会更接近原游戏。</span>
+      </div>
+
+      <section id="splash" class="screen splash-screen active">
+        <div class="splash-stage">
+          <div class="splash-tag">MADE<br />WITH</div>
+          <div class="splash-cube">
+            <span class="cube-top"></span>
+            <span class="cube-left"></span>
+            <span class="cube-right"></span>
+          </div>
+          <div class="splash-brand">Unity</div>
+          <div class="splash-reg">®</div>
+        </div>
+      </section>
+
+      <section id="menu" class="screen menu-screen">
+        <div class="menu-bg"></div>
+        <button class="gear-tile" id="gearBtn" aria-label="settings">
+          <svg viewBox="0 0 24 24" width="38" height="38" fill="#fff"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1A7.5 7.5 0 0 0 14.7 5l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2.3 1.4l-2.5-1-2 3.5L5.2 11a7.4 7.4 0 0 0 0 2L3 14.6l2 3.5 2.5-1a7.5 7.5 0 0 0 2.3 1.4l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.3-1.4l2.5 1 2-3.5L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
+        </button>
+
+        <div class="currency-bar">
+          <span class="coin"><i class="coin-bottle"></i><b id="coinTotal">0</b></span>
+          <button id="addCoins" class="plus-btn">＋</button>
+          <span class="cash"><i class="cash-gem"></i><b id="cashTotal">0</b></span>
+          <span class="ring"></span>
+        </div>
+
+        <main class="tile-grid">
+          <button id="startGame" class="tile start-tile">
+            <span class="tile-art car-art"></span>
+            <span class="tile-arc"></span>
+            <strong>开始游戏 》</strong>
+          </button>
+          <button class="tile wide-tile locked">
+            <span class="tile-photo open-world"></span>
+            <em class="lock">🔒</em>
+            <strong>开放世界</strong>
+          </button>
+          <button class="tile small-tile garage-tile locked">
+            <span class="tile-photo garage-art"></span>
+            <em class="lock">🔒</em>
+            <strong>车库</strong>
+          </button>
+          <button class="tile small-tile task-tile locked">
+            <span class="tile-photo task-art"></span>
+            <em class="lock">🔒</em>
+            <strong>任务</strong>
+          </button>
+          <button class="tile tall-tile muted">
+            <span class="tile-photo dev-art"></span>
+            <strong>开发中</strong>
+          </button>
+        </main>
+      </section>
+
+      <section id="hud" class="hud">
+        <button id="pauseBtn" class="hud-pause">Ⅱ</button>
+
+        <div class="speed-box">
+          <span id="speed">0</span>
+          <small>KM/H</small>
+        </div>
+
+        <div class="race-icons">
+          <span class="green-light"></span>
+          <span class="finish-flag"></span>
+        </div>
+        <button id="resetBtn" class="reset-btn" aria-label="重来">↻</button>
+
+        <div class="mission-toast" id="missionToast">冲到终点！</div>
+
+        <div class="nitro-wrap">
+          <button id="nitroBtn" class="nitro-btn" aria-label="nitro">
+            <svg viewBox="0 0 32 32" width="44" height="44"><path fill="#1a86c4" d="M19 3 7 18h6l-2 11 13-16h-6l1-10z"/></svg>
+          </button>
+          <span id="nitroCount">1</span>
+        </div>
+
+        <div class="steer-controls">
+          <button id="leftBtn" aria-label="left">‹</button>
+          <button id="rightBtn" aria-label="right">›</button>
+        </div>
+        <div class="pedals">
+          <button id="brakeBtn" aria-label="brake" class="pedal-brake">▰</button>
+          <button id="gasBtn" aria-label="gas" class="pedal-gas">▰</button>
+        </div>
+
+        <div class="hud-progress">
+          <span id="progressFill"></span>
+        </div>
+      </section>
+
+      <section id="pauseScreen" class="screen overlay-screen">
+        <div class="modal">
+          <h2>暂停</h2>
+          <p>休息一下眼睛，准备好了再继续。</p>
+          <button id="resumeBtn" class="primary">继续游戏</button>
+          <button id="homeBtn" class="secondary">返回菜单</button>
+        </div>
+      </section>
+
+      <section id="resultScreen" class="screen overlay-screen">
+        <div class="modal">
+          <h2 id="resultTitle">闯关成功</h2>
+          <p id="resultCopy">收集金币，躲开障碍，冲过终点。</p>
+          <div class="result-stats">
+            <div><b id="resStatTime">--</b><span>用时</span></div>
+            <div><b id="resStatCoins">0</b><span>金币</span></div>
+            <div><b id="resStatHits">0</b><span>碰撞</span></div>
+          </div>
+          <button id="againBtn" class="primary">再玩一局</button>
+          <button id="resultHomeBtn" class="secondary">返回菜单</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,144 @@
+<view class="game-page">
+  <canvas
+    id="gameCanvas"
+    type="2d"
+    class="game-canvas"
+    bindtouchstart="onTouchStart"
+    bindtouchmove="onTouchMove"
+    bindtouchend="onTouchEnd"
+  ></canvas>
+
+  <view class="hud" wx:if="{{screen === 'playing' || screen === 'paused'}}">
+    <view class="hud-top">
+      <view class="hud-stack">
+        <view class="hud-pill score">★ {{score}}</view>
+        <view class="hud-pill coins">● {{coins}}</view>
+      </view>
+      <button class="pause-btn" bindtap="pauseGame">Ⅱ</button>
+      <view class="hud-stack right">
+        <view class="hud-pill stage">第 {{stage}} 关</view>
+        <view class="hud-pill timer {{sessionLeftMs <= 60000 ? 'warn' : ''}}">{{sessionTimeText}}</view>
+      </view>
+    </view>
+    <view class="mini-goal">
+      <view class="mini-goal-bar" style="width: {{goalPercent}}%;"></view>
+      <text>{{goalText}}</text>
+    </view>
+  </view>
+
+  <view class="control-pad" wx:if="{{screen === 'playing'}}">
+    <button class="round-control" bindtap="moveLeft">‹</button>
+    <button class="jump-control" bindtap="jump">跳</button>
+    <button class="round-control" bindtap="moveRight">›</button>
+  </view>
+
+  <view class="screen title-screen" wx:if="{{screen === 'title'}}">
+    <view class="float-stars">
+      <text wx:for="{{floatingStars}}" wx:key="id" style="left: {{item.left}}%; animation-delay: {{item.delay}}s; animation-duration: {{item.duration}}s;">{{item.icon}}</text>
+    </view>
+    <view class="brand">
+      <text class="eyebrow">6岁小朋友友好版</text>
+      <text class="title">萌宠星星跑</text>
+      <text class="subtitle">滑一滑，跳一跳，帮小车收集快乐星星</text>
+    </view>
+    <view class="pet-row">
+      <view
+        class="pet-card {{selectedPet === item.id ? 'active' : ''}}"
+        wx:for="{{pets}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="selectPet"
+      >
+        <text class="pet-emoji">{{item.emoji}}</text>
+        <text class="pet-name">{{item.name}}</text>
+      </view>
+    </view>
+    <view class="health-card">
+      <view><text>今日星星</text><text>{{todayStars}} / {{dailyStarLimit}}</text></view>
+      <view><text>本次可玩</text><text>{{playLimitText}}</text></view>
+      <view><text>休息规则</text><text>到点休息 {{restText}}</text></view>
+    </view>
+    <button class="primary-btn" bindtap="startGame">开始冒险</button>
+    <view class="title-actions">
+      <button bindtap="showGuide">怎么玩</button>
+      <button bindtap="openParentGate">家长设置</button>
+    </view>
+  </view>
+
+  <view class="screen soft-screen" wx:if="{{screen === 'guide'}}">
+    <view class="modal">
+      <text class="modal-title">怎么玩</text>
+      <view class="guide-list">
+        <text>左右滑动：换跑道</text>
+        <text>点击屏幕：跳过小路障</text>
+        <text>收集星星：点亮本关目标</text>
+        <text>连续玩到时间：自动进入休息</text>
+      </view>
+      <button class="primary-btn small" bindtap="backHome">明白啦</button>
+    </view>
+  </view>
+
+  <view class="screen soft-screen" wx:if="{{screen === 'paused'}}">
+    <view class="modal">
+      <text class="modal-title">暂停中</text>
+      <text class="modal-copy">喝口水、看看远处，准备好了再继续。</text>
+      <button class="primary-btn small" bindtap="resumeGame">继续</button>
+      <button class="plain-btn" bindtap="backHome">回主页</button>
+    </view>
+  </view>
+
+  <view class="screen soft-screen" wx:if="{{screen === 'over'}}">
+    <view class="modal">
+      <text class="modal-title">{{overTitle}}</text>
+      <text class="big-score">{{score}}</text>
+      <view class="result-grid">
+        <view><text>{{coins}}</text><text>金币</text></view>
+        <view><text>{{stage}}</text><text>关卡</text></view>
+        <view><text>{{bestScore}}</text><text>最佳</text></view>
+      </view>
+      <button class="primary-btn small" bindtap="startGame">再玩一局</button>
+      <button class="plain-btn" bindtap="backHome">回主页</button>
+    </view>
+  </view>
+
+  <view class="screen rest-screen" wx:if="{{screen === 'rest'}}">
+    <view class="rest-orbit"></view>
+    <view class="rest-panel">
+      <text class="rest-emoji">☁</text>
+      <text class="rest-title">休息时间到啦</text>
+      <text class="rest-copy">{{restMessage}}</text>
+      <text class="rest-count">{{restCountdownText}}</text>
+      <view class="rest-progress">
+        <view style="width: {{restProgress}}%;"></view>
+      </view>
+      <text class="rest-tip">{{restTip}}</text>
+      <button class="plain-btn" bindtap="openParentGate">家长临时处理</button>
+    </view>
+  </view>
+
+  <view class="screen parent-screen" wx:if="{{showParentPanel}}">
+    <view class="parent-modal">
+      <text class="modal-title">家长设置</text>
+      <text class="modal-copy">请输入这道题的答案：{{parentQuestion.text}}</text>
+      <input class="answer-input" type="number" value="{{parentAnswer}}" bindinput="onParentAnswerInput" placeholder="答案" />
+      <view class="setting-row">
+        <text>每次可玩</text>
+        <view>
+          <button data-delta="-1" bindtap="changePlayLimit">-</button>
+          <text>{{playLimitText}}</text>
+          <button data-delta="1" bindtap="changePlayLimit">+</button>
+        </view>
+      </view>
+      <view class="setting-row">
+        <text>休息时长</text>
+        <view>
+          <button data-delta="-1" bindtap="changeRestLimit">-</button>
+          <text>{{restText}}</text>
+          <button data-delta="1" bindtap="changeRestLimit">+</button>
+        </view>
+      </view>
+      <button class="primary-btn small" bindtap="saveParentSettings">保存</button>
+      <button class="plain-btn" bindtap="closeParentGate">关闭</button>
+    </view>
+  </view>
+</view>
