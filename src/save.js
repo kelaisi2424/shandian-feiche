@@ -12,10 +12,10 @@ const DEFAULT = {
   totalRaces: 0,
   bestTimeMs: null,         // best lap on track #0 by car #0
   bestTimePerTrack: {},     // { [trackId]: { ms, carId } }
-  unlockedCars: ["sport"],  // sport, future, sedan
-  unlockedTracks: ["sky"],  // sky, sunset, neon
+  unlockedCars: ["sport"],     // sport, future, sedan
+  unlockedTracks: ["neon"],    // sky, sunset, neon — default to neon night for the cinematic look
   selectedCar: "sport",
-  selectedTrack: "sky",
+  selectedTrack: "neon",
   leaderboard: [],          // [{trackId, carId, ms, coins, hits, at}], top 10 by ms
   // engagement
   lastDaily: null,          // YYYY-MM-DD

@@ -107,14 +107,14 @@ const TRACKS = {
   neon: {
     id: "neon",
     label: "霓虹夜幕",
-    desc: "夜间高速",
-    cost: 1200,
-    length: 3000,
-    sky: 0x0a1338,
-    fog: [0x0a1338, 200, 760],
-    sun: 0xb0e0ff,
+    desc: "夜间城市赛道",
+    cost: 0,                          // unlocked by default for the cinematic experience
+    length: 2400,
+    sky: 0x050a1a,
+    fog: [0x050a1a, 110, 460],        // tighter night fog for atmosphere
+    sun: 0x6688cc,                    // moonlight tone
     edgeMode: "chevron",
-    rampGap: 130
+    rampGap: 200
   }
 }
 
@@ -1094,9 +1094,59 @@ function buildScenery() {
   ground.position.set(0, -60, -Track ? -Track.length / 2 : -700)
   sceneryAdd(ground)
 
+  const trackId = Save.get().selectedTrack
+  const isNight = trackId === "neon"
+
+  // ─── light poles every 50m along both sides ───
+  for (let s = 30; s < Track.length; s += 50) {
+    for (const sd of [-1, 1]) {
+      const pole = makeLightPole(isNight)
+      const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + 1.6), 0)
+      pole.position.copy(pos)
+      // face the pole "towards" the road
+      const tan = progressTangent(s).clone()
+      pole.lookAt(pos.clone().add(tan))
+      pole.rotateY(sd > 0 ? Math.PI / 2 : -Math.PI / 2)
+      sceneryAdd(pole)
+    }
+  }
+
+  // ─── neon billboards every 220m, alternating sides — fictional racing brands ───
+  const billboardLines = ["LIGHTNING", "NEON RACE", "SPEED ZONE", "TURBO", "CIRCUIT", "VICTORY LANE"]
+  for (let i = 0; i * 220 < Track.length; i++) {
+    const s = 160 + i * 220
+    if (s >= Track.length) break
+    const side = i % 2 ? -1 : 1
+    const board = makeBillboard(billboardLines[i % billboardLines.length], i % 3 === 0 ? 0xff2a90 : (i % 3 === 1 ? 0x26d6ff : 0xffd31a))
+    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 9), 5.4)
+    board.position.copy(pos)
+    const tan = progressTangent(s).clone()
+    board.lookAt(pos.clone().add(tan))
+    board.rotateY(side > 0 ? Math.PI / 2 : -Math.PI / 2)
+    sceneryAdd(board)
+  }
+
+  // ─── distant city silhouettes (only on night track, lots of skyscraper bars) ───
+  if (isNight) {
+    for (let i = 0; i < 40; i++) {
+      const sd = i % 2 ? -1 : 1
+      const s = 30 + i * 60
+      if (s >= Track.length) break
+      const dist = 60 + (i % 5) * 16
+      const h = 18 + (i * 7) % 32
+      const w = 8 + (i % 4) * 3
+      const buildings = makeCityBlock(w, h, i)
+      const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + dist), 0)
+      buildings.position.copy(pos)
+      const tan = progressTangent(s).clone()
+      buildings.lookAt(pos.clone().add(tan))
+      sceneryAdd(buildings)
+    }
+  }
+
   // turbines + trusses placed along the curve: every ~80m, alternating sides,
   // so they follow the track instead of drifting off into nothing.
-  const turbineCount = Math.floor(Track.length / 90)
+  const turbineCount = isNight ? 0 : Math.floor(Track.length / 90)
   for (let i = 0; i < turbineCount; i++) {
     const fan = makeTurbine(i)
     const side = i % 2 ? -1 : 1
@@ -1104,29 +1154,30 @@ function buildScenery() {
     if (s >= Track.length) break
     const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 36 + (i % 3) * 6), 4.5)
     fan.position.copy(pos)
-    world.add(fan)
+    sceneryAdd(fan)
   }
 
-  // signature floating ring + ball right at the start
-  const startBall = makeFloatingBall()
-  const startBallPos = progressToWorld(2, CFG.roadHalfWidth + 4, 4.4)
-  startBall.position.copy(startBallPos)
-  startBall.scale.setScalar(0.85)
-  world.add(startBall)
-
-  // floating balls along the route
-  for (let i = 0; i < 12; i++) {
-    const ball = makeFloatingBall()
-    const side = i % 2 ? -1 : 1
-    const s = 120 + i * 140
-    if (s >= Track.length) break
-    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 14 + rand(0, 8)), 11 + rand(0, 6))
-    ball.position.copy(pos)
-    world.add(ball)
+  // signature floating ring + ball right at the start (only daytime tracks)
+  if (!isNight) {
+    const startBall = makeFloatingBall()
+    const startBallPos = progressToWorld(2, CFG.roadHalfWidth + 4, 4.4)
+    startBall.position.copy(startBallPos)
+    startBall.scale.setScalar(0.85)
+    sceneryAdd(startBall)
+    // floating balls along the route
+    for (let i = 0; i < 12; i++) {
+      const ball = makeFloatingBall()
+      const side = i % 2 ? -1 : 1
+      const s = 120 + i * 140
+      if (s >= Track.length) break
+      const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 14 + rand(0, 8)), 11 + rand(0, 6))
+      ball.position.copy(pos)
+      sceneryAdd(ball)
+    }
   }
 
-  // truss towers along the curve, both sides
-  const towerCount = Math.floor(Track.length / 80)
+  // truss towers along the curve (skipped at night — billboards take their place)
+  const towerCount = isNight ? 0 : Math.floor(Track.length / 80)
   for (let i = 0; i < towerCount; i++) {
     const tower = makeTower(i)
     const side = i % 2 ? -1 : 1
@@ -1134,7 +1185,7 @@ function buildScenery() {
     if (s >= Track.length) break
     const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 24 + (i % 3) * 6), 0)
     tower.position.copy(pos)
-    world.add(tower)
+    sceneryAdd(tower)
   }
 
   // grandstand at start
@@ -1160,6 +1211,159 @@ function buildScenery() {
     tree.position.copy(pos)
     sceneryAdd(tree)
   }
+}
+
+// ─── Light pole with a glowing ball ───
+function makeLightPole(isNight) {
+  const g = new THREE.Group()
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 6.5, 8), new THREE.MeshStandardMaterial({ color: 0x202838, roughness: 0.5 }))
+  post.position.y = 3.25
+  g.add(post)
+  // arm reaching toward the road
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x202838 }))
+  arm.rotation.z = Math.PI / 2
+  arm.position.set(0.6, 6.4, 0)
+  g.add(arm)
+  // glowing lamp head
+  const lampColor = isNight ? 0xfff5b8 : 0xffffff
+  const lamp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 12, 8),
+    new THREE.MeshStandardMaterial({
+      color: lampColor,
+      emissive: lampColor,
+      emissiveIntensity: isNight ? 1.4 : 0.4
+    })
+  )
+  lamp.position.set(1.2, 6.4, 0)
+  g.add(lamp)
+  if (isNight) {
+    const halo = new THREE.PointLight(lampColor, 0.6, 14)
+    halo.position.copy(lamp.position)
+    g.add(halo)
+  }
+  return g
+}
+
+// ─── Neon billboard with painted text and glowing border ───
+function makeBillboard(text, accentHex) {
+  const g = new THREE.Group()
+  const w = 9
+  const h = 4
+  // posts
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5.4, 0.2), new THREE.MeshStandardMaterial({ color: 0x101828 }))
+    post.position.set(sx * (w / 2 - 0.4), -2.7, 0)
+    g.add(post)
+  }
+  // canvas-painted board with text
+  const c = document.createElement("canvas")
+  c.width = 1024
+  c.height = 256
+  const ctx = c.getContext("2d")
+  const bg = ctx.createLinearGradient(0, 0, 0, 256)
+  bg.addColorStop(0, "#0a1428")
+  bg.addColorStop(1, "#1a2a48")
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, 1024, 256)
+  // accent stripe
+  ctx.fillStyle = "#" + accentHex.toString(16).padStart(6, "0")
+  ctx.fillRect(0, 220, 1024, 6)
+  ctx.fillRect(0, 30, 1024, 4)
+  // big neon text
+  ctx.font = "bold 130px Arial Black, sans-serif"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.shadowColor = "#" + accentHex.toString(16).padStart(6, "0")
+  ctx.shadowBlur = 36
+  ctx.fillStyle = "#fff"
+  ctx.fillText(text, 512, 128)
+  ctx.shadowBlur = 0
+  // small "RACE NIGHT" tagline
+  ctx.font = "bold 26px Arial, sans-serif"
+  ctx.fillStyle = "#" + accentHex.toString(16).padStart(6, "0")
+  ctx.fillText("• RACE NIGHT •", 512, 200)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshStandardMaterial({
+      map: tex,
+      emissive: 0xffffff,
+      emissiveMap: tex,
+      emissiveIntensity: 0.95,
+      roughness: 0.45
+    })
+  )
+  board.position.set(0, 0, 0)
+  g.add(board)
+  // back so it doesn't look hollow from behind
+  const back = board.clone()
+  back.rotation.y = Math.PI
+  back.position.z = -0.08
+  g.add(back)
+  // neon outline frame
+  const frame = new THREE.Mesh(
+    new THREE.RingGeometry(0, 0, 0),
+    new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.7 })
+  )
+  // simple bordered shape with 4 thin boxes
+  const borderMat = new THREE.MeshBasicMaterial({ color: accentHex, transparent: true, opacity: 0.85 })
+  const top = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.12, 0.06), borderMat)
+  top.position.set(0, h / 2, 0.06)
+  const bot = top.clone(); bot.position.y = -h / 2
+  const left = new THREE.Mesh(new THREE.BoxGeometry(0.12, h, 0.06), borderMat)
+  left.position.set(-w / 2, 0, 0.06)
+  const right = left.clone(); right.position.x = w / 2
+  g.add(top, bot, left, right)
+  return g
+}
+
+// ─── Distant city block silhouette: tall dark boxes with random lit windows ───
+function makeCityBlock(width, height, seed = 0) {
+  const g = new THREE.Group()
+  const buildingMat = new THREE.MeshStandardMaterial({ color: 0x07112a, roughness: 0.9 })
+  // create canvas for window pattern
+  const c = document.createElement("canvas")
+  c.width = 64
+  c.height = 128
+  const ctx = c.getContext("2d")
+  ctx.fillStyle = "#040816"
+  ctx.fillRect(0, 0, 64, 128)
+  // random lit windows
+  const palette = ["#fff5a8", "#a8d4ff", "#ff8a44", "#94f0ff"]
+  for (let y = 8; y < 128; y += 8) {
+    for (let x = 4; x < 64; x += 8) {
+      if (Math.random() < 0.42) {
+        ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)]
+        ctx.globalAlpha = 0.7 + Math.random() * 0.3
+        ctx.fillRect(x, y, 4, 4)
+      }
+    }
+  }
+  ctx.globalAlpha = 1
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(1, height / 16)
+  const litMat = new THREE.MeshStandardMaterial({
+    map: tex,
+    emissive: 0xffffff,
+    emissiveMap: tex,
+    emissiveIntensity: 0.55
+  })
+  const main = new THREE.Mesh(new THREE.BoxGeometry(width, height, width * 0.7), litMat)
+  main.position.y = height / 2
+  g.add(main)
+  // top antenna for tall buildings
+  if (height > 30) {
+    const ant = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.18, 4, 6),
+      new THREE.MeshStandardMaterial({ color: 0xff3a3a, emissive: 0xff0a0a, emissiveIntensity: 1.2 })
+    )
+    ant.position.y = height + 2
+    g.add(ant)
+  }
+  return g
 }
 
 function makeTurbine(seed) {
@@ -2186,12 +2390,13 @@ function startRace() {
   state.hits = 0
   state.shake = 0
   state.countdown = 3 // 3..2..1..0 (0 = GO)
-  state.startedAt = performance.now() + 3200  // race timer starts AFTER GO
+  state.startedAt = performance.now() + 3200
   state.pauseAcc = 0
   state.finished = false
   state.finishedAt = 0
   state.lastRivalHit = 0
   state.airborne = false
+  state.topSpeed = 0   // tracked through the race for the result modal
 
   // reset world
   pickups.forEach((p) => {
@@ -2320,13 +2525,18 @@ function finishRace(success = true) {
       hits: state.hits,
       success: win
     })
+    // determine "new record" BEFORE the new ms is recorded
+    const prevBest = save.bestTimePerTrack[save.selectedTrack]
+    const isNewRecord = win && (!prevBest || ms < prevBest.ms)
     $("resStatTime").textContent = mmss(ms)
     $("resStatCoins").textContent = String(state.coins)
+    if ($("resStatTopSpeed")) $("resStatTopSpeed").textContent = `${Math.round(state.topSpeed)}`
     $("resStatHits").textContent = String(state.hits)
     $("resultTitle").textContent = win ? "闯关成功！" : "再试一次"
     $("resultCopy").textContent = win
-      ? `用 ${mmss(ms)} 冲过终点，收集 ${state.coins} 枚金币。`
+      ? `用 ${mmss(ms)} 冲过终点，最高速度 ${Math.round(state.topSpeed)} KM/H。`
       : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
+    if ($("resNewRecord")) $("resNewRecord").style.display = isNewRecord ? "block" : "none"
     // best time + leaderboard
     const fresh = Save.get()
     const best = fresh.bestTimePerTrack[fresh.selectedTrack]
@@ -2410,6 +2620,7 @@ function updateDriving(dt, now) {
 
   // forward motion along the curve. speed (km/h) → m/s ≈ speed * 0.278.
   state.progress = clamp(state.progress + state.speed * dt * 0.278, 0, Track.length)
+  if (state.speed > state.topSpeed) state.topSpeed = state.speed
 
   // map track-space → world for the player car
   const worldPos = progressToWorld(state.progress, state.lateral, state.y)
@@ -2420,9 +2631,16 @@ function updateDriving(dt, now) {
   player.rotation.x += -state.vy * 0.012 + (state.airborne ? 0.05 : 0)
   player.rotation.z += -state.steerVisual * 0.18
   if (playerBody) {
-    // face the car forward relative to the player group (Kenney models face -Z natively
-    // and we rotate the parent player group so they need to flip 180°)
     playerBody.rotation.y = Math.PI - state.steerVisual * 0.05
+    // wheel spin: rotate any sub-mesh whose name looks like a wheel
+    const spin = state.speed * dt * 0.16
+    playerBody.traverse((o) => {
+      if (!o.isMesh) return
+      const n = (o.name || "").toLowerCase()
+      if (n.includes("wheel") || n.includes("tire") || n.includes("tyre")) {
+        o.rotation.x -= spin
+      }
+    })
   }
 
   // nitro plume
@@ -2603,13 +2821,14 @@ function updateCheckpoints(now) {
 // ────────────────────────────────────────────────────────────────────
 function updateCamera(dt) {
   const wide = innerWidth > innerHeight
-  const back = wide ? 11 : 13
-  const high = wide ? 4.6 : 5.4
-  // sample the curve a few meters BEHIND the player for camera position,
-  // and a few meters AHEAD for the look-at target. This makes the camera
-  // bend naturally with the track in corners.
+  // dynamic camera distance: pulls back as speed climbs and during nitro,
+  // creating a "punch into the screen" feel of acceleration.
+  const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
+  const baseBack = wide ? 11 : 13
+  const back = baseBack + speedRatio * 2.5 + (state.nitroTime > 0 ? 1.6 : 0)
+  const high = (wide ? 4.6 : 5.4) + speedRatio * 0.4
   const camProgress = clamp(state.progress - back, 0, Track.length)
-  const lookProgress = clamp(state.progress + 22, 0, Track.length)
+  const lookProgress = clamp(state.progress + 22 + speedRatio * 8, 0, Track.length)
   const camWorld = progressToWorld(camProgress, state.lateral * 0.55 - state.steerVisual * 0.6, state.y + high)
   const lookWorld = progressToWorld(lookProgress, state.lateral * 0.4, state.y + 1.1)
   cameraTarget.copy(camWorld)
@@ -2622,9 +2841,8 @@ function updateCamera(dt) {
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
 
-  // FOV pulse driven by speed + nitro
+  // FOV pulse driven by speed + nitro (speedRatio reused from above)
   const baseFov = wide ? 60 : 70
-  const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
   const nitroBoost = state.nitroTime > 0 ? 8 : 0
   const targetFov = baseFov + speedRatio * 6 + nitroBoost
   camera.fov = lerp(camera.fov, targetFov, dt * 4)
@@ -2649,6 +2867,16 @@ function updateHUD() {
   $("progressFill").style.height = `${Math.round(progress * 100)}%`
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
   $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
+  // top centred chips: TIME / COIN / TRACK
+  const elapsedMs = state.countdown > 0
+    ? 0
+    : Math.max(0, performance.now() - state.startedAt - state.pauseAcc)
+  if ($("hudTime")) $("hudTime").textContent = mmss(elapsedMs)
+  if ($("hudCoins")) $("hudCoins").textContent = String(state.coins)
+  if ($("hudTrack")) {
+    const tCfg = TRACKS[Save.get().selectedTrack]
+    $("hudTrack").textContent = tCfg?.label ?? ""
+  }
   // nitro button state: ready (pulsing), firing (cyan), or empty (grey)
   const nitroBtn = $("nitroBtn")
   const nitroWrap = $("nitroBtn").parentElement

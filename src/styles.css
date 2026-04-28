@@ -966,14 +966,59 @@ body,
   letter-spacing: 2px;
 }
 
-.race-icons {
+.hud-stats {
   position: absolute;
-  top: calc(var(--ui) * 2.7);
+  top: calc(var(--ui) * 2);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  gap: calc(var(--ui) * 0.8);
+  z-index: 6;
+  pointer-events: none;
+}
+.hud-chip {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: calc(var(--ui) * 2.2);
+  gap: 2px;
+  padding: calc(var(--ui) * 0.5) calc(var(--ui) * 1);
+  background: linear-gradient(180deg, rgba(5, 18, 38, 0.85) 0%, rgba(5, 18, 38, 0.65) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: calc(var(--ui) * 0.6);
+  min-width: calc(var(--ui) * 6.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.hud-chip-label {
+  font-size: calc(var(--ui) * 0.7);
+  letter-spacing: 2px;
+  color: #93a8c8;
+  font-weight: 800;
+}
+.hud-chip b {
+  font-size: calc(var(--ui) * 1.6);
+  font-weight: 900;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.hud-chip-time { border-color: rgba(38, 214, 255, 0.4); }
+.hud-chip-time b { color: #26d6ff; text-shadow: 0 0 10px rgba(38, 214, 255, 0.5); }
+.hud-chip-coin { border-color: rgba(255, 211, 26, 0.4); }
+.hud-chip-coin b { color: #ffd31a; text-shadow: 0 0 10px rgba(255, 211, 26, 0.5); }
+.hud-chip-track b { font-size: calc(var(--ui) * 1.2); }
+.hud-coin-mini {
+  width: calc(var(--ui) * 1);
+  height: calc(var(--ui) * 1);
+  background: radial-gradient(circle, #ffe45a 0 50%, #ff8a16 100%);
+  border-radius: 50%;
+  display: inline-block;
+}
+.race-icons {
+  display: none;       /* legacy badges replaced by .hud-stats */
 }
 .green-light {
   width: calc(var(--ui) * 2.7);
@@ -1556,7 +1601,21 @@ body,
   display: flex;
   gap: 8px;
   justify-content: center;
-  margin: 8px 0 16px;
+  margin: 8px 0 12px;
+}
+.new-record {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: calc(var(--ui) * 1.6);
+  font-weight: 900;
+  color: #ffd31a;
+  text-shadow: 0 0 16px rgba(255, 211, 26, 0.7);
+  animation: rec-pop 0.5s ease-out;
+}
+@keyframes rec-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
 }
 .result-stats div {
   flex: 1;

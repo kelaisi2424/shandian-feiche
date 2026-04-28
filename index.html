@@ -195,11 +195,26 @@
       </section>
 
       <section id="hud" class="hud">
-        <button id="pauseBtn" class="hud-pause">Ⅱ</button>
+        <button id="pauseBtn" class="hud-pause" aria-label="pause">Ⅱ</button>
 
         <div class="speed-box">
           <span id="speed">0</span>
           <small>KM/H</small>
+        </div>
+
+        <div class="hud-stats">
+          <div class="hud-chip hud-chip-time">
+            <span class="hud-chip-label">TIME</span>
+            <b id="hudTime">0:00</b>
+          </div>
+          <div class="hud-chip hud-chip-coin">
+            <span class="hud-chip-label">COIN</span>
+            <b><i class="hud-coin-mini"></i><span id="hudCoins">0</span></b>
+          </div>
+          <div class="hud-chip hud-chip-track">
+            <span class="hud-chip-label">TRACK</span>
+            <b id="hudTrack">霓虹夜幕</b>
+          </div>
         </div>
 
         <div class="race-icons">
@@ -253,8 +268,10 @@
           <div class="result-stats">
             <div><b id="resStatTime">--</b><span>用时</span></div>
             <div><b id="resStatCoins">0</b><span>金币</span></div>
+            <div><b id="resStatTopSpeed">0</b><span>最高速度</span></div>
             <div><b id="resStatHits">0</b><span>碰撞</span></div>
           </div>
+          <p class="new-record" id="resNewRecord" style="display:none">🏆 新纪录！</p>
           <p class="best-time">本地最佳: <b id="resBestTime">--</b></p>
           <ul class="leaderboard" id="resLeaderboard"></ul>
           <div class="result-actions">
