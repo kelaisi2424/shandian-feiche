@@ -249,12 +249,43 @@ body,
 .menu-cover {
   position: absolute;
   inset: 0;
-  background-image: url("/menu-bg.svg");
+  background-image: url("/menu-bg.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   /* slow drift for life */
   animation: cover-drift 24s ease-in-out infinite alternate;
+}
+/* brand-logo masking — soft, feathered radial gradients that just darken
+   the band where Audi / Mercedes / Ferrari / HOT WHEELS sit, so they
+   blend back into the night sky instead of looking like censorship boxes.
+   Pure gradient (no backdrop-filter) so the edges actually fade. */
+.menu-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    /* upper-centre banner strip */
+    radial-gradient(ellipse 26% 11% at 50% 25%,
+      rgba(5,10,24,0.85) 0%,
+      rgba(5,10,24,0.62) 40%,
+      rgba(5,10,24,0.22) 75%,
+      rgba(5,10,24,0) 100%),
+    /* upper-right HOT WHEELS sign — darker and slightly cyan-shifted to read as neon haze */
+    radial-gradient(ellipse 16% 18% at 84% 26%,
+      rgba(8,16,36,0.88) 0%,
+      rgba(8,16,36,0.55) 50%,
+      rgba(8,16,36,0) 100%);
+  pointer-events: none;
+}
+.menu-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* extra subtle haze + horizontal blue tint over the entire upper band, reads as atmospheric fog */
+  background:
+    linear-gradient(180deg, rgba(5,10,24,0.35) 0%, rgba(5,10,24,0.0) 55%);
+  pointer-events: none;
 }
 @keyframes cover-drift {
   0%   { transform: scale(1.04) translate(-0.4%, 0); }
