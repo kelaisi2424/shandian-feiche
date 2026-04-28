@@ -12,7 +12,7 @@ const rand = (a, b) => a + Math.random() * (b - a)
 const tau = Math.PI * 2
 
 const CFG = {
-  trackLength: 1500,
+  trackLength: 2300,
   segLength: 8,
   roadHalfWidth: 7.4,
   laneHalfWidth: 5.4,
@@ -20,12 +20,12 @@ const CFG = {
   maxSpeed: 215,
   nitroSpeed: 305,
   nitroDuration: 2.4,
-  finishZ: -1450,
+  finishZ: -2250,
   rivalCount: 5,
   pickupGap: 26,
   rampGap: 180,
   checkpointGap: 260,
-  hitLimit: 6,
+  hitLimit: 10,
   coinGoal: 18
 }
 
@@ -227,33 +227,40 @@ function roadEdgeTexture(flip = false) {
     g.translate(256, 0)
     g.scale(-1, 1)
   }
-  // dense small alternating triangles — Hot Wheels track look
-  const cell = 32
-  for (let row = 0; row < 256 / cell; row++) {
-    for (let col = -1; col < 256 / cell + 1; col++) {
-      const x = col * cell + (row % 2 ? cell / 2 : 0)
-      const y = row * cell
-      // upward triangle: deep blue
-      g.fillStyle = "#0a55a8"
-      g.beginPath()
-      g.moveTo(x, y)
-      g.lineTo(x + cell, y)
-      g.lineTo(x + cell / 2, y + cell)
-      g.closePath()
-      g.fill()
-      // downward triangle: bright blue
-      g.fillStyle = "#1392ff"
-      g.beginPath()
-      g.moveTo(x + cell / 2, y)
-      g.lineTo(x + cell + cell / 2, y)
-      g.lineTo(x + cell, y + cell)
-      g.closePath()
-      g.fill()
-    }
+  // forward-pointing chevrons (V arrows) all aiming "up" the texture (the +V
+  // direction), which maps to the player's forward direction when applied to
+  // the road. Two-tone blue for depth.
+  const stripeH = 28
+  const stripeGap = 4
+  const tip = 0      // x position of the chevron tip on the inner edge (texture left)
+  const tail = 256   // x position of the chevron tail on the outer edge (texture right)
+  const tipDepth = 10 // chevron tip pulled forward (smaller V)
+  for (let y = -stripeH; y < 256 + stripeH; y += stripeH + stripeGap) {
+    g.fillStyle = "#0c5fb6"
+    g.beginPath()
+    g.moveTo(tip, y + stripeH / 2)
+    g.lineTo(tail, y)
+    g.lineTo(tail, y + 6)
+    g.lineTo(tip + tipDepth, y + stripeH / 2)
+    g.lineTo(tail, y + stripeH - 6)
+    g.lineTo(tail, y + stripeH)
+    g.closePath()
+    g.fill()
+    // bright blue inner highlight chevron
+    g.fillStyle = "#1392ff"
+    g.beginPath()
+    g.moveTo(tip + 4, y + stripeH / 2)
+    g.lineTo(tail - 8, y + 6)
+    g.lineTo(tail - 8, y + 10)
+    g.lineTo(tip + 14, y + stripeH / 2)
+    g.lineTo(tail - 8, y + stripeH - 10)
+    g.lineTo(tail - 8, y + stripeH - 6)
+    g.closePath()
+    g.fill()
   }
-  // tiny yellow seam line on the inner edge
+  // yellow seam strip on the inner edge (next to centre lane)
   g.fillStyle = "#ffd31a"
-  g.fillRect(flip ? 240 : 0, 0, 16, 256)
+  g.fillRect(0, 0, 12, 256)
   g.restore()
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
@@ -470,7 +477,8 @@ function buildTrack() {
   const edgeWidth = CFG.roadHalfWidth - CFG.laneHalfWidth
   for (const side of [-1, 1]) {
     const geo = new THREE.BoxGeometry(edgeWidth, 0.36, lengthMeters)
-    const mesh = new THREE.Mesh(geo, side < 0 ? mats.roadEdge : mats.roadEdgeR)
+    // LEFT strip uses flipped texture (tip → inward at u=1), RIGHT uses native texture (tip → inward at u=0)
+    const mesh = new THREE.Mesh(geo, side < 0 ? mats.roadEdgeR : mats.roadEdge)
     mesh.material.map.repeat.set(1, lengthMeters / 16)
     mesh.position.set(side * (CFG.laneHalfWidth + edgeWidth / 2), 0, -lengthMeters / 2 + 18)
     track.add(mesh)
@@ -515,6 +523,12 @@ function buildTrack() {
   const startGantry = makeOverheadGantry(0xfff15a, 0xffce15, true)
   startGantry.position.set(0, 0, 22)
   track.add(startGantry)
+
+  // welcome arch 18m ahead of the start grid (mimics screenshot 3 — there's a
+  // big horizontal banner just past the cars at race start)
+  const welcomeArch = makeOverheadGantry(0x10c8ff, 0xfff15a, false)
+  welcomeArch.position.set(0, 0, -16)
+  track.add(welcomeArch)
 
   // start grid markings (zebra stripe)
   const startStripe = new THREE.Mesh(new THREE.PlaneGeometry(CFG.laneHalfWidth * 2, 4), mats.checker)
@@ -619,7 +633,14 @@ function buildScenery() {
     world.add(fan)
   }
 
-  // floating soccer-style spheres above road (decoration like in screenshots)
+  // signature floating ring + ball right at the start, on the right side, just
+  // like screenshot 3 — first thing the player sees
+  const startBall = makeFloatingBall()
+  startBall.position.set(7, 4.4, -2)
+  startBall.scale.setScalar(0.85)
+  world.add(startBall)
+
+  // floating soccer-style spheres along the route
   for (let i = 0; i < 10; i++) {
     const ball = makeFloatingBall()
     const side = i % 2 ? -1 : 1
@@ -941,14 +962,16 @@ function spawnRivals() {
     { x: 3.6, z: 6, color: 0xff5826, accent: 0x520f00, baseSpeed: 124 }
   ]
   for (const cfg of startConfigs) addRival(cfg)
-  // staggered rivals further down — closer than before so they're visible
+  // staggered rivals further down, spread across deterministic lanes so they
+  // don't all sit in the player's centre lane
+  const lanes = [-4.0, 4.0, -2.0, 2.0, 0]
   for (let i = 0; i < CFG.rivalCount; i++) {
     addRival({
-      x: rand(-CFG.playerHalfWidth, CFG.playerHalfWidth),
-      z: -90 - i * 160 - rand(0, 40),
+      x: lanes[i % lanes.length],
+      z: -100 - i * 180,
       color: i % 2 ? 0xff3a3a : 0xff812a,
       accent: 0x3a0808,
-      baseSpeed: 92 + i * 10 + rand(0, 18)
+      baseSpeed: 95 + i * 9 + rand(0, 12)
     })
   }
 }
@@ -1045,7 +1068,13 @@ function makeHazard() {
 function spawnRamps() {
   ramps.forEach((r) => dynamic.remove(r.mesh))
   ramps = []
-  for (let z = -90; z > CFG.finishZ + 90; z -= CFG.rampGap + rand(-30, 30)) {
+  // dramatic first ramp 30m ahead of the start so the player sees it immediately
+  const firstZ = -32
+  const m0 = makeRamp()
+  m0.position.set(0, 0.3, firstZ)
+  dynamic.add(m0)
+  ramps.push({ mesh: m0, x: 0, z: firstZ, used: false })
+  for (let z = -180; z > CFG.finishZ + 90; z -= CFG.rampGap + rand(-30, 30)) {
     const x = Math.sin(z * 0.02) * 2.5
     const m = makeRamp()
     m.position.set(x, 0.3, z)
@@ -1369,6 +1398,16 @@ function updateDriving(dt, now) {
     p.scale.z = plumeOn ? 1 + Math.sin(now * 0.04) * 0.18 : 0.6
   })
   headlight.intensity = lerp(headlight.intensity, plumeOn ? 1.2 : 0.5, dt * 4)
+  // nitro particle trail (spawn at the rear of the player while active)
+  if (plumeOn) {
+    state._nitroEmitTimer = (state._nitroEmitTimer || 0) - dt
+    if (state._nitroEmitTimer <= 0) {
+      state._nitroEmitTimer = 0.018
+      const sx = (Math.random() - 0.5) * 1.2
+      const sy = 0.55 + Math.random() * 0.2
+      nitroTrail(state.x + sx, state.y + sy, state.z + 3.4, Math.random() < 0.5 ? 0x36e0ff : 0xfff15a)
+    }
+  }
 
   // finish trigger
   if (!state.finished && state.z < CFG.finishZ + 14) finishRace(true)
@@ -1378,20 +1417,36 @@ function updateRivals(dt, now) {
   for (const r of rivals) {
     const car = r.car
     const dz = car.position.z - state.z
-    if (dz > 80) {
-      car.position.z = state.z - 60 - rand(0, 50)
-      car.position.x = rand(-CFG.playerHalfWidth, CFG.playerHalfWidth)
+    // each rival drives at its own constant speed (no chasing the player) — feels
+    // like real opponents rather than rubber-banding
+    car.position.z -= r.baseSpeed * dt * 0.22
+    // far behind player → respawn comfortably ahead
+    if (dz > 60) {
+      car.position.z = state.z - 90 - rand(0, 80)
+      // respawn into a lane offset from the player's current x (avoid head-on)
+      const lanes = [-4, -2, 2, 4]
+      car.position.x = lanes[Math.floor(Math.random() * lanes.length)]
+      r.laneTarget = car.position.x
+      r.lastHit = now      // grace period after teleport so respawn doesn't insta-collide
     }
-    if (dz < -180) {
-      car.position.z = state.z - 30
+    // way ahead of player → bring them back into view so the field stays exciting
+    if (dz < -360) {
+      car.position.z = state.z - 90 - rand(0, 80)
+      // respawn into a lane offset from the player's current x (avoid head-on)
+      const lanes = [-4, -2, 2, 4]
+      car.position.x = lanes[Math.floor(Math.random() * lanes.length)]
+      r.laneTarget = car.position.x
     }
-    // hover near the player (alternating ahead / beside) so the field stays exciting
-    const baseGap = r.laneTarget < 0 ? -8 : -18
-    const targetGap = baseGap + Math.sin(now * 0.0011 + r.swayPhase) * 18
-    car.position.z = lerp(car.position.z, state.z + targetGap, dt * 1.6)
-    // sway lane
-    const lane = r.laneTarget + Math.sin(now * 0.0014 + r.swayPhase) * 2.0
-    car.position.x = lerp(car.position.x, lane, dt * 0.9)
+    // sway lane gently around the rival's preferred lane.
+    // when player is close behind and aligned, rival shifts AWAY (yield).
+    const playerCloseBehind = (car.position.z - state.z) < 16 && (car.position.z - state.z) > -2
+    const playerAligned = Math.abs(car.position.x - state.x) < 1.4
+    let lane = r.laneTarget + Math.sin(now * 0.0010 + r.swayPhase) * 1.4
+    if (playerCloseBehind && playerAligned) {
+      const dodge = state.x < 0 ? 2.4 : -2.4
+      lane = clamp(r.laneTarget + dodge, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+    }
+    car.position.x = lerp(car.position.x, lane, dt * 1.6)
     car.position.x += r.bumpVx * dt
     r.bumpVx *= Math.pow(0.05, dt)
     car.position.x = clamp(car.position.x, -CFG.playerHalfWidth, CFG.playerHalfWidth)
@@ -1404,7 +1459,9 @@ function updateRivals(dt, now) {
     if (state.finished) continue
     const distZ = Math.abs(car.position.z - state.z)
     const distX = Math.abs(car.position.x - state.x)
-    if (distZ < 4.0 && distX < 2.4 && now - r.lastHit > 1100 && now - state.lastRivalHit > 600) {
+    const sinceStart = now - state.startedAt - state.pauseAcc
+    if (sinceStart < 1500) continue   // 1.5s start-grid grace period
+    if (distZ < 2.6 && distX < 1.4 && now - r.lastHit > 1500 && now - state.lastRivalHit > 900) {
       r.lastHit = now
       state.lastRivalHit = now
       const dir = state.x < car.position.x ? -1 : 1
@@ -1522,6 +1579,8 @@ function updateHUD() {
   $("nitroCount").textContent = state.nitroCharges
   const progress = clamp((-state.z) / Math.abs(CFG.finishZ), 0, 1)
   $("progressFill").style.height = `${Math.round(progress * 100)}%`
+  $("missionFill").style.width = `${Math.round(progress * 100)}%`
+  $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
   if (performance.now() < state.toastUntil) {
     $("missionToast").textContent = state.toastText
     $("missionToast").classList.add("show")
@@ -1553,6 +1612,25 @@ function animateScenery(dt, now) {
   }
 }
 
+// One streamy puff that drifts BACKWARD (positive z = away from player) and
+// gently up; used for nitro afterburn trail.
+function nitroTrail(x, y, z, color) {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18 + Math.random() * 0.12, 8, 6),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending })
+  )
+  m.position.set(x, y, z)
+  m.userData = {
+    vx: (Math.random() - 0.5) * 1.6,
+    vy: 0.8 + Math.random() * 1.4,
+    vz: 18 + Math.random() * 12,    // strong backward
+    life: 0.45 + Math.random() * 0.3,
+    max: 0.75,
+    grow: 1.4 + Math.random() * 0.6
+  }
+  particles.add(m)
+}
+
 function sparks(x, y, z, color, n) {
   for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(
@@ -1577,7 +1655,13 @@ function updateParticles(dt) {
     p.position.x += p.userData.vx * dt
     p.position.y += p.userData.vy * dt
     p.position.z += p.userData.vz * dt
-    p.userData.vy -= 14 * dt
+    if (p.userData.grow) {
+      p.scale.multiplyScalar(1 + p.userData.grow * dt)
+      p.userData.vy *= 0.92
+      p.userData.vx *= 0.92
+    } else {
+      p.userData.vy -= 14 * dt
+    }
     p.userData.life -= dt
     p.material.opacity = clamp(p.userData.life / p.userData.max, 0, 1)
     if (p.userData.life <= 0) particles.remove(p)
