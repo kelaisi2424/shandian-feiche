@@ -45,6 +45,8 @@
 
       <section id="menu" class="screen menu-screen">
         <div class="menu-bg"></div>
+        <div class="menu-cover" aria-hidden="true"></div>
+        <div class="menu-overlay" aria-hidden="true"></div>
         <button class="gear-tile" id="gearBtn" aria-label="settings">
           <svg viewBox="0 0 24 24" width="38" height="38" fill="#fff"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1A7.5 7.5 0 0 0 14.7 5l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2.3 1.4l-2.5-1-2 3.5L5.2 11a7.4 7.4 0 0 0 0 2L3 14.6l2 3.5 2.5-1a7.5 7.5 0 0 0 2.3 1.4l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.3-1.4l2.5 1 2-3.5L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
         </button>
@@ -84,119 +86,72 @@
           <span class="ring"></span>
         </div>
 
+        <header class="menu-hero">
+          <h1>闪电飞车</h1>
+          <span>LIGHTNING&nbsp;RACER</span>
+        </header>
+
         <main class="tile-grid">
           <button id="startGame" class="tile start-tile">
-            <svg class="tile-svg start-svg" viewBox="0 0 240 200" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#ff912a"/>
-                  <stop offset="1" stop-color="#ffd31a"/>
-                </linearGradient>
-                <linearGradient id="loop" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#ff5520"/>
-                  <stop offset="1" stop-color="#c41a00"/>
-                </linearGradient>
-                <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#88ddff"/>
-                  <stop offset="0.45" stop-color="#1a8eff"/>
-                  <stop offset="1" stop-color="#062c66"/>
-                </linearGradient>
-                <radialGradient id="exhaust" cx="0.5" cy="0.5" r="0.5">
-                  <stop offset="0" stop-color="#fff"/>
-                  <stop offset="0.4" stop-color="#ffd31a"/>
-                  <stop offset="1" stop-color="#ff5520" stop-opacity="0"/>
-                </radialGradient>
-              </defs>
-              <rect width="240" height="200" fill="url(#sky)"/>
-              <!-- big loop track behind -->
-              <path d="M -10 130 Q 80 -20 180 110 Q 230 170 260 130" fill="none" stroke="url(#loop)" stroke-width="22" stroke-linecap="round"/>
-              <path d="M -10 130 Q 80 -20 180 110 Q 230 170 260 130" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="6 8" opacity="0.6"/>
-              <!-- exhaust glow -->
-              <ellipse cx="60" cy="160" rx="48" ry="22" fill="url(#exhaust)"/>
-              <!-- supercar silhouette (Koenigsegg-ish) -->
-              <path d="M 70 150 L 75 130 Q 90 116 110 116 L 145 116 Q 160 110 175 124 L 195 130 Q 200 138 195 152 L 70 152 Z" fill="url(#carBody)" stroke="#001830" stroke-width="2"/>
-              <!-- windscreen / cabin -->
-              <path d="M 105 122 L 145 122 Q 152 124 156 132 L 110 132 Z" fill="#0a1530" opacity="0.9"/>
-              <!-- side stripe -->
-              <path d="M 80 142 L 192 142" stroke="#fff" stroke-width="1.5" opacity="0.5"/>
-              <!-- wheels -->
-              <circle cx="92" cy="155" r="11" fill="#0a0a0a"/>
-              <circle cx="92" cy="155" r="6" fill="#cfd6e0"/>
-              <circle cx="172" cy="155" r="11" fill="#0a0a0a"/>
-              <circle cx="172" cy="155" r="6" fill="#cfd6e0"/>
-              <!-- rear wing -->
-              <rect x="183" y="118" width="14" height="3" fill="#001830"/>
-              <rect x="190" y="120" width="2" height="6" fill="#001830"/>
-            </svg>
-            <strong>开始游戏 》</strong>
+            <span class="tile-icon">
+              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+                <defs>
+                  <linearGradient id="bolt-g" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#ffd31a"/>
+                  </linearGradient>
+                </defs>
+                <path d="M36 6 L18 36 L30 36 L24 58 L48 28 L36 28 Z" fill="url(#bolt-g)" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <strong>开始游戏</strong>
+            <em class="tile-sub">START RACE</em>
           </button>
           <button id="tracksTile" class="tile wide-tile">
-            <svg class="tile-svg" viewBox="0 0 240 110" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <linearGradient id="suvSky" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#76b8ff"/>
-                  <stop offset="0.6" stop-color="#cfe7ff"/>
-                  <stop offset="0.61" stop-color="#5b8b3e"/>
-                  <stop offset="1" stop-color="#2e4824"/>
-                </linearGradient>
-              </defs>
-              <rect width="240" height="110" fill="url(#suvSky)"/>
-              <!-- mountains -->
-              <polygon points="-10,70 40,30 90,68 140,28 200,72 250,40 250,90 -10,90" fill="#3d6c4a" opacity="0.7"/>
-              <!-- road -->
-              <path d="M 0 88 Q 120 78 240 88 L 240 110 L 0 110 Z" fill="#3a3a3a"/>
-              <path d="M 0 99 Q 120 92 240 99" stroke="#ffd31a" stroke-width="2" stroke-dasharray="10 8" fill="none"/>
-              <!-- SUV body -->
-              <path d="M 100 70 Q 105 56 120 56 L 152 56 Q 165 58 168 70 L 168 84 L 100 84 Z" fill="#ff7a18" stroke="#3a1500" stroke-width="1.5"/>
-              <rect x="118" y="60" width="38" height="12" fill="#0a1530" opacity="0.85"/>
-              <circle cx="112" cy="86" r="6" fill="#0a0a0a"/>
-              <circle cx="158" cy="86" r="6" fill="#0a0a0a"/>
-            </svg>
+            <span class="tile-icon">
+              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#26d6ff" stroke-width="3"/>
+                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 3"/>
+                <circle cx="22" cy="38" r="3" fill="#26d6ff"/>
+                <circle cx="42" cy="38" r="3" fill="#ffd31a"/>
+              </svg>
+            </span>
             <strong>赛道</strong>
+            <em class="tile-sub">TRACKS</em>
           </button>
-          <button id="garageTile" class="tile small-tile garage-tile">
-            <svg class="tile-svg" viewBox="0 0 110 90" preserveAspectRatio="xMidYMid slice">
-              <rect width="110" height="90" fill="#ffb22a"/>
-              <!-- garage car icon -->
-              <path d="M 18 58 L 22 42 Q 28 34 38 34 L 72 34 Q 82 34 88 42 L 92 58 L 92 70 L 18 70 Z" fill="#fff" stroke="#3a2200" stroke-width="2.5"/>
-              <rect x="34" y="42" width="42" height="12" fill="#3a2200" opacity="0.4"/>
-              <circle cx="32" cy="70" r="7" fill="#3a2200"/>
-              <circle cx="78" cy="70" r="7" fill="#3a2200"/>
-              <!-- garage door arch -->
-              <path d="M 8 60 Q 8 14 55 14 Q 102 14 102 60" fill="none" stroke="#3a2200" stroke-width="2.5" opacity="0.45"/>
-            </svg>
+          <button id="garageTile" class="tile small-tile">
+            <span class="tile-icon">
+              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+                <path d="M14 36 L18 24 Q22 18 30 18 L42 18 Q50 18 54 24 L58 36 L58 46 L14 46 Z" fill="none" stroke="#ffd31a" stroke-width="3" stroke-linejoin="round"/>
+                <rect x="22" y="26" width="20" height="6" fill="none" stroke="#ffd31a" stroke-width="2"/>
+                <circle cx="22" cy="46" r="4" fill="#ffd31a"/>
+                <circle cx="50" cy="46" r="4" fill="#ffd31a"/>
+              </svg>
+            </span>
             <strong>车库</strong>
+            <em class="tile-sub">GARAGE</em>
           </button>
-          <button id="dailyTile" class="tile small-tile task-tile">
-            <svg class="tile-svg" viewBox="0 0 110 90" preserveAspectRatio="xMidYMid slice">
-              <rect width="110" height="90" fill="#3d8edd"/>
-              <!-- stack of mission cards -->
-              <rect x="20" y="22" width="68" height="50" fill="#fff" rx="5" transform="rotate(-6 54 47)"/>
-              <rect x="22" y="22" width="64" height="48" fill="#aedaff" rx="5"/>
-              <line x1="32" y1="32" x2="76" y2="32" stroke="#1a4d8c" stroke-width="2.5" stroke-linecap="round"/>
-              <line x1="32" y1="42" x2="68" y2="42" stroke="#1a4d8c" stroke-width="2" stroke-linecap="round"/>
-              <line x1="32" y1="52" x2="60" y2="52" stroke="#1a4d8c" stroke-width="2" stroke-linecap="round"/>
-              <circle cx="78" cy="58" r="7" fill="#ffd31a" stroke="#1a4d8c" stroke-width="2"/>
-            </svg>
+          <button id="dailyTile" class="tile small-tile">
+            <span class="tile-icon">
+              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+                <rect x="14" y="16" width="36" height="32" rx="4" fill="none" stroke="#26d6ff" stroke-width="3"/>
+                <line x1="20" y1="26" x2="44" y2="26" stroke="#26d6ff" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="20" y1="34" x2="38" y2="34" stroke="#26d6ff" stroke-width="2"/>
+                <line x1="20" y1="42" x2="34" y2="42" stroke="#26d6ff" stroke-width="2"/>
+                <circle cx="48" cy="44" r="6" fill="#ffd31a" stroke="#fff" stroke-width="2"/>
+              </svg>
+            </span>
             <strong>任务</strong>
+            <em class="tile-sub">MISSIONS</em>
           </button>
           <button class="tile tall-tile muted">
-            <svg class="tile-svg" viewBox="0 0 110 200" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <linearGradient id="grayDev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#cccccc"/>
-                  <stop offset="1" stop-color="#888888"/>
-                </linearGradient>
-              </defs>
-              <rect width="110" height="200" fill="url(#grayDev)"/>
-              <path d="M 20 98 L 26 80 Q 34 70 48 70 L 78 70 Q 90 72 96 80 L 100 98 L 100 120 L 20 120 Z" fill="#aaa" stroke="#444" stroke-width="2"/>
-              <rect x="40" y="78" width="38" height="14" fill="#444" opacity="0.6"/>
-              <circle cx="34" cy="120" r="8" fill="#222"/>
-              <circle cx="86" cy="120" r="8" fill="#222"/>
-              <circle cx="55" cy="50" r="14" fill="rgba(255,255,255,0.4)"/>
-              <text x="55" y="56" text-anchor="middle" font-size="20" font-weight="900" fill="#444">🔒</text>
-            </svg>
+            <span class="tile-icon">
+              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+                <rect x="14" y="22" width="36" height="26" rx="4" fill="none" stroke="#888" stroke-width="3"/>
+                <path d="M22 22 V16 a10 10 0 0 1 20 0 V22" fill="none" stroke="#888" stroke-width="3"/>
+              </svg>
+            </span>
             <strong>开发中</strong>
+            <em class="tile-sub">SOON</em>
           </button>
         </main>
       </section>

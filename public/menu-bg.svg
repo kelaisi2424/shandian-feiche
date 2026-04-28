@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <!-- Deep dusk sky → horizon glow -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#070d20"/>
+      <stop offset="35%" stop-color="#10204a"/>
+      <stop offset="70%" stop-color="#1f4a99"/>
+      <stop offset="82%" stop-color="#ff7d2a"/>
+      <stop offset="92%" stop-color="#ffae3a"/>
+      <stop offset="100%" stop-color="#fff1c0"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.62" cy="0.86" r="0.18">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#ffe8a8" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ff8a16" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Wet asphalt — top dark, bottom slick reflection -->
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#0c1424"/>
+      <stop offset="40%" stop-color="#1a2a48"/>
+      <stop offset="100%" stop-color="#2c4682"/>
+    </linearGradient>
+    <linearGradient id="roadCenter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7da5d9" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#a8c8ee" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="laneLine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd31a" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#ffd31a" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="laneLineSide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1392ff" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#26c6ff" stop-opacity="0.85"/>
+    </linearGradient>
+    <radialGradient id="trail" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#26d6ff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#26d6ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="tail" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ffd0d0" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#ff2a2a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ff0a0a" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Tower silhouette -->
+    <linearGradient id="towerSil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10204a"/>
+      <stop offset="100%" stop-color="#03060f"/>
+    </linearGradient>
+    <filter id="blur4" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="blur8" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <!-- ===== sky ===== -->
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <rect width="1920" height="1080" fill="url(#sun)"/>
+
+  <!-- distant horizon haze -->
+  <rect x="0" y="660" width="1920" height="80" fill="#ffae3a" opacity="0.18" filter="url(#blur8)"/>
+
+  <!-- ===== distant skyline silhouette ===== -->
+  <g opacity="0.85">
+    <polygon points="0,720 60,710 80,690 120,690 140,672 200,672 230,640 280,640 300,672 340,672 360,690 400,690 440,660 500,660 540,684 600,684 620,700 700,700 740,668 820,668 860,690 900,690 940,672 1000,672 1040,648 1100,648 1140,684 1220,684 1260,668 1340,668 1380,690 1440,690 1480,672 1560,672 1620,660 1720,660 1760,690 1820,690 1860,704 1920,704 1920,720" fill="url(#towerSil)"/>
+    <!-- pit lane tower with grid lights -->
+    <g transform="translate(200 580)">
+      <rect x="0" y="0" width="36" height="140" fill="#101a30"/>
+      <rect x="38" y="20" width="34" height="120" fill="#0a1326"/>
+      <g fill="#ffe45a">
+        <rect x="6" y="14" width="6" height="6"/>
+        <rect x="18" y="14" width="6" height="6"/>
+        <rect x="6" y="34" width="6" height="6"/>
+        <rect x="18" y="34" width="6" height="6"/>
+        <rect x="6" y="54" width="6" height="6"/>
+        <rect x="18" y="54" width="6" height="6"/>
+        <rect x="6" y="74" width="6" height="6"/>
+        <rect x="18" y="74" width="6" height="6"/>
+        <rect x="42" y="32" width="6" height="6"/>
+        <rect x="58" y="32" width="6" height="6"/>
+        <rect x="42" y="54" width="6" height="6"/>
+        <rect x="58" y="54" width="6" height="6"/>
+        <rect x="42" y="78" width="6" height="6"/>
+        <rect x="58" y="78" width="6" height="6"/>
+      </g>
+    </g>
+    <g transform="translate(1620 540)">
+      <rect x="0" y="0" width="42" height="180" fill="#101a30"/>
+      <rect x="46" y="30" width="34" height="150" fill="#0a1326"/>
+      <g fill="#26d6ff">
+        <rect x="6" y="14" width="6" height="6"/>
+        <rect x="22" y="14" width="6" height="6"/>
+        <rect x="6" y="38" width="6" height="6"/>
+        <rect x="22" y="38" width="6" height="6"/>
+        <rect x="6" y="62" width="6" height="6"/>
+        <rect x="22" y="62" width="6" height="6"/>
+        <rect x="6" y="86" width="6" height="6"/>
+        <rect x="22" y="86" width="6" height="6"/>
+        <rect x="6" y="110" width="6" height="6"/>
+        <rect x="22" y="110" width="6" height="6"/>
+      </g>
+    </g>
+    <!-- two big yellow lattice towers, like Hot Wheels -->
+    <g transform="translate(380 470)" fill="#ffd31a" opacity="0.72">
+      <rect x="0" y="0" width="6" height="250"/>
+      <rect x="60" y="0" width="6" height="250"/>
+      <rect x="0" y="0" width="66" height="6"/>
+      <rect x="0" y="60" width="66" height="4"/>
+      <rect x="0" y="120" width="66" height="4"/>
+      <rect x="0" y="180" width="66" height="4"/>
+      <rect x="0" y="240" width="66" height="4"/>
+      <line x1="0" y1="6" x2="66" y2="60" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="66" y1="6" x2="0" y2="60" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="64" x2="66" y2="120" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="66" y1="64" x2="0" y2="120" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="124" x2="66" y2="180" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="66" y1="124" x2="0" y2="180" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="184" x2="66" y2="240" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="66" y1="184" x2="0" y2="240" stroke="#ffd31a" stroke-width="3"/>
+      <!-- top star light -->
+      <circle cx="33" cy="-12" r="10" fill="#ffd31a" filter="url(#blur4)"/>
+      <circle cx="33" cy="-12" r="5" fill="#fff"/>
+    </g>
+    <g transform="translate(1380 460)" fill="#ffd31a" opacity="0.72">
+      <rect x="0" y="0" width="6" height="260"/>
+      <rect x="70" y="0" width="6" height="260"/>
+      <rect x="0" y="0" width="76" height="6"/>
+      <rect x="0" y="60" width="76" height="4"/>
+      <rect x="0" y="120" width="76" height="4"/>
+      <rect x="0" y="180" width="76" height="4"/>
+      <rect x="0" y="240" width="76" height="4"/>
+      <line x1="0" y1="6" x2="76" y2="60" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="76" y1="6" x2="0" y2="60" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="64" x2="76" y2="120" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="76" y1="64" x2="0" y2="120" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="124" x2="76" y2="180" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="76" y1="124" x2="0" y2="180" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="0" y1="184" x2="76" y2="240" stroke="#ffd31a" stroke-width="3"/>
+      <line x1="76" y1="184" x2="0" y2="240" stroke="#ffd31a" stroke-width="3"/>
+      <circle cx="38" cy="-12" r="10" fill="#ffd31a" filter="url(#blur4)"/>
+      <circle cx="38" cy="-12" r="5" fill="#fff"/>
+    </g>
+  </g>
+
+  <!-- ===== wet asphalt with vanishing-point road ===== -->
+  <polygon points="0,1080 0,820 760,720 1160,720 1920,820 1920,1080" fill="url(#road)"/>
+  <polygon points="0,1080 0,820 760,720 1160,720 1920,820 1920,1080" fill="url(#roadCenter)"/>
+
+  <!-- centre dashed yellow lane with perspective -->
+  <g fill="url(#laneLine)">
+    <polygon points="956,720 964,720 964,740 956,740"/>
+    <polygon points="952,758 968,758 968,790 952,790"/>
+    <polygon points="946,808 974,808 974,852 946,852"/>
+    <polygon points="940,872 980,872 980,932 940,932"/>
+    <polygon points="930,952 990,952 990,1024 930,1024"/>
+  </g>
+  <!-- side blue stripes -->
+  <polygon points="0,1080 0,820 760,720 750,720 0,820 0,1080" fill="url(#laneLineSide)" opacity="0.6"/>
+  <polygon points="1920,1080 1920,820 1160,720 1170,720 1920,820 1920,1080" fill="url(#laneLineSide)" opacity="0.6"/>
+
+  <!-- light puddle reflections / wet shine -->
+  <ellipse cx="600" cy="980" rx="380" ry="34" fill="#ffae3a" opacity="0.25" filter="url(#blur8)"/>
+  <ellipse cx="1320" cy="990" rx="280" ry="28" fill="#26d6ff" opacity="0.2" filter="url(#blur8)"/>
+
+  <!-- ===== motion light streaks (no cars, just energy) ===== -->
+  <g filter="url(#blur4)" opacity="0.85">
+    <ellipse cx="380" cy="900" rx="260" ry="14" fill="#ff5040" opacity="0.55"/>
+    <ellipse cx="380" cy="900" rx="120" ry="6" fill="#ffd0d0"/>
+    <ellipse cx="1500" cy="940" rx="320" ry="14" fill="#ff5040" opacity="0.55"/>
+    <ellipse cx="1500" cy="940" rx="160" ry="6" fill="#ffd0d0"/>
+    <ellipse cx="780" cy="820" rx="180" ry="6" fill="#26d6ff" opacity="0.55"/>
+    <ellipse cx="1180" cy="820" rx="180" ry="6" fill="#26d6ff" opacity="0.55"/>
+  </g>
+  <g filter="url(#glow)" opacity="0.5">
+    <circle cx="380" cy="900" r="40" fill="#ff5040"/>
+    <circle cx="1500" cy="940" r="50" fill="#ff5040"/>
+    <circle cx="780" cy="820" r="22" fill="#26d6ff"/>
+    <circle cx="1180" cy="820" r="22" fill="#26d6ff"/>
+  </g>
+
+  <!-- ===== top vignette so HUD/title pop ===== -->
+  <rect x="0" y="0" width="1920" height="320" fill="url(#sky)" opacity="0.0"/>
+  <rect x="0" y="0" width="1920" height="240" fill="#070d20" opacity="0.5"/>
+</svg>
