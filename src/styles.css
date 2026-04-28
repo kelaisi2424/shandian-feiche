@@ -313,6 +313,11 @@ body,
   font-family: "Arial Black", Arial, sans-serif;
   color: #fff;
 }
+.cur-icon {
+  width: calc(var(--ui) * 2.2);
+  height: calc(var(--ui) * 2.4);
+  flex-shrink: 0;
+}
 .coin-bottle {
   width: calc(var(--ui) * 1.6);
   height: calc(var(--ui) * 2);
@@ -506,11 +511,39 @@ body,
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 56px;
-  font-style: normal;
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 4px 9px rgba(0, 0, 0, 0.32);
+  font-size: 0;
+  text-shadow: none;
 }
+.tile em.lock::before {
+  content: "";
+  width: calc(var(--ui) * 5.4);
+  height: calc(var(--ui) * 5.4);
+  background:
+    radial-gradient(circle at 40% 35%, rgba(255, 200, 60, 0.95) 0%, rgba(180, 130, 0, 0.85) 60%, rgba(80, 50, 0, 0.7) 100%);
+  border-radius: 50%;
+  display: block;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.45),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+.tile em.lock::after {
+  content: "🔒";
+  position: absolute;
+  font-size: calc(var(--ui) * 3.2);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.tile-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* hide the legacy gradient backgrounds since SVG art replaces them */
+.car-art, .open-world, .garage-art, .task-art, .dev-art, .tile-arc { display: none; }
 
 /* tile artwork — start (blue koenigsegg-style) */
 .car-art {
@@ -630,28 +663,31 @@ body,
   position: absolute;
   top: calc(var(--ui) * 2);
   left: calc(var(--ui) * 1.3);
-  min-width: calc(var(--ui) * 13);
-  height: calc(var(--ui) * 4.6);
+  min-width: calc(var(--ui) * 16);
+  height: calc(var(--ui) * 6);
   display: flex;
   align-items: flex-end;
   gap: calc(var(--ui) * 0.6);
-  padding: 0 calc(var(--ui) * 1.3) calc(var(--ui) * 0.5) calc(var(--ui) * 1.3);
+  padding: 0 calc(var(--ui) * 1.6) calc(var(--ui) * 0.6) calc(var(--ui) * 1.6);
   color: #fff;
-  background: rgba(5, 18, 38, 0.78);
+  background: linear-gradient(180deg, rgba(5, 18, 38, 0.88) 0%, rgba(5, 18, 38, 0.7) 100%);
   transform: skew(-6deg);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  border-bottom: 3px solid rgba(255, 211, 26, 0.6);
 }
 .speed-box span {
   font-family: "Arial Black", Arial, sans-serif;
-  font-size: calc(var(--ui) * 4.6);
-  line-height: 0.8;
+  font-size: calc(var(--ui) * 6);
+  line-height: 0.78;
   font-weight: 900;
+  text-shadow: 0 0 18px rgba(50, 130, 255, 0.4);
+  font-variant-numeric: tabular-nums;
 }
 .speed-box small {
   margin-bottom: calc(var(--ui) * 0.3);
-  font-size: calc(var(--ui) * 1.2);
+  font-size: calc(var(--ui) * 1.4);
   font-weight: 900;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .race-icons {
@@ -822,6 +858,15 @@ body,
   border-radius: calc(var(--ui) * 1.4);
   font-size: calc(var(--ui) * 6);
   line-height: calc(var(--ui) * 4);
+  /* High-contrast yellow chevron arrows like the reference shot */
+  color: #ffd31a;
+  text-shadow: 0 0 12px rgba(255, 211, 26, 0.6);
+  background: linear-gradient(180deg, rgba(10, 30, 56, 0.55) 0%, rgba(10, 30, 56, 0.35) 100%);
+  border: 2px solid rgba(255, 211, 26, 0.35);
+}
+.steer-controls button:active {
+  background: rgba(255, 211, 26, 0.25);
+  color: #fff;
 }
 .steer-controls button:active,
 .pedals button:active {
@@ -841,16 +886,21 @@ body,
   width: calc(var(--ui) * 8);
   height: calc(var(--ui) * 5.4);
   border-radius: calc(var(--ui) * 0.8);
-  font-size: calc(var(--ui) * 4);
+  font-size: 0;
   transform: skew(-10deg);
+  background:
+    repeating-linear-gradient(135deg, rgba(20, 142, 255, 0.85) 0 14px, rgba(10, 30, 56, 0.85) 14px 28px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.18);
 }
 .pedal-gas {
   width: calc(var(--ui) * 6.6);
   height: calc(var(--ui) * 11);
   border-radius: calc(var(--ui) * 0.8);
-  font-size: calc(var(--ui) * 6);
+  font-size: 0;
   transform: skew(-10deg);
-  color: rgba(255, 220, 90, 0.95) !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 211, 26, 0.92) 0 14px, rgba(10, 30, 56, 0.85) 14px 28px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.18);
 }
 
 .hud-progress {
@@ -1010,6 +1060,10 @@ body,
 .daily-prize .coin-bottle {
   width: calc(var(--ui) * 3);
   height: calc(var(--ui) * 3.6);
+}
+.cur-icon-big {
+  width: calc(var(--ui) * 4);
+  height: calc(var(--ui) * 5);
 }
 .muted {
   color: #93a8c8;

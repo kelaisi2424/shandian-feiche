@@ -50,32 +50,152 @@
         </button>
 
         <div class="currency-bar">
-          <span class="coin"><i class="coin-bottle"></i><b id="coinTotal">0</b></span>
+          <span class="coin">
+            <svg class="cur-icon" viewBox="0 0 28 36" aria-hidden="true">
+              <rect x="9" y="0" width="10" height="6" rx="1.5" fill="#5c5c5c"/>
+              <rect x="6" y="6" width="16" height="3" rx="1" fill="#3a3a3a"/>
+              <path d="M 6 9 L 22 9 L 23 32 Q 23 34 21 34 L 7 34 Q 5 34 5 32 Z" fill="url(#coinG)" stroke="#a35a00" stroke-width="1"/>
+              <defs>
+                <linearGradient id="coinG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffe45a"/>
+                  <stop offset="1" stop-color="#ff8a16"/>
+                </linearGradient>
+              </defs>
+              <rect x="8" y="14" width="12" height="2" fill="#ffeea0" opacity="0.7"/>
+              <rect x="8" y="20" width="12" height="2" fill="#ffeea0" opacity="0.5"/>
+            </svg>
+            <b id="coinTotal">0</b>
+          </span>
           <button id="addCoins" class="plus-btn">＋</button>
-          <span class="cash"><i class="cash-gem"></i><b id="cashTotal">0</b></span>
+          <span class="cash">
+            <svg class="cur-icon" viewBox="0 0 28 28" aria-hidden="true">
+              <polygon points="14,2 26,10 22,26 6,26 2,10" fill="url(#gemG)" stroke="#0a5a32" stroke-width="1.5" stroke-linejoin="round"/>
+              <polyline points="2,10 14,16 26,10" fill="none" stroke="#fff" stroke-width="1" opacity="0.55"/>
+              <polyline points="14,16 14,26" fill="none" stroke="#fff" stroke-width="1" opacity="0.55"/>
+              <defs>
+                <linearGradient id="gemG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#5cf2a4"/>
+                  <stop offset="1" stop-color="#0fa86a"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <b id="cashTotal">0</b>
+          </span>
           <span class="ring"></span>
         </div>
 
         <main class="tile-grid">
           <button id="startGame" class="tile start-tile">
-            <span class="tile-art car-art"></span>
-            <span class="tile-arc"></span>
+            <svg class="tile-svg start-svg" viewBox="0 0 240 200" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ff912a"/>
+                  <stop offset="1" stop-color="#ffd31a"/>
+                </linearGradient>
+                <linearGradient id="loop" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ff5520"/>
+                  <stop offset="1" stop-color="#c41a00"/>
+                </linearGradient>
+                <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#88ddff"/>
+                  <stop offset="0.45" stop-color="#1a8eff"/>
+                  <stop offset="1" stop-color="#062c66"/>
+                </linearGradient>
+                <radialGradient id="exhaust" cx="0.5" cy="0.5" r="0.5">
+                  <stop offset="0" stop-color="#fff"/>
+                  <stop offset="0.4" stop-color="#ffd31a"/>
+                  <stop offset="1" stop-color="#ff5520" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="240" height="200" fill="url(#sky)"/>
+              <!-- big loop track behind -->
+              <path d="M -10 130 Q 80 -20 180 110 Q 230 170 260 130" fill="none" stroke="url(#loop)" stroke-width="22" stroke-linecap="round"/>
+              <path d="M -10 130 Q 80 -20 180 110 Q 230 170 260 130" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="6 8" opacity="0.6"/>
+              <!-- exhaust glow -->
+              <ellipse cx="60" cy="160" rx="48" ry="22" fill="url(#exhaust)"/>
+              <!-- supercar silhouette (Koenigsegg-ish) -->
+              <path d="M 70 150 L 75 130 Q 90 116 110 116 L 145 116 Q 160 110 175 124 L 195 130 Q 200 138 195 152 L 70 152 Z" fill="url(#carBody)" stroke="#001830" stroke-width="2"/>
+              <!-- windscreen / cabin -->
+              <path d="M 105 122 L 145 122 Q 152 124 156 132 L 110 132 Z" fill="#0a1530" opacity="0.9"/>
+              <!-- side stripe -->
+              <path d="M 80 142 L 192 142" stroke="#fff" stroke-width="1.5" opacity="0.5"/>
+              <!-- wheels -->
+              <circle cx="92" cy="155" r="11" fill="#0a0a0a"/>
+              <circle cx="92" cy="155" r="6" fill="#cfd6e0"/>
+              <circle cx="172" cy="155" r="11" fill="#0a0a0a"/>
+              <circle cx="172" cy="155" r="6" fill="#cfd6e0"/>
+              <!-- rear wing -->
+              <rect x="183" y="118" width="14" height="3" fill="#001830"/>
+              <rect x="190" y="120" width="2" height="6" fill="#001830"/>
+            </svg>
             <strong>开始游戏 》</strong>
           </button>
           <button id="tracksTile" class="tile wide-tile">
-            <span class="tile-photo open-world"></span>
+            <svg class="tile-svg" viewBox="0 0 240 110" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="suvSky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#76b8ff"/>
+                  <stop offset="0.6" stop-color="#cfe7ff"/>
+                  <stop offset="0.61" stop-color="#5b8b3e"/>
+                  <stop offset="1" stop-color="#2e4824"/>
+                </linearGradient>
+              </defs>
+              <rect width="240" height="110" fill="url(#suvSky)"/>
+              <!-- mountains -->
+              <polygon points="-10,70 40,30 90,68 140,28 200,72 250,40 250,90 -10,90" fill="#3d6c4a" opacity="0.7"/>
+              <!-- road -->
+              <path d="M 0 88 Q 120 78 240 88 L 240 110 L 0 110 Z" fill="#3a3a3a"/>
+              <path d="M 0 99 Q 120 92 240 99" stroke="#ffd31a" stroke-width="2" stroke-dasharray="10 8" fill="none"/>
+              <!-- SUV body -->
+              <path d="M 100 70 Q 105 56 120 56 L 152 56 Q 165 58 168 70 L 168 84 L 100 84 Z" fill="#ff7a18" stroke="#3a1500" stroke-width="1.5"/>
+              <rect x="118" y="60" width="38" height="12" fill="#0a1530" opacity="0.85"/>
+              <circle cx="112" cy="86" r="6" fill="#0a0a0a"/>
+              <circle cx="158" cy="86" r="6" fill="#0a0a0a"/>
+            </svg>
             <strong>赛道</strong>
           </button>
           <button id="garageTile" class="tile small-tile garage-tile">
-            <span class="tile-photo garage-art"></span>
+            <svg class="tile-svg" viewBox="0 0 110 90" preserveAspectRatio="xMidYMid slice">
+              <rect width="110" height="90" fill="#ffb22a"/>
+              <!-- garage car icon -->
+              <path d="M 18 58 L 22 42 Q 28 34 38 34 L 72 34 Q 82 34 88 42 L 92 58 L 92 70 L 18 70 Z" fill="#fff" stroke="#3a2200" stroke-width="2.5"/>
+              <rect x="34" y="42" width="42" height="12" fill="#3a2200" opacity="0.4"/>
+              <circle cx="32" cy="70" r="7" fill="#3a2200"/>
+              <circle cx="78" cy="70" r="7" fill="#3a2200"/>
+              <!-- garage door arch -->
+              <path d="M 8 60 Q 8 14 55 14 Q 102 14 102 60" fill="none" stroke="#3a2200" stroke-width="2.5" opacity="0.45"/>
+            </svg>
             <strong>车库</strong>
           </button>
           <button id="dailyTile" class="tile small-tile task-tile">
-            <span class="tile-photo task-art"></span>
+            <svg class="tile-svg" viewBox="0 0 110 90" preserveAspectRatio="xMidYMid slice">
+              <rect width="110" height="90" fill="#3d8edd"/>
+              <!-- stack of mission cards -->
+              <rect x="20" y="22" width="68" height="50" fill="#fff" rx="5" transform="rotate(-6 54 47)"/>
+              <rect x="22" y="22" width="64" height="48" fill="#aedaff" rx="5"/>
+              <line x1="32" y1="32" x2="76" y2="32" stroke="#1a4d8c" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="32" y1="42" x2="68" y2="42" stroke="#1a4d8c" stroke-width="2" stroke-linecap="round"/>
+              <line x1="32" y1="52" x2="60" y2="52" stroke="#1a4d8c" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="78" cy="58" r="7" fill="#ffd31a" stroke="#1a4d8c" stroke-width="2"/>
+            </svg>
             <strong>任务</strong>
           </button>
           <button class="tile tall-tile muted">
-            <span class="tile-photo dev-art"></span>
+            <svg class="tile-svg" viewBox="0 0 110 200" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="grayDev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#cccccc"/>
+                  <stop offset="1" stop-color="#888888"/>
+                </linearGradient>
+              </defs>
+              <rect width="110" height="200" fill="url(#grayDev)"/>
+              <path d="M 20 98 L 26 80 Q 34 70 48 70 L 78 70 Q 90 72 96 80 L 100 98 L 100 120 L 20 120 Z" fill="#aaa" stroke="#444" stroke-width="2"/>
+              <rect x="40" y="78" width="38" height="14" fill="#444" opacity="0.6"/>
+              <circle cx="34" cy="120" r="8" fill="#222"/>
+              <circle cx="86" cy="120" r="8" fill="#222"/>
+              <circle cx="55" cy="50" r="14" fill="rgba(255,255,255,0.4)"/>
+              <text x="55" y="56" text-anchor="middle" font-size="20" font-weight="900" fill="#444">🔒</text>
+            </svg>
             <strong>开发中</strong>
           </button>
         </main>
@@ -188,7 +308,17 @@
           <h2>每日登录</h2>
           <p>第 <b id="dailyDay">1</b> 天打卡，赠送：</p>
           <div class="daily-prize">
-            <i class="coin-bottle"></i>
+            <svg class="cur-icon-big" viewBox="0 0 28 36" aria-hidden="true">
+              <rect x="9" y="0" width="10" height="6" rx="1.5" fill="#5c5c5c"/>
+              <rect x="6" y="6" width="16" height="3" rx="1" fill="#3a3a3a"/>
+              <path d="M 6 9 L 22 9 L 23 32 Q 23 34 21 34 L 7 34 Q 5 34 5 32 Z" fill="url(#coinG2)" stroke="#a35a00" stroke-width="1"/>
+              <defs>
+                <linearGradient id="coinG2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffe45a"/>
+                  <stop offset="1" stop-color="#ff8a16"/>
+                </linearGradient>
+              </defs>
+            </svg>
             <strong id="dailyAmount">+50</strong>
           </div>
           <p class="muted">每天回来都有奖励，连续登录还会变多。</p>

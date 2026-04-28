@@ -1,5 +1,9 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js"
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js"
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js"
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js"
 import { Save } from "./save.js"
 import "./styles.css"
 
@@ -142,7 +146,7 @@ const state = {
   airSince: 0
 }
 
-let renderer, scene, camera
+let renderer, scene, camera, composer, bloomPass
 const track = new THREE.Group()
 const world = new THREE.Group()
 const dynamic = new THREE.Group()
@@ -358,7 +362,7 @@ async function init() {
   renderer.setSize(innerWidth, innerHeight)
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.2
+  renderer.toneMappingExposure = 0.95
 
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x9bd0f6)
@@ -375,6 +379,46 @@ async function init() {
   const fill = new THREE.DirectionalLight(0x9ed8ff, 0.8)
   fill.position.set(-60, 30, -120)
   scene.add(fill)
+
+  // env map for car paint reflections — procedural "studio sky + ground" via PMREM
+  const pmrem = new THREE.PMREMGenerator(renderer)
+  pmrem.compileEquirectangularShader()
+  const envCanvas = document.createElement("canvas")
+  envCanvas.width = 256
+  envCanvas.height = 128
+  const ec = envCanvas.getContext("2d")
+  const sky = ec.createLinearGradient(0, 0, 0, 128)
+  sky.addColorStop(0, "#cfe6ff")
+  sky.addColorStop(0.55, "#88baff")
+  sky.addColorStop(0.6, "#3b69aa")
+  sky.addColorStop(1, "#1f3050")
+  ec.fillStyle = sky
+  ec.fillRect(0, 0, 256, 128)
+  // hot soft sun
+  const sunG = ec.createRadialGradient(180, 30, 0, 180, 30, 38)
+  sunG.addColorStop(0, "rgba(255,250,210,1)")
+  sunG.addColorStop(1, "rgba(255,250,210,0)")
+  ec.fillStyle = sunG
+  ec.fillRect(120, 0, 130, 60)
+  const envTex = new THREE.CanvasTexture(envCanvas)
+  envTex.mapping = THREE.EquirectangularReflectionMapping
+  envTex.colorSpace = THREE.SRGBColorSpace
+  const envMap = pmrem.fromEquirectangular(envTex).texture
+  scene.environment = envMap
+  envTex.dispose()
+  pmrem.dispose()
+
+  // post-processing — bloom on glow elements (lights, nitro, coins, neon)
+  composer = new EffectComposer(renderer)
+  composer.addPass(new RenderPass(scene, camera))
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(innerWidth, innerHeight),
+    0.25,    // strength — subtle
+    0.4,     // radius
+    0.92     // threshold — only very bright pixels (lights, nitro, coins)
+  )
+  composer.addPass(bloomPass)
+  composer.addPass(new OutputPass())
 
   buildMaterials()
   await loadAssets()
@@ -414,17 +458,20 @@ function buildMaterials() {
   mats.roadCenter = new THREE.MeshStandardMaterial({
     map: roadCenterTexture(),
     roughness: 0.55,
-    metalness: 0.05
+    metalness: 0.05,
+    envMapIntensity: 0.15
   })
   mats.roadEdge = new THREE.MeshStandardMaterial({
     map: roadEdgeTexture(),
     roughness: 0.45,
-    metalness: 0.08
+    metalness: 0.08,
+    envMapIntensity: 0.2
   })
   mats.roadEdgeR = new THREE.MeshStandardMaterial({
     map: roadEdgeTexture(true),
     roughness: 0.45,
-    metalness: 0.08
+    metalness: 0.08,
+    envMapIntensity: 0.2
   })
   mats.rail = new THREE.MeshStandardMaterial({
     color: 0x0e63b8,
@@ -461,34 +508,35 @@ function buildMaterials() {
 
 function roadCenterTexture() {
   const c = document.createElement("canvas")
-  c.width = c.height = 256
+  c.width = c.height = 512
   const g = c.getContext("2d")
+  // base yellow
   g.fillStyle = "#ffd31a"
-  g.fillRect(0, 0, 256, 256)
-  // centre dashed lane stripes
-  g.fillStyle = "#fff7c5"
-  for (let i = 0; i < 256; i += 64) g.fillRect(120, i + 8, 16, 36)
-  // subtle grid
-  g.strokeStyle = "rgba(255,255,255,.18)"
-  g.lineWidth = 1
-  for (let i = 0; i < 256; i += 32) {
-    g.beginPath()
-    g.moveTo(i, 0)
-    g.lineTo(i, 256)
-    g.stroke()
+  g.fillRect(0, 0, 512, 512)
+  // diamond-plate raised dots — the small bumps you see on the screenshot road.
+  // Two-pass: dark shadow disk + bright highlight disk offset by 1px → 3D feel.
+  const cell = 22
+  for (let y = -cell; y < 512 + cell; y += cell) {
+    for (let x = (y / cell) % 2 === 0 ? 0 : cell / 2; x < 512 + cell; x += cell) {
+      g.fillStyle = "rgba(150, 100, 0, 0.45)"
+      g.beginPath()
+      g.arc(x + 1, y + 1, 4.5, 0, Math.PI * 2)
+      g.fill()
+      const grd = g.createRadialGradient(x - 0.5, y - 0.5, 0, x, y, 4.6)
+      grd.addColorStop(0, "rgba(255, 250, 200, 0.95)")
+      grd.addColorStop(0.6, "rgba(255, 220, 90, 0.7)")
+      grd.addColorStop(1, "rgba(255, 200, 40, 0)")
+      g.fillStyle = grd
+      g.beginPath()
+      g.arc(x, y, 4.6, 0, Math.PI * 2)
+      g.fill()
+    }
   }
-  // diagonal slant accent
-  g.strokeStyle = "rgba(255,255,255,.22)"
-  g.lineWidth = 4
-  for (let i = -200; i < 320; i += 36) {
-    g.beginPath()
-    g.moveTo(i, 0)
-    g.lineTo(i + 80, 256)
-    g.stroke()
-  }
+  // centre dashed white lane stripes (strong)
+  g.fillStyle = "rgba(255, 255, 255, 0.85)"
+  for (let i = 0; i < 512; i += 96) g.fillRect(244, i + 12, 24, 64)
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
-  t.repeat.set(1, 1)
   t.colorSpace = THREE.SRGBColorSpace
   return t
 }
@@ -497,48 +545,28 @@ function roadEdgeTexture(flip = false) {
   const c = document.createElement("canvas")
   c.width = c.height = 256
   const g = c.getContext("2d")
-  g.fillStyle = "#ffd31a"
+  g.fillStyle = "#0c5fb6"
   g.fillRect(0, 0, 256, 256)
-  g.save()
-  if (flip) {
-    g.translate(256, 0)
-    g.scale(-1, 1)
+  // big alternating blue squares — like the wide checker pattern in the
+  // reference screenshot. Two shades of blue + faint yellow inner stripe.
+  const cell = 64
+  for (let y = 0; y < 256; y += cell) {
+    for (let x = 0; x < 256; x += cell) {
+      const isLight = ((x / cell) + (y / cell)) % 2 === 0
+      g.fillStyle = isLight ? "#1392ff" : "#0c5fb6"
+      g.fillRect(x, y, cell, cell)
+      // inset darker border for depth
+      g.strokeStyle = isLight ? "#0a55a8" : "#062c66"
+      g.lineWidth = 2
+      g.strokeRect(x + 1, y + 1, cell - 2, cell - 2)
+    }
   }
-  // forward-pointing chevrons (V arrows) all aiming "up" the texture (the +V
-  // direction), which maps to the player's forward direction when applied to
-  // the road. Two-tone blue for depth.
-  const stripeH = 28
-  const stripeGap = 4
-  const tip = 0      // x position of the chevron tip on the inner edge (texture left)
-  const tail = 256   // x position of the chevron tail on the outer edge (texture right)
-  const tipDepth = 10 // chevron tip pulled forward (smaller V)
-  for (let y = -stripeH; y < 256 + stripeH; y += stripeH + stripeGap) {
-    g.fillStyle = "#0c5fb6"
-    g.beginPath()
-    g.moveTo(tip, y + stripeH / 2)
-    g.lineTo(tail, y)
-    g.lineTo(tail, y + 6)
-    g.lineTo(tip + tipDepth, y + stripeH / 2)
-    g.lineTo(tail, y + stripeH - 6)
-    g.lineTo(tail, y + stripeH)
-    g.closePath()
-    g.fill()
-    // bright blue inner highlight chevron
-    g.fillStyle = "#1392ff"
-    g.beginPath()
-    g.moveTo(tip + 4, y + stripeH / 2)
-    g.lineTo(tail - 8, y + 6)
-    g.lineTo(tail - 8, y + 10)
-    g.lineTo(tip + 14, y + stripeH / 2)
-    g.lineTo(tail - 8, y + stripeH - 10)
-    g.lineTo(tail - 8, y + stripeH - 6)
-    g.closePath()
-    g.fill()
-  }
-  // yellow seam strip on the inner edge (next to centre lane)
+  // yellow inner-edge stripe
   g.fillStyle = "#ffd31a"
-  g.fillRect(0, 0, 12, 256)
-  g.restore()
+  g.fillRect(flip ? 240 : 0, 0, 16, 256)
+  // narrow white safety stripe just inside the yellow
+  g.fillStyle = "rgba(255, 255, 255, 0.7)"
+  g.fillRect(flip ? 232 : 16, 0, 4, 256)
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.colorSpace = THREE.SRGBColorSpace
@@ -802,9 +830,21 @@ function buildTrack() {
     }
   }
 
-  // periodic blue zebra stripes across the centre lane
+  // big start-line zebra stripe (like the bold blue band visible in the
+  // screenshot under the start grid)
+  const startStripeMat = new THREE.MeshStandardMaterial({
+    color: 0x1392ff,
+    emissive: 0x0a4a8a,
+    emissiveIntensity: 0.18,
+    roughness: 0.35
+  })
+  const startStripeGeo = new THREE.BoxGeometry(CFG.laneHalfWidth * 2 - 0.4, 0.06, 3.4)
+  const startStripeMesh = new THREE.Mesh(startStripeGeo, startStripeMat)
+  startStripeMesh.position.set(0, 0.21, 8)
+  track.add(startStripeMesh)
+  // periodic narrower blue zebra stripes along the rest of the road
   const zebraMat = new THREE.MeshStandardMaterial({ color: 0x1392ff, roughness: 0.4 })
-  for (let z = -4; z > -lengthMeters; z -= 64) {
+  for (let z = -64; z > -lengthMeters; z -= 64) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(CFG.laneHalfWidth * 2 - 0.4, 0.05, 1.2), zebraMat)
     stripe.position.set(0, 0.21, z)
     track.add(stripe)
@@ -1017,16 +1057,63 @@ function makeFloatingBall() {
   return g
 }
 
+// Industrial square truss tower, like the bright yellow lattice frames in
+// the reference screenshot. Box-frame footprint with cross-bracing X bars.
 function makeTower(seed) {
   const g = new THREE.Group()
-  for (let i = 0; i < 3 + (seed % 3); i++) {
-    const block = new THREE.Mesh(
-      new THREE.BoxGeometry(4 + (i % 2) * 1.5, 4, 4),
-      new THREE.MeshStandardMaterial({ color: i % 2 ? 0xffd02e : 0x1da3ec, roughness: 0.35 })
-    )
-    block.position.set(0, 2 + i * 4, 0)
-    g.add(block)
+  const yellow = new THREE.MeshStandardMaterial({ color: 0xffd02e, roughness: 0.42, metalness: 0.25 })
+  const dark = new THREE.MeshStandardMaterial({ color: 0x142036, roughness: 0.55 })
+  const W = 3.2 + (seed % 3) * 0.4
+  const H = 12 + (seed % 4) * 2
+  const segH = 2.4
+  // 4 vertical legs
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.32, H, 0.32), yellow)
+      leg.position.set(sx * W / 2, H / 2, sz * W / 2)
+      g.add(leg)
+    }
   }
+  // horizontal bands every segH metres + diagonal X bracing
+  for (let h = segH; h <= H; h += segH) {
+    // band rectangle (4 horizontal beams)
+    for (const sx of [-1, 1]) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(W + 0.32, 0.18, 0.18), yellow)
+      beam.position.set(0, h, sx * W / 2)
+      g.add(beam)
+      const beam2 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, W + 0.32), yellow)
+      beam2.position.set(sx * W / 2, h, 0)
+      g.add(beam2)
+    }
+    // diagonal X on front and back faces
+    for (const sz of [-1, 1]) {
+      const diag = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(W, segH), 0.14, 0.14), yellow)
+      diag.position.set(0, h - segH / 2, sz * W / 2)
+      diag.rotation.z = Math.atan2(segH, W)
+      g.add(diag)
+      const diag2 = diag.clone()
+      diag2.rotation.z = -Math.atan2(segH, W)
+      g.add(diag2)
+    }
+  }
+  // base plate
+  const base = new THREE.Mesh(new THREE.BoxGeometry(W + 1.2, 0.3, W + 1.2), dark)
+  base.position.set(0, 0.15, 0)
+  g.add(base)
+  // top platform with star/light
+  const top = new THREE.Mesh(new THREE.BoxGeometry(W + 0.8, 0.22, W + 0.8), dark)
+  top.position.set(0, H + 0.11, 0)
+  g.add(top)
+  // tower-top star/light
+  const starMat = new THREE.MeshStandardMaterial({
+    color: 0xffe45a,
+    emissive: 0xffae0e,
+    emissiveIntensity: 1.2,
+    roughness: 0.3
+  })
+  const star = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), starMat)
+  star.position.set(0, H + 0.55, 0)
+  g.add(star)
   return g
 }
 
@@ -2014,7 +2101,8 @@ function loop(now) {
   animateScenery(dt, now)
   updateParticles(dt)
   setEngineLoad(state.speed, state.nitroTime > 0)
-  renderer.render(scene, camera)
+  if (composer) composer.render()
+  else renderer.render(scene, camera)
   requestAnimationFrame(loop)
 }
 
@@ -2361,6 +2449,8 @@ function resize() {
   camera.fov = innerWidth > innerHeight ? 60 : 70
   camera.updateProjectionMatrix()
   renderer.setSize(innerWidth, innerHeight)
+  if (composer) composer.setSize(innerWidth, innerHeight)
+  if (bloomPass) bloomPass.setSize(innerWidth, innerHeight)
 }
 
 // register service worker (PWA offline cache)
