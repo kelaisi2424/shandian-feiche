@@ -47,48 +47,49 @@
         <div class="menu-bg"></div>
         <div class="menu-cover" aria-hidden="true"></div>
         <div class="menu-overlay" aria-hidden="true"></div>
-        <button class="gear-tile" id="gearBtn" aria-label="settings">
-          <svg viewBox="0 0 24 24" width="38" height="38" fill="#fff"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1A7.5 7.5 0 0 0 14.7 5l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2.3 1.4l-2.5-1-2 3.5L5.2 11a7.4 7.4 0 0 0 0 2L3 14.6l2 3.5 2.5-1a7.5 7.5 0 0 0 2.3 1.4l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.3-1.4l2.5 1 2-3.5L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
-        </button>
 
-        <div class="currency-bar">
-          <span class="coin">
-            <svg class="cur-icon" viewBox="0 0 28 36" aria-hidden="true">
-              <rect x="9" y="0" width="10" height="6" rx="1.5" fill="#5c5c5c"/>
-              <rect x="6" y="6" width="16" height="3" rx="1" fill="#3a3a3a"/>
-              <path d="M 6 9 L 22 9 L 23 32 Q 23 34 21 34 L 7 34 Q 5 34 5 32 Z" fill="url(#coinG)" stroke="#a35a00" stroke-width="1"/>
-              <defs>
-                <linearGradient id="coinG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#ffe45a"/>
-                  <stop offset="1" stop-color="#ff8a16"/>
-                </linearGradient>
-              </defs>
-              <rect x="8" y="14" width="12" height="2" fill="#ffeea0" opacity="0.7"/>
-              <rect x="8" y="20" width="12" height="2" fill="#ffeea0" opacity="0.5"/>
-            </svg>
-            <b id="coinTotal">0</b>
-          </span>
-          <button id="addCoins" class="plus-btn">＋</button>
-          <span class="cash">
-            <svg class="cur-icon" viewBox="0 0 28 28" aria-hidden="true">
-              <polygon points="14,2 26,10 22,26 6,26 2,10" fill="url(#gemG)" stroke="#0a5a32" stroke-width="1.5" stroke-linejoin="round"/>
-              <polyline points="2,10 14,16 26,10" fill="none" stroke="#fff" stroke-width="1" opacity="0.55"/>
-              <polyline points="14,16 14,26" fill="none" stroke="#fff" stroke-width="1" opacity="0.55"/>
-              <defs>
-                <linearGradient id="gemG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#5cf2a4"/>
-                  <stop offset="1" stop-color="#0fa86a"/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <b id="cashTotal">0</b>
-          </span>
-          <span class="ring"></span>
-        </div>
-
-        <header class="menu-hero">
-          <h1>闪电飞车</h1>
-          <span>LIGHTNING&nbsp;RACER</span>
+        <header class="menu-topbar">
+          <div class="brand">
+            <span class="brand-bolt">⚡</span>
+            <div class="brand-text">
+              <b>闪电飞车</b>
+              <small>LIGHTNING RACER</small>
+            </div>
+          </div>
+          <div class="currency-bar">
+            <span class="coin">
+              <svg class="cur-icon" viewBox="0 0 28 36" aria-hidden="true">
+                <rect x="9" y="0" width="10" height="6" rx="1.5" fill="#5c5c5c"/>
+                <rect x="6" y="6" width="16" height="3" rx="1" fill="#3a3a3a"/>
+                <path d="M 6 9 L 22 9 L 23 32 Q 23 34 21 34 L 7 34 Q 5 34 5 32 Z" fill="url(#coinG)" stroke="#a35a00" stroke-width="1"/>
+                <defs>
+                  <linearGradient id="coinG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffe45a"/>
+                    <stop offset="1" stop-color="#ff8a16"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <b id="coinTotal">0</b>
+            </span>
+            <button id="addCoins" class="plus-btn">＋</button>
+            <span class="cash">
+              <svg class="cur-icon" viewBox="0 0 28 28" aria-hidden="true">
+                <polygon points="14,2 22,10 18,24 10,24 6,10" fill="url(#gemG)" stroke="#7a5a00" stroke-width="1.4" stroke-linejoin="round"/>
+                <defs>
+                  <linearGradient id="gemG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffe45a"/>
+                    <stop offset="1" stop-color="#ff8a16"/>
+                  </linearGradient>
+                </defs>
+                <polygon points="14,4 19,9 14,14 9,9" fill="#fff" opacity="0.55"/>
+              </svg>
+              <b id="cashTotal">0</b>
+            </span>
+            <span class="ring" aria-hidden="true"></span>
+          </div>
+          <button class="gear-tile" id="gearBtn" aria-label="settings">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1A7.5 7.5 0 0 0 14.7 5l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2.3 1.4l-2.5-1-2 3.5L5.2 11a7.4 7.4 0 0 0 0 2L3 14.6l2 3.5 2.5-1a7.5 7.5 0 0 0 2.3 1.4l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.3-1.4l2.5 1 2-3.5L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
+          </button>
         </header>
 
         <main class="tile-grid">
@@ -106,10 +107,10 @@
             <strong>开始游戏</strong>
             <em class="tile-sub">START RACE</em>
           </button>
-          <button id="tracksTile" class="tile wide-tile">
+          <button id="tracksTile" class="tile small-tile">
             <span class="tile-icon">
               <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#26d6ff" stroke-width="3"/>
+                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#5cf2a4" stroke-width="3"/>
                 <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 3"/>
                 <circle cx="22" cy="38" r="3" fill="#26d6ff"/>
                 <circle cx="42" cy="38" r="3" fill="#ffd31a"/>
@@ -143,7 +144,7 @@
             <strong>任务</strong>
             <em class="tile-sub">MISSIONS</em>
           </button>
-          <button class="tile tall-tile muted">
+          <button class="tile small-tile muted">
             <span class="tile-icon">
               <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
                 <rect x="14" y="22" width="36" height="26" rx="4" fill="none" stroke="#888" stroke-width="3"/>
@@ -154,6 +155,43 @@
             <em class="tile-sub">SOON</em>
           </button>
         </main>
+
+        <footer class="menu-actionbar">
+          <div class="player-level">
+            <span class="crown">👑</span>
+            <div class="player-text">
+              <b>LV. <span id="playerLevel">1</span></b>
+              <small id="playerTitle">新手车手</small>
+            </div>
+          </div>
+          <nav class="action-nav">
+            <button class="nav-btn active" data-nav="home">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 3 4 10v11h6v-7h4v7h6V10z"/></svg>
+              <span>首页</span>
+              <em>HOME</em>
+            </button>
+            <button class="nav-btn" id="navRanking">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 4h10v3a5 5 0 0 1-4 4.9V14h2v2H9v-2h2v-2.1A5 5 0 0 1 7 7zm-3 1h2v2a3 3 0 0 1-2 2.8zm14 0h2v4.8a3 3 0 0 1-2-2.8zM6 18h12v3H6z"/></svg>
+              <span>排行榜</span>
+              <em>RANKING</em>
+            </button>
+            <button class="nav-btn" id="navDaily">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6zm2 2v2h2v-2zm4 0v2h2v-2zm4 0v2h2v-2zm-8 4v2h2v-2zm4 0v2h2v-2z"/></svg>
+              <span>每日</span>
+              <em>DAILY</em>
+            </button>
+            <button class="nav-btn" id="navShare">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.5-3.7a3 3 0 0 0 0-2.9l6.5-3.7a3 3 0 1 0-1-1.7l-6.5 3.7a3 3 0 1 0 0 6l6.5 3.7A3 3 0 1 0 18 16z"/></svg>
+              <span>分享</span>
+              <em>SHARE</em>
+            </button>
+          </nav>
+          <button id="ctaStartRace" class="cta-btn">
+            <span>开始游戏</span>
+            <em>START RACE</em>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M9 6 16 12 9 18z"/></svg>
+          </button>
+        </footer>
       </section>
 
       <section id="hud" class="hud">

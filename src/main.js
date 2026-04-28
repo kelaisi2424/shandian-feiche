@@ -1901,6 +1901,60 @@ function bindMetaControls() {
   })
   // share button
   $("shareBtn").addEventListener("click", shareResult)
+
+  // bottom action-bar nav + CTA
+  const ctaBtn = document.getElementById("ctaStartRace")
+  if (ctaBtn) ctaBtn.addEventListener("click", startRace)
+  const navRanking = document.getElementById("navRanking")
+  if (navRanking) navRanking.addEventListener("click", showLeaderboard)
+  const navDaily = document.getElementById("navDaily")
+  if (navDaily) navDaily.addEventListener("click", () => maybeShowDailyBonus(true))
+  const navShare = document.getElementById("navShare")
+  if (navShare) navShare.addEventListener("click", shareCurrentBest)
+}
+
+// Show top-5 leaderboard via the result modal in read-only mode
+function showLeaderboard() {
+  const fresh = Save.get()
+  $("resultTitle").textContent = "排行榜"
+  $("resultCopy").textContent = "本地最佳记录（按用时排序）"
+  const best = fresh.bestTimePerTrack[fresh.selectedTrack]
+  $("resBestTime").textContent = best ? mmss(best.ms) : "--"
+  $("resStatTime").textContent = "--"
+  $("resStatCoins").textContent = String(fresh.coins)
+  $("resStatHits").textContent = String(fresh.totalRaces)
+  const board = $("resLeaderboard")
+  board.innerHTML = ""
+  const entries = fresh.leaderboard
+    .filter((x) => x.trackId === fresh.selectedTrack)
+    .slice(0, 10)
+  if (entries.length === 0) {
+    const li = document.createElement("li")
+    li.innerHTML = `<span style="opacity:0.6">暂无记录，去比一局！</span>`
+    board.appendChild(li)
+  } else {
+    entries.forEach((row, i) => {
+      const li = document.createElement("li")
+      li.innerHTML = `<span>#${i + 1} · ${CARS[row.carId]?.label ?? row.carId}</span><b>${mmss(row.ms)}</b>`
+      board.appendChild(li)
+    })
+  }
+  showOverlay("resultScreen")
+}
+
+// Share current local best stats as PNG
+function shareCurrentBest() {
+  const fresh = Save.get()
+  const best = fresh.bestTimePerTrack[fresh.selectedTrack]
+  if (!best) {
+    toast("还没成绩，先比一局！", 1100)
+    return
+  }
+  $("resultTitle").textContent = "我的最佳"
+  $("resStatTime").textContent = mmss(best.ms)
+  $("resStatCoins").textContent = String(fresh.coins)
+  $("resStatHits").textContent = String(fresh.totalRaces)
+  shareResult()
 }
 
 function openSettings() {
