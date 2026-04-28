@@ -70,6 +70,128 @@ let checkpoints = []
 let assets = {}
 let last = performance.now()
 const mats = {}
+
+// ────────────────────────────────────────────────────────────────────
+// audio (Web Audio synthesised engine loop + SFX, no asset downloads)
+// ────────────────────────────────────────────────────────────────────
+const audio = {
+  ctx: null,
+  master: null,
+  engine: null,    // { osc1, osc2, gain }
+  windGain: null,
+  unlocked: false
+}
+
+function unlockAudio() {
+  if (audio.unlocked) return
+  audio.unlocked = true
+  const Ctx = window.AudioContext || window.webkitAudioContext
+  if (!Ctx) return
+  audio.ctx = new Ctx()
+  audio.master = audio.ctx.createGain()
+  audio.master.gain.value = 0.6
+  audio.master.connect(audio.ctx.destination)
+
+  // engine: two saw oscillators slightly detuned + lowpass + gain
+  const osc1 = audio.ctx.createOscillator()
+  const osc2 = audio.ctx.createOscillator()
+  osc1.type = "sawtooth"
+  osc2.type = "square"
+  osc1.frequency.value = 60
+  osc2.frequency.value = 90
+  const lp = audio.ctx.createBiquadFilter()
+  lp.type = "lowpass"
+  lp.frequency.value = 900
+  const eg = audio.ctx.createGain()
+  eg.gain.value = 0
+  osc1.connect(lp)
+  osc2.connect(lp)
+  lp.connect(eg)
+  eg.connect(audio.master)
+  osc1.start()
+  osc2.start()
+  audio.engine = { osc1, osc2, gain: eg, lp }
+
+  // wind: white noise → bandpass
+  const buf = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 2, audio.ctx.sampleRate)
+  const data = buf.getChannelData(0)
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
+  const noise = audio.ctx.createBufferSource()
+  noise.buffer = buf
+  noise.loop = true
+  const bp = audio.ctx.createBiquadFilter()
+  bp.type = "bandpass"
+  bp.frequency.value = 600
+  bp.Q.value = 0.6
+  const wg = audio.ctx.createGain()
+  wg.gain.value = 0
+  noise.connect(bp)
+  bp.connect(wg)
+  wg.connect(audio.master)
+  noise.start()
+  audio.windGain = wg
+}
+
+function setEngineLoad(speedKmh, nitroOn) {
+  if (!audio.engine) return
+  // map 0..305 km/h to 50..420 Hz on osc1 (and osc2 = osc1 * 1.5)
+  const f = 50 + (speedKmh / 305) * 360
+  audio.engine.osc1.frequency.setTargetAtTime(f, audio.ctx.currentTime, 0.05)
+  audio.engine.osc2.frequency.setTargetAtTime(f * 1.5, audio.ctx.currentTime, 0.05)
+  audio.engine.lp.frequency.setTargetAtTime(700 + (speedKmh / 305) * 1500, audio.ctx.currentTime, 0.08)
+  audio.engine.gain.gain.setTargetAtTime(state.mode === "playing" ? (nitroOn ? 0.35 : 0.22) : 0, audio.ctx.currentTime, 0.1)
+  audio.windGain.gain.setTargetAtTime(state.mode === "playing" ? Math.min(0.18, speedKmh / 305 * 0.18) : 0, audio.ctx.currentTime, 0.15)
+}
+
+function sfxImpact() {
+  if (!audio.ctx) return
+  const now = audio.ctx.currentTime
+  // short metallic noise burst
+  const buf = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 0.3, audio.ctx.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4)
+  const src = audio.ctx.createBufferSource()
+  src.buffer = buf
+  const bp = audio.ctx.createBiquadFilter()
+  bp.type = "bandpass"
+  bp.frequency.value = 1500
+  bp.Q.value = 1.5
+  const g = audio.ctx.createGain()
+  g.gain.setValueAtTime(0.6, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.28)
+  src.connect(bp); bp.connect(g); g.connect(audio.master)
+  src.start(now)
+  src.stop(now + 0.3)
+}
+
+function sfxNitro() {
+  if (!audio.ctx) return
+  const now = audio.ctx.currentTime
+  const osc = audio.ctx.createOscillator()
+  osc.type = "sawtooth"
+  osc.frequency.setValueAtTime(220, now)
+  osc.frequency.exponentialRampToValueAtTime(900, now + 0.45)
+  const g = audio.ctx.createGain()
+  g.gain.setValueAtTime(0.0, now)
+  g.gain.linearRampToValueAtTime(0.32, now + 0.05)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+  osc.connect(g); g.connect(audio.master)
+  osc.start(now); osc.stop(now + 0.55)
+}
+
+function sfxCoin() {
+  if (!audio.ctx) return
+  const now = audio.ctx.currentTime
+  const osc = audio.ctx.createOscillator()
+  osc.type = "triangle"
+  osc.frequency.setValueAtTime(880, now)
+  osc.frequency.linearRampToValueAtTime(1320, now + 0.06)
+  const g = audio.ctx.createGain()
+  g.gain.setValueAtTime(0.18, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
+  osc.connect(g); g.connect(audio.master)
+  osc.start(now); osc.stop(now + 0.2)
+}
 const tmpVec = new THREE.Vector3()
 const cameraTarget = new THREE.Vector3()
 const cameraLook = new THREE.Vector3()
@@ -116,6 +238,7 @@ async function init() {
   spawnRamps()
   spawnCheckpoints()
   bindControls()
+  bindAudioUnlock()
   addEventListener("resize", resize)
 
   // splash → menu auto fade
@@ -1207,6 +1330,58 @@ function bindControls() {
     if (["ArrowUp", "KeyW"].includes(e.code)) state.gas = 0
     if (["ArrowDown", "KeyS"].includes(e.code)) state.brake = 0
   })
+
+  bindCanvasGestures()
+}
+
+// Swipe-to-steer + double-tap nitro on the canvas itself, so phone players
+// can drive without precise button taps. Buttons still work in parallel.
+function bindCanvasGestures() {
+  const canvas = $("game")
+  let startX = 0
+  let startY = 0
+  let startTime = 0
+  let lastTap = 0
+  let active = false
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (state.mode !== "playing") return
+    canvas.setPointerCapture?.(e.pointerId)
+    startX = e.clientX
+    startY = e.clientY
+    startTime = performance.now()
+    active = true
+    // double-tap → nitro
+    const now = performance.now()
+    if (now - lastTap < 300) fireNitro()
+    lastTap = now
+  })
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!active || state.mode !== "playing") return
+    e.preventDefault()
+    const dx = e.clientX - startX
+    // map horizontal drag distance to steer amount, normalised by viewport width
+    const norm = clamp(dx / (innerWidth * 0.18), -1, 1)
+    state.steer = norm
+  })
+
+  const release = (e) => {
+    if (!active) return
+    active = false
+    canvas.releasePointerCapture?.(e.pointerId)
+    state.steer = 0
+    // very short tap on right half of screen → fire nitro
+    const dt = performance.now() - startTime
+    const dx = Math.abs(e.clientX - startX)
+    const dy = Math.abs(e.clientY - startY)
+    if (dt < 220 && dx < 12 && dy < 12 && e.clientX > innerWidth * 0.5) {
+      // tap on right half acts as a gas pulse / nitro confirm; left half = brake pulse
+      // (brake is already on the pedal, so nothing here)
+    }
+  }
+  canvas.addEventListener("pointerup", release)
+  canvas.addEventListener("pointercancel", release)
 }
 
 function hold(el, down, up) {
@@ -1233,6 +1408,17 @@ function setMode(mode) {
   $("pauseScreen").classList.toggle("active", mode === "paused")
   $("resultScreen").classList.toggle("active", mode === "result")
   $("splash").classList.toggle("active", mode === "boot")
+}
+
+// Unlock audio on first user gesture (browsers require this).
+function bindAudioUnlock() {
+  const handler = () => {
+    unlockAudio()
+    removeEventListener("pointerdown", handler)
+    removeEventListener("keydown", handler)
+  }
+  addEventListener("pointerdown", handler, { once: false })
+  addEventListener("keydown", handler, { once: false })
 }
 
 function startRace() {
@@ -1297,6 +1483,7 @@ function fireNitro() {
   state.nitroTime = CFG.nitroDuration
   state.shake = 0.3
   toast("NITRO!", 900)
+  sfxNitro()
 }
 
 function finishRace(success = true) {
@@ -1341,6 +1528,7 @@ function loop(now) {
   // background world animation always active
   animateScenery(dt, now)
   updateParticles(dt)
+  setEngineLoad(state.speed, state.nitroTime > 0)
   renderer.render(scene, camera)
   requestAnimationFrame(loop)
 }
@@ -1478,6 +1666,7 @@ function updateRivals(dt, now) {
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
       sparks((state.x + car.position.x) / 2, 1.6, (state.z + car.position.z) / 2, 0xffe45a, 22)
+      sfxImpact()
     }
   }
 }
@@ -1495,12 +1684,14 @@ function updatePickups(dt, now) {
         p.mesh.visible = false
         state.coins++
         sparks(p.x, 2.0, p.z, 0xffd23a, 10)
+        sfxCoin()
       } else if (p.type === "nitro") {
         p.taken = true
         p.mesh.visible = false
         state.nitroCharges = Math.min(3, state.nitroCharges + 1)
         toast("氮气 +1", 800)
         sparks(p.x, 2.0, p.z, 0xffe45a, 18)
+        sfxCoin()
       } else if (p.type === "hazard" && state.nitroTime <= 0) {
         p.taken = true
         p.mesh.visible = false
@@ -1509,6 +1700,7 @@ function updatePickups(dt, now) {
         state.shake = 0.5
         toast("撞到障碍！", 900)
         sparks(p.x, 1.2, p.z, 0xff7a18, 24)
+        sfxImpact()
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
     }
@@ -1552,7 +1744,10 @@ function updateCamera(dt) {
   const wide = innerWidth > innerHeight
   const back = wide ? 11 : 13
   const high = wide ? 4.6 : 5.4
-  cameraTarget.set(state.x * 0.55, state.y + high, state.z + back)
+  // small lateral lag on camera so it "trails" steering input — gives the
+  // car a sense of weight when you swerve hard
+  const trailX = state.x * 0.55 + state.steerVisual * -0.6
+  cameraTarget.set(trailX, state.y + high, state.z + back)
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
     cameraTarget.x += (Math.random() - 0.5) * 0.4
@@ -1561,6 +1756,14 @@ function updateCamera(dt) {
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.set(state.x * 0.4, state.y + 1.1, state.z - 22)
   camera.lookAt(cameraLook)
+
+  // FOV pulse driven by speed + nitro — makes high speed feel fast
+  const baseFov = wide ? 60 : 70
+  const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
+  const nitroBoost = state.nitroTime > 0 ? 8 : 0
+  const targetFov = baseFov + speedRatio * 6 + nitroBoost
+  camera.fov = lerp(camera.fov, targetFov, dt * 4)
+  camera.updateProjectionMatrix()
 }
 
 function updateMenuCamera(now) {

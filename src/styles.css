@@ -1,7 +1,20 @@
+/* ---- mobile-first scaling base ----
+ * The HUD is sized in `--ui` units. On a landscape phone (~700-900 px wide
+ * × 350-430 tall) we want everything compact; on a desktop (>=1200×700)
+ * we want generous. A single CSS variable drives the entire HUD scale.
+ */
+:root {
+  --ui: clamp(8px, 1.4vmin, 14px);
+  --frame-h: clamp(28px, 4.6vmin, 40px);
+  --hud-pad: clamp(8px, 1.6vmin, 18px);
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html,
@@ -14,6 +27,8 @@ body,
   background: #0b1727;
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
   color: #fff;
+  /* iOS safe-area support for notch/home-bar */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #game {
@@ -22,6 +37,7 @@ body,
   width: 100vw;
   height: 100vh;
   display: block;
+  touch-action: none;        /* let the JS swipe handler own the gesture */
 }
 
 /* ---- title bar at top of screen (像截图里的窗口) ---- */
@@ -30,8 +46,8 @@ body,
   top: 0;
   left: 0;
   right: 0;
-  height: 38px;
-  padding: 0 12px;
+  height: var(--frame-h);
+  padding: 0 calc(var(--ui) * 1.2);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -41,27 +57,27 @@ body,
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
 }
 .frame-corner {
-  width: 22px;
+  width: calc(var(--ui) * 1.8);
   text-align: center;
-  font-size: 16px;
+  font-size: calc(var(--ui) * 1.2);
   color: #777;
 }
 .frame-title {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(var(--ui) * 1.1);
   font-weight: 800;
   color: #181818;
   letter-spacing: 1px;
 }
 .frame-buttons {
   display: flex;
-  gap: 12px;
+  gap: calc(var(--ui) * 0.9);
   align-items: center;
-  font-size: 16px;
+  font-size: calc(var(--ui) * 1.2);
   color: #4a4a4a;
 }
 .frame-buttons span {
-  padding: 4px 6px;
+  padding: calc(var(--ui) * 0.3) calc(var(--ui) * 0.5);
   cursor: default;
 }
 
@@ -128,7 +144,7 @@ body,
 /* ---- screens ---- */
 .screen {
   position: fixed;
-  inset: 38px 0 0 0;
+  inset: var(--frame-h) 0 0 0;
   display: none;
   z-index: 10;
 }
@@ -233,10 +249,10 @@ body,
 
 .gear-tile {
   position: absolute;
-  top: 22px;
-  left: 22px;
-  width: 70px;
-  height: 70px;
+  top: calc(var(--ui) * 1.6);
+  left: calc(var(--ui) * 1.6);
+  width: calc(var(--ui) * 5);
+  height: calc(var(--ui) * 5);
   display: grid;
   place-items: center;
   background: #08172e;
@@ -246,29 +262,33 @@ body,
   z-index: 2;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
+.gear-tile svg {
+  width: 60%;
+  height: 60%;
+}
 
 .currency-bar {
   position: absolute;
-  top: 24px;
+  top: calc(var(--ui) * 1.8);
   left: 50%;
   transform: translateX(-50%);
-  height: 42px;
+  height: calc(var(--ui) * 3);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--ui) * 0.6);
   z-index: 2;
 }
 .currency-bar .coin,
 .currency-bar .cash {
-  height: 42px;
-  min-width: 110px;
-  padding: 0 14px 0 10px;
+  height: calc(var(--ui) * 3);
+  min-width: calc(var(--ui) * 8);
+  padding: 0 calc(var(--ui) * 1) 0 calc(var(--ui) * 0.7);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--ui) * 0.6);
   background: rgba(4, 18, 39, 0.92);
   border-radius: 4px;
-  font-size: 22px;
+  font-size: calc(var(--ui) * 1.6);
   font-weight: 900;
 }
 .currency-bar .coin b,
@@ -277,8 +297,8 @@ body,
   color: #fff;
 }
 .coin-bottle {
-  width: 22px;
-  height: 28px;
+  width: calc(var(--ui) * 1.6);
+  height: calc(var(--ui) * 2);
   background: linear-gradient(180deg, #ffd02e 0%, #f99c00 100%);
   border-radius: 3px 3px 6px 6px;
   position: relative;
@@ -286,35 +306,35 @@ body,
 .coin-bottle::before {
   content: "";
   position: absolute;
-  top: -6px;
-  left: 5px;
-  width: 12px;
-  height: 7px;
+  top: calc(var(--ui) * -0.4);
+  left: calc(var(--ui) * 0.3);
+  width: calc(var(--ui) * 0.9);
+  height: calc(var(--ui) * 0.5);
   background: #555;
   border-radius: 2px 2px 0 0;
 }
 .cash-gem {
-  width: 22px;
-  height: 22px;
+  width: calc(var(--ui) * 1.6);
+  height: calc(var(--ui) * 1.6);
   background: #1be07f;
   clip-path: polygon(50% 0, 100% 30%, 80% 100%, 20% 100%, 0% 30%);
 }
 .plus-btn {
-  width: 42px;
-  height: 42px;
+  width: calc(var(--ui) * 3);
+  height: calc(var(--ui) * 3);
   color: #fff;
-  font-size: 28px;
-  line-height: 38px;
+  font-size: calc(var(--ui) * 2);
+  line-height: 1;
   background: #2bb87a;
   border: 0;
   border-radius: 4px;
   cursor: pointer;
 }
 .currency-bar .ring {
-  width: 32px;
-  height: 32px;
-  margin-left: 4px;
-  border: 4px solid #fff;
+  width: calc(var(--ui) * 2.3);
+  height: calc(var(--ui) * 2.3);
+  margin-left: calc(var(--ui) * 0.3);
+  border: 3px solid #fff;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.18);
 }
@@ -380,13 +400,13 @@ body,
 .tile-grid {
   position: relative;
   z-index: 2;
-  margin: 110px auto 0;
-  width: min(820px, calc(100vw - 200px));
-  height: clamp(280px, 56vh, 360px);
+  margin: calc(var(--ui) * 8) auto 0;
+  width: min(820px, calc(100vw - var(--ui) * 14));
+  height: clamp(220px, 60vh, 360px);
   display: grid;
   grid-template-columns: 1.55fr 0.85fr 0.85fr 0.95fr;
   grid-template-rows: 1fr 1fr;
-  gap: 14px;
+  gap: calc(var(--ui) * 1);
 }
 .tile {
   position: relative;
@@ -564,7 +584,7 @@ body,
 /* ---- HUD ---- */
 .hud {
   position: fixed;
-  inset: 38px 0 0 0;
+  inset: var(--frame-h) 0 0 0;
   z-index: 5;
   display: none;
   pointer-events: none;
@@ -575,15 +595,15 @@ body,
 
 .hud-pause {
   position: absolute;
-  top: 12px;
-  left: 14px;
-  width: 30px;
-  height: 30px;
+  top: calc(var(--ui) * 0.7);
+  left: calc(var(--ui) * 1);
+  width: calc(var(--ui) * 2.5);
+  height: calc(var(--ui) * 2.5);
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: #1d1d1d;
-  font-size: 22px;
+  font-size: calc(var(--ui) * 1.7);
   font-weight: 900;
   pointer-events: auto;
   cursor: pointer;
@@ -591,14 +611,14 @@ body,
 
 .speed-box {
   position: absolute;
-  top: 32px;
-  left: 22px;
-  min-width: 180px;
-  height: 64px;
+  top: calc(var(--ui) * 2);
+  left: calc(var(--ui) * 1.3);
+  min-width: calc(var(--ui) * 13);
+  height: calc(var(--ui) * 4.6);
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  padding: 0 18px 7px 18px;
+  gap: calc(var(--ui) * 0.6);
+  padding: 0 calc(var(--ui) * 1.3) calc(var(--ui) * 0.5) calc(var(--ui) * 1.3);
   color: #fff;
   background: rgba(5, 18, 38, 0.78);
   transform: skew(-6deg);
@@ -606,55 +626,55 @@ body,
 }
 .speed-box span {
   font-family: "Arial Black", Arial, sans-serif;
-  font-size: 64px;
+  font-size: calc(var(--ui) * 4.6);
   line-height: 0.8;
   font-weight: 900;
 }
 .speed-box small {
-  margin-bottom: 4px;
-  font-size: 16px;
+  margin-bottom: calc(var(--ui) * 0.3);
+  font-size: calc(var(--ui) * 1.2);
   font-weight: 900;
   letter-spacing: 1px;
 }
 
 .race-icons {
   position: absolute;
-  top: 38px;
+  top: calc(var(--ui) * 2.7);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: calc(var(--ui) * 2.2);
 }
 .green-light {
-  width: 38px;
-  height: 38px;
+  width: calc(var(--ui) * 2.7);
+  height: calc(var(--ui) * 2.7);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #c4ff90, #35dc0d 60%, #1f8a00 100%);
   border: 3px solid #fff;
-  box-shadow: 0 0 24px rgba(69, 255, 22, 0.55);
+  box-shadow: 0 0 18px rgba(69, 255, 22, 0.55);
 }
 .finish-flag {
-  width: 32px;
-  height: 36px;
+  width: calc(var(--ui) * 2.3);
+  height: calc(var(--ui) * 2.6);
   background:
-    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 0 0 / 16px 16px;
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 0 0 / calc(var(--ui) * 1.1) calc(var(--ui) * 1.1);
   border: 1px solid rgba(0, 0, 0, 0.5);
 }
 
 .reset-btn {
   position: absolute;
-  top: 60px;
-  right: 56px;
-  width: 64px;
-  height: 64px;
+  top: calc(var(--ui) * 4.2);
+  right: calc(var(--ui) * 4);
+  width: calc(var(--ui) * 4.6);
+  height: calc(var(--ui) * 4.6);
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 50px;
+  font-size: calc(var(--ui) * 3.5);
   line-height: 1;
-  border: 5px solid rgba(255, 255, 255, 0.92);
+  border: 4px solid rgba(255, 255, 255, 0.92);
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
@@ -663,24 +683,24 @@ body,
 
 .mission-box {
   position: absolute;
-  top: 110px;
-  left: 22px;
-  width: 230px;
-  padding: 10px 12px 11px;
+  top: calc(var(--ui) * 7.6);
+  left: calc(var(--ui) * 1.3);
+  width: calc(var(--ui) * 16);
+  padding: calc(var(--ui) * 0.7) calc(var(--ui) * 0.9) calc(var(--ui) * 0.8);
   color: #fff;
   background: rgba(5, 18, 38, 0.7);
-  border-left: 5px solid #ffd527;
+  border-left: 4px solid #ffd527;
   border-radius: 2px;
   pointer-events: none;
 }
 .mission-box b {
   display: block;
-  font-size: 16px;
-  margin-bottom: 7px;
+  font-size: calc(var(--ui) * 1.2);
+  margin-bottom: calc(var(--ui) * 0.5);
   font-weight: 900;
 }
 .mission-bar {
-  height: 9px;
+  height: calc(var(--ui) * 0.7);
   overflow: hidden;
   background: rgba(255, 255, 255, 0.22);
   border-radius: 2px;
@@ -694,26 +714,27 @@ body,
 }
 .mission-box small {
   display: block;
-  margin-top: 7px;
-  font-size: 12px;
+  margin-top: calc(var(--ui) * 0.5);
+  font-size: calc(var(--ui) * 0.95);
   font-weight: 800;
   color: #eaf4ff;
 }
 
 .mission-toast {
   position: absolute;
-  top: 50%;
+  top: 38%;
   left: 50%;
   transform: translateX(-50%);
-  padding: 8px 18px;
+  padding: calc(var(--ui) * 0.55) calc(var(--ui) * 1.4);
   background: rgba(5, 18, 38, 0.74);
   color: #ffe35a;
   font-weight: 900;
-  font-size: 16px;
+  font-size: calc(var(--ui) * 1.2);
   border-radius: 999px;
   border: 1px solid rgba(255, 227, 90, 0.6);
   opacity: 0;
   transition: opacity 0.25s;
+  white-space: nowrap;
 }
 .mission-toast.show {
   opacity: 1;
@@ -721,36 +742,40 @@ body,
 
 .nitro-wrap {
   position: absolute;
-  right: 234px;
-  bottom: 130px;
+  right: calc(var(--ui) * 16);
+  bottom: calc(var(--ui) * 9);
   pointer-events: auto;
 }
 .nitro-btn {
-  width: 84px;
-  height: 84px;
+  width: calc(var(--ui) * 6);
+  height: calc(var(--ui) * 6);
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: #1a86c4;
   background: radial-gradient(circle at 30% 30%, #fff8c8 0 18%, #ffd34a 60%, #fa9c1c 100%);
-  border: 5px solid rgba(255, 255, 255, 0.9);
+  border: 4px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 22px rgba(255, 200, 60, 0.65);
   cursor: pointer;
+}
+.nitro-btn svg {
+  width: 60%;
+  height: 60%;
 }
 .nitro-btn:active {
   transform: scale(0.95);
 }
 .nitro-wrap span {
   position: absolute;
-  right: -8px;
-  bottom: 4px;
-  width: 30px;
-  height: 30px;
+  right: calc(var(--ui) * -0.5);
+  bottom: calc(var(--ui) * 0.3);
+  width: calc(var(--ui) * 2.2);
+  height: calc(var(--ui) * 2.2);
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: #222;
-  font-size: 18px;
+  font-size: calc(var(--ui) * 1.3);
   font-weight: 900;
   background: #fff;
   border: 2px solid #444;
@@ -758,10 +783,10 @@ body,
 
 .steer-controls {
   position: absolute;
-  left: 38px;
-  bottom: 38px;
+  left: calc(var(--ui) * 2.5);
+  bottom: calc(var(--ui) * 2.5);
   display: flex;
-  gap: 26px;
+  gap: calc(var(--ui) * 1.6);
   pointer-events: auto;
 }
 .steer-controls button,
@@ -771,13 +796,15 @@ body,
   background: rgba(10, 30, 56, 0.5);
   cursor: pointer;
   font-weight: 900;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .steer-controls button {
-  width: 122px;
-  height: 92px;
-  border-radius: 22px;
-  font-size: 100px;
-  line-height: 64px;
+  width: calc(var(--ui) * 8);
+  height: calc(var(--ui) * 6);
+  border-radius: calc(var(--ui) * 1.4);
+  font-size: calc(var(--ui) * 6);
+  line-height: calc(var(--ui) * 4);
 }
 .steer-controls button:active,
 .pedals button:active {
@@ -786,37 +813,37 @@ body,
 
 .pedals {
   position: absolute;
-  right: 70px;
-  bottom: 38px;
+  right: calc(var(--ui) * 4);
+  bottom: calc(var(--ui) * 2.5);
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: calc(var(--ui) * 1);
   pointer-events: auto;
 }
 .pedal-brake {
-  width: 124px;
-  height: 80px;
-  border-radius: 12px;
-  font-size: 60px;
+  width: calc(var(--ui) * 8);
+  height: calc(var(--ui) * 5.4);
+  border-radius: calc(var(--ui) * 0.8);
+  font-size: calc(var(--ui) * 4);
   transform: skew(-10deg);
 }
 .pedal-gas {
-  width: 100px;
-  height: 168px;
-  border-radius: 12px;
-  font-size: 92px;
+  width: calc(var(--ui) * 6.6);
+  height: calc(var(--ui) * 11);
+  border-radius: calc(var(--ui) * 0.8);
+  font-size: calc(var(--ui) * 6);
   transform: skew(-10deg);
   color: rgba(255, 220, 90, 0.95) !important;
 }
 
 .hud-progress {
   position: absolute;
-  top: 110px;
-  right: 56px;
-  width: 12px;
-  height: 220px;
+  top: calc(var(--ui) * 7.6);
+  right: calc(var(--ui) * 4);
+  width: calc(var(--ui) * 0.85);
+  height: calc(var(--ui) * 16);
   background: rgba(5, 18, 38, 0.5);
-  border-radius: 6px;
+  border-radius: calc(var(--ui) * 0.4);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.4);
 }
@@ -903,27 +930,36 @@ body,
   }
 }
 
-@media (max-width: 720px) {
-  .ad-strip {
-    display: none;
+/* compact phone landscape (e.g. iPhone SE 667×375) — make HUD even tighter */
+@media (orientation: landscape) and (max-height: 430px) {
+  :root {
+    --ui: 9px;
+    --frame-h: 28px;
   }
   .tile-grid {
-    width: calc(100vw - 60px);
+    width: calc(100vw - 24px);
+    height: calc(100vh - var(--frame-h) - 100px);
     grid-template-columns: 1.4fr 1fr 1fr;
     gap: 8px;
+    margin-top: calc(var(--frame-h) + 60px);
   }
   .tall-tile {
     display: none;
   }
   .nitro-wrap {
-    right: 30px;
-    bottom: 144px;
+    right: calc(var(--ui) * 12);
+    bottom: calc(var(--ui) * 8);
   }
-  .pedals {
-    right: 16px;
+  .reset-btn {
+    top: calc(var(--ui) * 3.6);
+    right: calc(var(--ui) * 1.6);
   }
-  .steer-controls {
-    left: 16px;
-    bottom: 32px;
+}
+
+/* very narrow phones (small Android, iPhone Mini portrait edge) */
+@media (orientation: landscape) and (max-height: 370px) {
+  :root {
+    --ui: 8px;
+    --frame-h: 24px;
   }
 }
