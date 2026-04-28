@@ -121,9 +121,10 @@ const TRACKS = {
 const state = {
   mode: "boot",
   speed: 0,
-  z: 12,
-  x: 0,
-  y: 0.22,
+  // track-space coordinates (replace world x/z):
+  progress: 0,         // distance traveled along the spline (m, 0 → Track.length)
+  lateral: 0,          // offset from centerline (m, ±playerHalfWidth)
+  y: 0.22,             // height above the road surface (m)
   vy: 0,
   steer: 0,
   steerVisual: 0,
@@ -143,7 +144,18 @@ const state = {
   toastText: "",
   lastRivalHit: 0,
   airborne: false,
-  airSince: 0
+  airSince: 0,
+  countdown: 0
+}
+
+// the curved track itself (CatmullRom spline + length cache + helpers)
+const Track = {
+  curve: null,
+  length: 0,
+  _up: new THREE.Vector3(0, 1, 0),
+  _tan: new THREE.Vector3(),
+  _pos: new THREE.Vector3(),
+  _right: new THREE.Vector3()
 }
 
 let renderer, scene, camera, composer, bloomPass
@@ -436,6 +448,10 @@ async function init() {
   refreshCurrencyHud()
   applyQuality()
   addEventListener("resize", resize)
+  // expose for debugging
+  window.__state = state
+  window.__Track = Track
+  window.__player = player
 
   // assets ready → flick the splash off into the menu
   $("splashStatus").textContent = "准备就绪"
@@ -780,97 +796,214 @@ function makeCloud() {
 // ────────────────────────────────────────────────────────────────────
 // track
 // ────────────────────────────────────────────────────────────────────
+// Build a curved CatmullRom centerline for the selected track. Track-space
+// progress (meters from start, increasing) maps to world position via
+// progressToWorld(). Each track has its own bend amplitude / hill profile.
+function buildTrackCurve() {
+  const tCfg = TRACKS[Save.get().selectedTrack] ?? TRACKS.sky
+  const totalLen = tCfg.length
+  const points = []
+  // start: 24m back from origin so the start gantry has space behind player
+  points.push(new THREE.Vector3(0, 0, 24))
+  const wobble = tCfg.id === "neon" ? 36 : tCfg.id === "sunset" ? 26 : 18
+  const hills = tCfg.id === "neon" ? 2.6 : tCfg.id === "sunset" ? 2.0 : 1.4
+  // sample control points every ~70m
+  const step = 70
+  let z = 0
+  while (z > -totalLen) {
+    z -= step
+    const s = -z   // distance from origin
+    const x =
+      Math.sin(s * 0.0085) * wobble +
+      Math.sin(s * 0.0033 + 1.2) * (wobble * 0.4)
+    const y = Math.sin(s * 0.0072 + 0.5) * hills + Math.sin(s * 0.0028) * (hills * 0.4)
+    points.push(new THREE.Vector3(x, y, z))
+  }
+  // tail past finish so end-of-track tangent is well-defined
+  points.push(new THREE.Vector3(0, 0, -totalLen - 50))
+  Track.curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.5)
+  Track.length = Track.curve.getLength()
+  CFG.trackLength = Track.length
+}
+
+// Track-space (progress, lateral, height) → world coordinates.
+function progressToWorld(progress, lateral = 0, height = 0, out = new THREE.Vector3()) {
+  const t = clamp(progress / Track.length, 0, 1)
+  Track.curve.getPointAt(t, out)
+  Track.curve.getTangentAt(t, Track._tan)
+  Track._right.crossVectors(Track._up, Track._tan).normalize()
+  out.addScaledVector(Track._right, lateral)
+  out.y += height
+  return out
+}
+
+// Track-space tangent (forward direction) at a given progress.
+function progressTangent(progress, out = new THREE.Vector3()) {
+  const t = clamp(progress / Track.length, 0, 1)
+  Track.curve.getTangentAt(t, out)
+  return out
+}
+
 function buildTrack() {
   track.clear()
+  buildTrackCurve()
 
-  const segCount = Math.ceil(CFG.trackLength / CFG.segLength)
-  const lengthMeters = segCount * CFG.segLength
+  const samples = Math.max(80, Math.floor(Track.length / 4))
+  const halfW = CFG.roadHalfWidth
+  const laneHalf = CFG.laneHalfWidth
+  const edgeW = halfW - laneHalf
 
-  // road shape
-  const centerGeo = new THREE.BoxGeometry(CFG.laneHalfWidth * 2, 0.36, lengthMeters)
-  const centerMesh = new THREE.Mesh(centerGeo, mats.roadCenter)
-  centerMesh.position.set(0, 0, -lengthMeters / 2 + 18)
-  centerMesh.material.map.repeat.set(1, lengthMeters / 24)
-  track.add(centerMesh)
+  // build a single-ribbon mesh for the lane area (yellow center)
+  // and 2 ribbon meshes for the blue edges, all bent along the spline.
+  track.add(makeRibbonMesh(samples, -laneHalf, laneHalf, 0.36, mats.roadCenter, Track.length / 24))
+  track.add(makeRibbonMesh(samples, -halfW, -laneHalf, 0.36, mats.roadEdgeR, Track.length / 18))
+  track.add(makeRibbonMesh(samples, laneHalf, halfW, 0.36, mats.roadEdge, Track.length / 18))
 
-  const edgeWidth = CFG.roadHalfWidth - CFG.laneHalfWidth
+  // rails (blue body + yellow top) on each side
   for (const side of [-1, 1]) {
-    const geo = new THREE.BoxGeometry(edgeWidth, 0.36, lengthMeters)
-    // LEFT strip uses flipped texture (tip → inward at u=1), RIGHT uses native texture (tip → inward at u=0)
-    const mesh = new THREE.Mesh(geo, side < 0 ? mats.roadEdgeR : mats.roadEdge)
-    mesh.material.map.repeat.set(1, lengthMeters / 16)
-    mesh.position.set(side * (CFG.laneHalfWidth + edgeWidth / 2), 0, -lengthMeters / 2 + 18)
-    track.add(mesh)
+    track.add(makeRailMesh(samples, side * (halfW + 0.21), 0.65, 0.42, 0.95, mats.rail))
+    track.add(makeRailMesh(samples, side * (halfW + 0.21), 1.18, 0.46, 0.18, mats.railTop))
   }
 
-  // rails (blue lower + yellow top accent)
-  for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.95, lengthMeters), mats.rail)
-    rail.position.set(side * (CFG.roadHalfWidth + 0.21), 0.65, -lengthMeters / 2 + 18)
-    track.add(rail)
-    const railTop = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, lengthMeters), mats.railTop)
-    railTop.position.set(side * (CFG.roadHalfWidth + 0.21), 1.18, -lengthMeters / 2 + 18)
-    track.add(railTop)
-  }
-
-  // structural underside ribs (every 24m), gives the "sky bridge" feel
-  const ribCount = Math.floor(lengthMeters / 24)
-  const ribGeo = new THREE.BoxGeometry(CFG.roadHalfWidth * 2 + 1.6, 1.4, 1.4)
-  for (let i = 0; i < ribCount; i++) {
-    const z = 16 - i * 24
+  // structural underside ribs every ~24m. Box dimension is along the local
+  // axes after lookAt: width along X = road width, depth along Z = thickness.
+  // Use a smaller, slimmer profile so they don't fight the curve geometry.
+  const ribStep = 24
+  for (let s = 12; s < Track.length; s += ribStep) {
+    const center = progressToWorld(s, 0, -0.9)
+    const tan = progressTangent(s).clone()
+    const right = new THREE.Vector3().crossVectors(Track._up, tan).normalize()
+    // build rib as a flat horizontal beam along `right` axis
+    const ribGeo = new THREE.BoxGeometry(halfW * 2 + 1.0, 0.8, 0.8)
     const rib = new THREE.Mesh(ribGeo, mats.support)
-    rib.position.set(0, -0.9, z)
+    rib.position.copy(center)
+    // align local +X with `right` direction
+    const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), tan, Track._up)
+    rib.setRotationFromMatrix(m)
     track.add(rib)
-    // diagonal struts
-    for (const s of [-1, 1]) {
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 8), mats.support)
-      strut.position.set(s * (CFG.roadHalfWidth + 0.2), -2.4, z - 2)
-      strut.rotation.x = -0.6
-      track.add(strut)
-    }
   }
 
-  // big start-line zebra stripe (like the bold blue band visible in the
-  // screenshot under the start grid)
-  const startStripeMat = new THREE.MeshStandardMaterial({
-    color: 0x1392ff,
-    emissive: 0x0a4a8a,
-    emissiveIntensity: 0.18,
-    roughness: 0.35
-  })
-  const startStripeGeo = new THREE.BoxGeometry(CFG.laneHalfWidth * 2 - 0.4, 0.06, 3.4)
-  const startStripeMesh = new THREE.Mesh(startStripeGeo, startStripeMat)
-  startStripeMesh.position.set(0, 0.21, 8)
-  track.add(startStripeMesh)
-  // periodic narrower blue zebra stripes along the rest of the road
-  const zebraMat = new THREE.MeshStandardMaterial({ color: 0x1392ff, roughness: 0.4 })
-  for (let z = -64; z > -lengthMeters; z -= 64) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(CFG.laneHalfWidth * 2 - 0.4, 0.05, 1.2), zebraMat)
-    stripe.position.set(0, 0.21, z)
+  // big start-line zebra stripe + periodic narrower stripes
+  for (let s = 6; s < Track.length; s += 64) {
+    const isStart = s === 6
+    const wide = isStart ? 3.4 : 1.2
+    const stripeMat = isStart
+      ? new THREE.MeshStandardMaterial({ color: 0x1392ff, emissive: 0x0a4a8a, emissiveIntensity: 0.18, roughness: 0.35 })
+      : new THREE.MeshStandardMaterial({ color: 0x1392ff, roughness: 0.4 })
+    const center = progressToWorld(s, 0, 0.21)
+    const tan = progressTangent(s).clone()
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(laneHalf * 2 - 0.4, 0.06, wide), stripeMat)
+    stripe.position.copy(center)
+    stripe.lookAt(center.clone().add(tan))
     track.add(stripe)
   }
 
-  // start gantry behind player at z = 22
+  // start gantry — placed behind the start grid (progress = -8, ie. behind start)
   const startGantry = makeOverheadGantry(0xfff15a, 0xffce15, true)
-  startGantry.position.set(0, 0, 22)
+  placeAlongTrack(startGantry, -8)
   track.add(startGantry)
 
-  // welcome arch 18m ahead of the start grid (mimics screenshot 3 — there's a
-  // big horizontal banner just past the cars at race start)
+  // welcome arch 16m past the start grid
   const welcomeArch = makeOverheadGantry(0x10c8ff, 0xfff15a, false)
-  welcomeArch.position.set(0, 0, -16)
+  placeAlongTrack(welcomeArch, 32)
   track.add(welcomeArch)
 
-  // start grid markings (zebra stripe)
-  const startStripe = new THREE.Mesh(new THREE.PlaneGeometry(CFG.laneHalfWidth * 2, 4), mats.checker)
-  startStripe.rotation.x = -Math.PI / 2
-  startStripe.position.set(0, 0.2, 14)
-  track.add(startStripe)
-
-  // finish line
+  // finish line at end of track
   const finish = makeFinishLine()
-  finish.position.set(0, 0, CFG.finishZ)
+  placeAlongTrack(finish, Track.length - 30)
   track.add(finish)
+}
+
+// Place an Object3D along the track at a given progress, lateral=0, oriented
+// to face forward along the tangent.
+function placeAlongTrack(obj, progress, lateral = 0, height = 0) {
+  const pos = progressToWorld(progress, lateral, height)
+  const tan = progressTangent(progress).clone()
+  obj.position.copy(pos)
+  obj.lookAt(pos.clone().add(tan))
+}
+
+// Build a ribbon mesh (a strip of width [u0..u1]) along the spline. The
+// texture map repeats vertically by `repeatV`.
+function makeRibbonMesh(samples, u0, u1, thickness, material, repeatV) {
+  const verts = []
+  const uvs = []
+  const idx = []
+  const tmpRight = new THREE.Vector3()
+  const tmpTan = new THREE.Vector3()
+  const tmpPos = new THREE.Vector3()
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples
+    Track.curve.getPointAt(t, tmpPos)
+    Track.curve.getTangentAt(t, tmpTan)
+    tmpRight.crossVectors(Track._up, tmpTan).normalize()
+    // top of strip (slight thickness using +y, simpler than a real box)
+    const yTop = tmpPos.y + thickness * 0.5
+    const lx = tmpPos.x + tmpRight.x * u0
+    const lz = tmpPos.z + tmpRight.z * u0
+    const rx = tmpPos.x + tmpRight.x * u1
+    const rz = tmpPos.z + tmpRight.z * u1
+    verts.push(lx, yTop, lz, rx, yTop, rz)
+    uvs.push(0, t * repeatV, 1, t * repeatV)
+    if (i < samples) {
+      const a = i * 2
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3))
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  // ribbon shares the material — make sure repeat is set so the texture tiles
+  if (material.map) {
+    material.map.wrapS = THREE.RepeatWrapping
+    material.map.wrapT = THREE.RepeatWrapping
+  }
+  return new THREE.Mesh(geo, material)
+}
+
+// Build a thin vertical rail mesh along the spline (rectangular cross-section).
+function makeRailMesh(samples, lateral, yCenter, w, h, material) {
+  const verts = []
+  const idx = []
+  const tmpRight = new THREE.Vector3()
+  const tmpTan = new THREE.Vector3()
+  const tmpPos = new THREE.Vector3()
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples
+    Track.curve.getPointAt(t, tmpPos)
+    Track.curve.getTangentAt(t, tmpTan)
+    tmpRight.crossVectors(Track._up, tmpTan).normalize()
+    const cx = tmpPos.x + tmpRight.x * lateral
+    const cz = tmpPos.z + tmpRight.z * lateral
+    const rx = tmpRight.x * (w * 0.5)
+    const rz = tmpRight.z * (w * 0.5)
+    const yLow = tmpPos.y + yCenter - h * 0.5
+    const yHi = tmpPos.y + yCenter + h * 0.5
+    // 4 verts per cross-section: front-left, front-right, back-right, back-left (in cross-section)
+    verts.push(
+      cx - rx, yLow, cz - rz,    // 0 lower-inner
+      cx + rx, yLow, cz + rz,    // 1 lower-outer
+      cx + rx, yHi, cz + rz,     // 2 upper-outer
+      cx - rx, yHi, cz - rz      // 3 upper-inner
+    )
+    if (i < samples) {
+      const a = i * 4
+      // 4 quads connecting this cross-section to the next: top, outer, bottom, inner
+      idx.push(
+        a + 3, a + 2, a + 7, a + 7, a + 2, a + 6,    // top
+        a + 1, a + 5, a + 2, a + 2, a + 5, a + 6,    // outer
+        a + 0, a + 4, a + 1, a + 1, a + 4, a + 5,    // bottom
+        a + 3, a + 7, a + 0, a + 0, a + 7, a + 4     // inner
+      )
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  return new THREE.Mesh(geo, material)
 }
 
 function makeOverheadGantry(topColor = 0xffce15, accent = 0x10c8ff, withLight = false) {
@@ -947,43 +1080,60 @@ function makeFinishLine() {
 // scenery (turbines, towers, balls, billboards)
 // ────────────────────────────────────────────────────────────────────
 function buildScenery() {
+  // remove any scenery placed by a prior race (tagged with userData.isScenery)
+  for (let i = world.children.length - 1; i >= 0; i--) {
+    if (world.children[i].userData?.isScenery) world.remove(world.children[i])
+  }
+  const sceneryAdd = (obj) => { obj.userData.isScenery = true; world.add(obj) }
   // ground far below the road (so the track feels suspended in the sky)
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2200, 2200),
+    new THREE.PlaneGeometry(4400, 4400),
     new THREE.MeshStandardMaterial({ color: 0x4d8bc4, roughness: 0.95 })
   )
   ground.rotation.x = -Math.PI / 2
-  ground.position.set(0, -60, -700)
-  world.add(ground)
+  ground.position.set(0, -60, -Track ? -Track.length / 2 : -700)
+  sceneryAdd(ground)
 
-  // wind-turbine like fans — these are the big yellow "circles" in the screenshots
-  for (let i = 0; i < 14; i++) {
+  // turbines + trusses placed along the curve: every ~80m, alternating sides,
+  // so they follow the track instead of drifting off into nothing.
+  const turbineCount = Math.floor(Track.length / 90)
+  for (let i = 0; i < turbineCount; i++) {
     const fan = makeTurbine(i)
     const side = i % 2 ? -1 : 1
-    fan.position.set(side * (38 + (i % 3) * 6), 4.5, -60 - i * 90)
+    const s = 60 + i * 90
+    if (s >= Track.length) break
+    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 36 + (i % 3) * 6), 4.5)
+    fan.position.copy(pos)
     world.add(fan)
   }
 
-  // signature floating ring + ball right at the start, on the right side, just
-  // like screenshot 3 — first thing the player sees
+  // signature floating ring + ball right at the start
   const startBall = makeFloatingBall()
-  startBall.position.set(7, 4.4, -2)
+  const startBallPos = progressToWorld(2, CFG.roadHalfWidth + 4, 4.4)
+  startBall.position.copy(startBallPos)
   startBall.scale.setScalar(0.85)
   world.add(startBall)
 
-  // floating soccer-style spheres along the route
-  for (let i = 0; i < 10; i++) {
+  // floating balls along the route
+  for (let i = 0; i < 12; i++) {
     const ball = makeFloatingBall()
     const side = i % 2 ? -1 : 1
-    ball.position.set(side * (22 + rand(0, 10)), 11 + rand(0, 6), -120 - i * 120)
+    const s = 120 + i * 140
+    if (s >= Track.length) break
+    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 14 + rand(0, 8)), 11 + rand(0, 6))
+    ball.position.copy(pos)
     world.add(ball)
   }
 
-  // tower stacks
-  for (let i = 0; i < 14; i++) {
+  // truss towers along the curve, both sides
+  const towerCount = Math.floor(Track.length / 80)
+  for (let i = 0; i < towerCount; i++) {
     const tower = makeTower(i)
     const side = i % 2 ? -1 : 1
-    tower.position.set(side * (50 + (i % 3) * 6), 0, -90 - i * 75)
+    const s = 90 + i * 80
+    if (s >= Track.length) break
+    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 24 + (i % 3) * 6), 0)
+    tower.position.copy(pos)
     world.add(tower)
   }
 
@@ -992,20 +1142,23 @@ function buildScenery() {
   if (stand) {
     stand.position.set(-50, -8, -10)
     stand.rotation.y = Math.PI / 2
-    world.add(stand)
+    sceneryAdd(stand)
     const stand2 = stand.clone(true)
     stand2.position.set(50, -8, -10)
     stand2.rotation.y = -Math.PI / 2
-    world.add(stand2)
+    sceneryAdd(stand2)
   }
 
-  // a few trees
-  for (let i = 0; i < 12; i++) {
+  // trees scattered along the curve at the track edges
+  for (let i = 0; i < 14; i++) {
     const tree = cloneAsset("treeLarge", 5)
     if (!tree) break
     const side = i % 2 ? -1 : 1
-    tree.position.set(side * (16 + rand(0, 6)), -2, -40 - i * 110)
-    world.add(tree)
+    const s = 40 + i * 110
+    if (s >= Track.length) break
+    const pos = progressToWorld(s, side * (CFG.roadHalfWidth + 10 + rand(0, 4)), -2)
+    tree.position.copy(pos)
+    sceneryAdd(tree)
   }
 }
 
@@ -1360,19 +1513,15 @@ function loftGeometry(sections, cols = 16) {
 function spawnRivals() {
   rivals.forEach((r) => dynamic.remove(r.car))
   rivals = []
-  // 2 rivals on the start grid, just ahead and to each side (mimic screenshot 3 + 4)
-  const startConfigs = [
-    { x: -3.6, z: 6, color: 0xee2424, accent: 0x4a0808, baseSpeed: 118 },
-    { x: 3.6, z: 6, color: 0xff5826, accent: 0x520f00, baseSpeed: 124 }
-  ]
-  for (const cfg of startConfigs) addRival(cfg)
-  // staggered rivals further down, spread across deterministic lanes so they
-  // don't all sit in the player's centre lane
+  // 2 rivals on the start grid, just ahead of the player on the curve
+  addRival({ lateral: -3.6, progress: 6, color: 0xee2424, accent: 0x4a0808, baseSpeed: 118 })
+  addRival({ lateral: 3.6, progress: 6, color: 0xff5826, accent: 0x520f00, baseSpeed: 124 })
+  // staggered rivals further down the track, spread across deterministic lanes
   const lanes = [-4.0, 4.0, -2.0, 2.0, 0]
   for (let i = 0; i < CFG.rivalCount; i++) {
     addRival({
-      x: lanes[i % lanes.length],
-      z: -100 - i * 180,
+      lateral: lanes[i % lanes.length],
+      progress: 100 + i * 180,
       color: i % 2 ? 0xff3a3a : 0xff812a,
       accent: 0x3a0808,
       baseSpeed: 95 + i * 9 + rand(0, 12)
@@ -1381,17 +1530,20 @@ function spawnRivals() {
 }
 
 function addRival(cfg) {
-  // alternate Kenney models so rivals don't look identical
   const assetName = (rivals.length % 2 === 0) ? "race" : "sedanSports"
   const car = cloneAsset(assetName, 4.4, "z") || makeHypercar({ body: cfg.color })
   car.rotation.y = Math.PI
   recolorCar(car, { body: cfg.color, accent: cfg.accent ?? 0x300404 })
-  car.position.set(cfg.x, 0.22, cfg.z)
+  // place along curve at given progress
+  const pos = progressToWorld(cfg.progress, cfg.lateral, 0.22)
+  car.position.copy(pos)
   dynamic.add(car)
   rivals.push({
     car,
     baseSpeed: cfg.baseSpeed,
-    laneTarget: cfg.x,
+    progress: cfg.progress,
+    lateral: cfg.lateral,
+    laneTarget: cfg.lateral,
     swayPhase: Math.random() * tau,
     lastHit: -9999,
     bumpVx: 0
@@ -1401,37 +1553,33 @@ function addRival(cfg) {
 function spawnPickups() {
   pickups.forEach((p) => dynamic.remove(p.mesh))
   pickups = []
-  for (let z = -40; z > CFG.finishZ + 40; z -= CFG.pickupGap) {
-    // a coin row pattern
-    const lane = Math.sin(z * 0.012) * 3.6
-    const pattern = Math.floor(Math.abs(z) / 100) % 4
-    if (pattern === 3) {
-      // skip = nothing here (creates rhythm)
-      continue
-    }
+  for (let s = 40; s < Track.length - 40; s += CFG.pickupGap) {
+    const lane = Math.sin(s * 0.012) * 3.6
+    const pattern = Math.floor(s / 100) % 4
+    if (pattern === 3) continue
     if (pattern === 2) {
-      // nitro can
       const m = makeNitroPickup()
-      m.position.set(lane, 1.9, z)
+      placeAlongTrack(m, s, lane, 1.9 - 0.22)
       dynamic.add(m)
-      pickups.push({ mesh: m, x: lane, z, type: "nitro", taken: false })
+      pickups.push({ mesh: m, progress: s, lateral: lane, type: "nitro", taken: false })
     } else {
-      // coin trio
       for (const off of [-1.3, 0, 1.3]) {
         const m = makeCoin()
-        m.position.set(clamp(lane + off, -CFG.playerHalfWidth, CFG.playerHalfWidth), 2.0, z + off * 1.2)
+        const lat = clamp(lane + off, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+        const prog = s + off * 1.2
+        placeAlongTrack(m, prog, lat, 2.0 - 0.22)
         dynamic.add(m)
-        pickups.push({ mesh: m, x: m.position.x, z: m.position.z, type: "coin", taken: false })
+        pickups.push({ mesh: m, progress: prog, lateral: lat, type: "coin", taken: false })
       }
     }
   }
-  // some hazard barriers
-  for (let z = -300; z > CFG.finishZ; z -= 320) {
+  // hazard barriers
+  for (let s = 300; s < Track.length - 30; s += 320) {
     const m = makeHazard()
-    const x = (Math.sin(z * 0.03) > 0 ? 1 : -1) * rand(2.8, 4.2)
-    m.position.set(x, 0.6, z)
+    const lat = (Math.sin(s * 0.03) > 0 ? 1 : -1) * rand(2.8, 4.2)
+    placeAlongTrack(m, s, lat, 0.6 - 0.22)
     dynamic.add(m)
-    pickups.push({ mesh: m, x, z, type: "hazard", taken: false })
+    pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
   }
 }
 
@@ -1473,17 +1621,16 @@ function spawnRamps() {
   ramps.forEach((r) => dynamic.remove(r.mesh))
   ramps = []
   // dramatic first ramp 30m ahead of the start so the player sees it immediately
-  const firstZ = -32
   const m0 = makeRamp()
-  m0.position.set(0, 0.3, firstZ)
+  placeAlongTrack(m0, 32, 0, 0.3 - 0.22)
   dynamic.add(m0)
-  ramps.push({ mesh: m0, x: 0, z: firstZ, used: false })
-  for (let z = -180; z > CFG.finishZ + 90; z -= CFG.rampGap + rand(-30, 30)) {
-    const x = Math.sin(z * 0.02) * 2.5
+  ramps.push({ mesh: m0, progress: 32, lateral: 0, used: false })
+  for (let s = 180; s < Track.length - 90; s += CFG.rampGap + rand(-30, 30)) {
+    const lat = Math.sin(s * 0.02) * 2.5
     const m = makeRamp()
-    m.position.set(x, 0.3, z)
+    placeAlongTrack(m, s, lat, 0.3 - 0.22)
     dynamic.add(m)
-    ramps.push({ mesh: m, x, z, used: false })
+    ramps.push({ mesh: m, progress: s, lateral: lat, used: false })
   }
 }
 
@@ -1565,11 +1712,11 @@ function makeRamp() {
 function spawnCheckpoints() {
   checkpoints.forEach((c) => dynamic.remove(c.mesh))
   checkpoints = []
-  for (let z = -200; z > CFG.finishZ + 80; z -= CFG.checkpointGap) {
+  for (let s = 200; s < Track.length - 80; s += CFG.checkpointGap) {
     const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
-    m.position.set(0, 0, z)
+    placeAlongTrack(m, s)
     dynamic.add(m)
-    checkpoints.push({ mesh: m, z, passed: false })
+    checkpoints.push({ mesh: m, progress: s, passed: false })
   }
 }
 
@@ -1964,6 +2111,7 @@ function startRace() {
   rebuildPlayerCar()
   applyTrack()
   buildTrack()
+  buildScenery()
   spawnPickups()
   spawnRamps()
   spawnCheckpoints()
@@ -1971,19 +2119,20 @@ function startRace() {
 
   // reset run state
   state.speed = 0
-  state.x = 0
+  state.lateral = 0
+  state.progress = 0       // start at the very beginning of the curve
   state.y = 0.22
   state.vy = 0
-  state.z = 12
   state.steer = 0
-  state.gas = 1
+  state.gas = 0      // locked during countdown
   state.brake = 0
   state.nitroCharges = 1
   state.nitroTime = 0
   state.coins = 0
   state.hits = 0
   state.shake = 0
-  state.startedAt = performance.now()
+  state.countdown = 3 // 3..2..1..0 (0 = GO)
+  state.startedAt = performance.now() + 3200  // race timer starts AFTER GO
   state.pauseAcc = 0
   state.finished = false
   state.finishedAt = 0
@@ -2008,11 +2157,78 @@ function startRace() {
     r.bumpVx = 0
   })
 
-  player.position.set(0, state.y, state.z)
+  // place player on the curve at progress=0
+  const startPos = progressToWorld(0, 0, state.y)
+  player.position.copy(startPos)
   player.rotation.set(0, 0, 0)
   setMode("playing")
-  toast("准备... 出发！", 1200)
+  runCountdown()
   maybeShowTutorial()
+}
+
+// 3-2-1-GO! sequence: red lights tick down, green flashes, controls unlock.
+function runCountdown() {
+  const overlay = $("countdownOverlay")
+  const num = $("countdownNum")
+  const lights = overlay.querySelectorAll(".cd-light")
+  overlay.classList.add("show")
+  lights.forEach((l) => l.classList.remove("lit", "go"))
+  num.classList.remove("go")
+
+  let step = 3
+  const tick = () => {
+    if (step > 0) {
+      num.textContent = String(step)
+      num.classList.remove("go")
+      // re-trigger pop animation
+      num.style.animation = "none"
+      void num.offsetWidth
+      num.style.animation = ""
+      // light up the right number of red lights (4-step → 3,2,1)
+      lights.forEach((l, i) => {
+        l.classList.toggle("lit", i < (4 - step))
+      })
+      // engine rev sound on each tick
+      if (audio.ctx) {
+        const o = audio.ctx.createOscillator()
+        const g = audio.ctx.createGain()
+        o.type = "sawtooth"
+        o.frequency.setValueAtTime(180, audio.ctx.currentTime)
+        o.frequency.exponentialRampToValueAtTime(90, audio.ctx.currentTime + 0.3)
+        g.gain.setValueAtTime(0.18, audio.ctx.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.001, audio.ctx.currentTime + 0.32)
+        o.connect(g); g.connect(audio.master)
+        o.start()
+        o.stop(audio.ctx.currentTime + 0.35)
+      }
+      step--
+      state.countdown = step + 1
+      setTimeout(tick, 900)
+    } else {
+      // GO!
+      num.textContent = "GO!"
+      num.classList.add("go")
+      lights.forEach((l) => l.classList.add("go"))
+      state.countdown = 0
+      state.gas = 1
+      state.shake = 0.35
+      // GO sound: short pitch-up sweep
+      if (audio.ctx) {
+        const o = audio.ctx.createOscillator()
+        const g = audio.ctx.createGain()
+        o.type = "sawtooth"
+        o.frequency.setValueAtTime(200, audio.ctx.currentTime)
+        o.frequency.exponentialRampToValueAtTime(800, audio.ctx.currentTime + 0.3)
+        g.gain.setValueAtTime(0.3, audio.ctx.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.001, audio.ctx.currentTime + 0.45)
+        o.connect(g); g.connect(audio.master)
+        o.start()
+        o.stop(audio.ctx.currentTime + 0.5)
+      }
+      setTimeout(() => overlay.classList.remove("show"), 600)
+    }
+  }
+  tick()
 }
 
 function pauseRace() {
@@ -2108,7 +2324,9 @@ function loop(now) {
 
 function updateDriving(dt, now) {
   // throttle / brake (uses currently-selected car's stats)
-  if (!state.finished) {
+  if (state.countdown > 0) {
+    state.speed = lerp(state.speed, 0, dt * 4)
+  } else if (!state.finished) {
     const target = state.brake ? 0 : (state.nitroTime > 0 ? CFG.nitroSpeed : (state.gas ? CFG.maxSpeed : 95))
     const accel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
     state.speed = lerp(state.speed, target, dt * accel)
@@ -2118,19 +2336,17 @@ function updateDriving(dt, now) {
   }
   if (state.nitroTime > 0) state.nitroTime = Math.max(0, state.nitroTime - dt)
 
-  // steering — visual lean + lateral velocity
-  state.steerVisual = lerp(state.steerVisual, state.steer, dt * 6)
+  // steering — locked during countdown
+  const liveSteer = state.countdown > 0 ? 0 : state.steer
+  state.steerVisual = lerp(state.steerVisual, liveSteer, dt * 6)
   const steerStrength = (CFG.carSteer ?? 6.5) + state.speed * 0.05
-  state.x = clamp(state.x + state.steer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+  state.lateral = clamp(state.lateral + liveSteer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
 
   // gravity / jump
   state.vy -= 32 * dt
   state.y += state.vy * dt
   if (state.y < 0.22) {
-    if (state.airborne) {
-      // landed — give a small boost feeling
-      state.shake = Math.max(state.shake, 0.18)
-    }
+    if (state.airborne) state.shake = Math.max(state.shake, 0.18)
     state.y = 0.22
     state.vy = 0
     state.airborne = false
@@ -2138,17 +2354,20 @@ function updateDriving(dt, now) {
     state.airborne = true
   }
 
-  // forward motion
-  state.z -= state.speed * dt * 0.22
+  // forward motion along the curve. speed (km/h) → m/s ≈ speed * 0.278.
+  state.progress = clamp(state.progress + state.speed * dt * 0.278, 0, Track.length)
 
-  // apply to player
-  player.position.set(state.x, state.y, state.z)
-  player.rotation.set(
-    -state.vy * 0.012 + (state.airborne ? 0.05 : 0),
-    state.steerVisual * 0.16,
-    -state.steerVisual * 0.18
-  )
+  // map track-space → world for the player car
+  const worldPos = progressToWorld(state.progress, state.lateral, state.y)
+  const tan = progressTangent(state.progress).clone()
+  player.position.copy(worldPos)
+  // orient player to face down the curve (forward = tangent), then add steer/jump tilt
+  player.lookAt(worldPos.clone().add(tan))
+  player.rotation.x += -state.vy * 0.012 + (state.airborne ? 0.05 : 0)
+  player.rotation.z += -state.steerVisual * 0.18
   if (playerBody) {
+    // face the car forward relative to the player group (Kenney models face -Z natively
+    // and we rotate the parent player group so they need to flip 180°)
     playerBody.rotation.y = Math.PI - state.steerVisual * 0.05
   }
 
@@ -2159,75 +2378,82 @@ function updateDriving(dt, now) {
     p.scale.z = plumeOn ? 1 + Math.sin(now * 0.04) * 0.18 : 0.6
   })
   headlight.intensity = lerp(headlight.intensity, plumeOn ? 1.2 : 0.5, dt * 4)
-  // nitro particle trail (spawn at the rear of the player while active)
+  // nitro particle trail — spawn at world rear of player
   if (plumeOn) {
     state._nitroEmitTimer = (state._nitroEmitTimer || 0) - dt
     if (state._nitroEmitTimer <= 0) {
       state._nitroEmitTimer = 0.018
-      const sx = (Math.random() - 0.5) * 1.2
-      const sy = 0.55 + Math.random() * 0.2
-      nitroTrail(state.x + sx, state.y + sy, state.z + 3.4, Math.random() < 0.5 ? 0x36e0ff : 0xfff15a)
+      // spawn a couple of meters behind the car along -tangent
+      const back = worldPos.clone().addScaledVector(tan, -3.4)
+      back.x += (Math.random() - 0.5) * 1.2
+      back.y += 0.45 + Math.random() * 0.2
+      back.z += (Math.random() - 0.5) * 1.2
+      nitroTrail(back.x, back.y, back.z, Math.random() < 0.5 ? 0x36e0ff : 0xfff15a)
     }
   }
 
-  // finish trigger
-  if (!state.finished && state.z < CFG.finishZ + 14) finishRace(true)
+  // finish trigger — once we've covered the whole curve
+  if (!state.finished && state.progress >= Track.length - 14) finishRace(true)
 }
 
 function updateRivals(dt, now) {
   for (const r of rivals) {
-    const car = r.car
-    const dz = car.position.z - state.z
-    // each rival drives at its own constant speed (no chasing the player) — feels
-    // like real opponents rather than rubber-banding
-    car.position.z -= r.baseSpeed * dt * 0.22
-    // far behind player → respawn comfortably ahead
-    if (dz > 60) {
-      car.position.z = state.z - 90 - rand(0, 80)
-      // respawn into a lane offset from the player's current x (avoid head-on)
+    // each rival drives at its own constant speed along the curve
+    r.progress += r.baseSpeed * dt * 0.278
+    // gap to player along the track (positive = rival ahead)
+    const dProgress = r.progress - state.progress
+    // far behind → respawn ahead
+    if (dProgress < -60) {
+      r.progress = state.progress + 90 + rand(0, 80)
       const lanes = [-4, -2, 2, 4]
-      car.position.x = lanes[Math.floor(Math.random() * lanes.length)]
-      r.laneTarget = car.position.x
-      r.lastHit = now      // grace period after teleport so respawn doesn't insta-collide
+      r.laneTarget = lanes[Math.floor(Math.random() * lanes.length)]
+      r.lateral = r.laneTarget
+      r.lastHit = now
     }
-    // way ahead of player → bring them back into view so the field stays exciting
-    if (dz < -360) {
-      car.position.z = state.z - 90 - rand(0, 80)
-      // respawn into a lane offset from the player's current x (avoid head-on)
+    // way ahead → bring back into view
+    if (dProgress > 360) {
+      r.progress = state.progress + 90 + rand(0, 80)
       const lanes = [-4, -2, 2, 4]
-      car.position.x = lanes[Math.floor(Math.random() * lanes.length)]
-      r.laneTarget = car.position.x
+      r.laneTarget = lanes[Math.floor(Math.random() * lanes.length)]
+      r.lateral = r.laneTarget
     }
-    // sway lane gently around the rival's preferred lane.
-    // when player is close behind and aligned, rival shifts AWAY (yield).
-    const playerCloseBehind = (car.position.z - state.z) < 16 && (car.position.z - state.z) > -2
-    const playerAligned = Math.abs(car.position.x - state.x) < 1.4
+    // lane sway + dodge if player close behind in same lane
+    const playerCloseBehind = dProgress < 16 && dProgress > -2
+    const playerAligned = Math.abs(r.lateral - state.lateral) < 1.4
     let lane = r.laneTarget + Math.sin(now * 0.0010 + r.swayPhase) * 1.4
     if (playerCloseBehind && playerAligned) {
-      const dodge = state.x < 0 ? 2.4 : -2.4
+      const dodge = state.lateral < 0 ? 2.4 : -2.4
       lane = clamp(r.laneTarget + dodge, -CFG.playerHalfWidth, CFG.playerHalfWidth)
     }
-    car.position.x = lerp(car.position.x, lane, dt * 1.6)
-    car.position.x += r.bumpVx * dt
+    r.lateral = lerp(r.lateral, lane, dt * 1.6)
+    r.lateral += r.bumpVx * dt
     r.bumpVx *= Math.pow(0.05, dt)
-    car.position.x = clamp(car.position.x, -CFG.playerHalfWidth, CFG.playerHalfWidth)
-    car.position.y = 0.22
+    r.lateral = clamp(r.lateral, -CFG.playerHalfWidth, CFG.playerHalfWidth)
 
-    // car bob & subtle steer lean
-    const lean = Math.sin(now * 0.003 + r.swayPhase) * 0.05 + (r.car.position.x - state.x) * 0.02
-    car.rotation.set(0, Math.PI - lean * 0.6, lean * 0.8)
-    // collision with player
+    // place car in world following the curve
+    const wp = progressToWorld(r.progress, r.lateral, 0.22)
+    const tan = progressTangent(r.progress).clone()
+    r.car.position.copy(wp)
+    r.car.lookAt(wp.clone().add(tan))
+    // Kenney models face -Z natively, lookAt also faces -Z (same direction the
+    // tangent points), so add a 180° flip to face the right way.
+    r.car.rotateY(Math.PI)
+    // tilt for lean
+    const lean = Math.sin(now * 0.003 + r.swayPhase) * 0.05 + (r.lateral - state.lateral) * 0.02
+    r.car.rotateZ(lean * 0.8)
+
+    // collision with player (in track-space)
     if (state.finished) continue
-    const distZ = Math.abs(car.position.z - state.z)
-    const distX = Math.abs(car.position.x - state.x)
     const sinceStart = now - state.startedAt - state.pauseAcc
-    if (sinceStart < 1500) continue   // 1.5s start-grid grace period
-    if (distZ < 2.6 && distX < 1.4 && now - r.lastHit > 1500 && now - state.lastRivalHit > 900) {
+    if (sinceStart < 1500) continue
+    const dProg = Math.abs(dProgress)
+    const dLat = Math.abs(r.lateral - state.lateral)
+    if (dProg < 2.6 && dLat < 1.4 && now - r.lastHit > 1500 && now - state.lastRivalHit > 900) {
       r.lastHit = now
       state.lastRivalHit = now
-      const dir = state.x < car.position.x ? -1 : 1
+      const dir = state.lateral < r.lateral ? -1 : 1
       r.bumpVx = dir * 14
-      state.x = clamp(state.x - dir * 0.7, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+      state.lateral = clamp(state.lateral - dir * 0.7, -CFG.playerHalfWidth, CFG.playerHalfWidth)
       if (state.nitroTime > 0) {
         state.speed *= 0.92
         toast("撞开对手！", 800)
@@ -2238,7 +2464,8 @@ function updateRivals(dt, now) {
         toast("被撞了！稳住", 900)
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
-      sparks((state.x + car.position.x) / 2, 1.6, (state.z + car.position.z) / 2, 0xffe45a, 22)
+      const sparkPos = progressToWorld((r.progress + state.progress) / 2, (r.lateral + state.lateral) / 2, 1.6)
+      sparks(sparkPos.x, sparkPos.y, sparkPos.z, 0xffe45a, 22)
       sfxImpact()
     }
   }
@@ -2249,21 +2476,26 @@ function updatePickups(dt, now) {
     if (p.taken) continue
     if (p.type !== "hazard") {
       p.mesh.rotation.y += dt * 4
-      p.mesh.position.y = (p.type === "nitro" ? 1.9 : 2.0) + Math.sin(now * 0.004 + p.z) * 0.2
+      // float-bob the y position relative to the road base height under it
+      const baseY = (p.type === "nitro" ? 1.9 : 2.0) + Math.sin(now * 0.004 + p.progress) * 0.2
+      const bobPos = progressToWorld(p.progress, p.lateral, baseY)
+      p.mesh.position.copy(bobPos)
     }
-    if (Math.abs(p.z - state.z) < 3.6 && Math.abs(p.x - state.x) < 2.0) {
+    const dProg = Math.abs(p.progress - state.progress)
+    const dLat = Math.abs(p.lateral - state.lateral)
+    if (dProg < 3.6 && dLat < 2.0) {
       if (p.type === "coin") {
         p.taken = true
         p.mesh.visible = false
         state.coins++
-        sparks(p.x, 2.0, p.z, 0xffd23a, 10)
+        sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffd23a, 10)
         sfxCoin()
       } else if (p.type === "nitro") {
         p.taken = true
         p.mesh.visible = false
         state.nitroCharges = Math.min(3, state.nitroCharges + 1)
         toast("氮气 +1", 800)
-        sparks(p.x, 2.0, p.z, 0xffe45a, 18)
+        sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffe45a, 18)
         sfxCoin()
       } else if (p.type === "hazard" && state.nitroTime <= 0) {
         p.taken = true
@@ -2272,7 +2504,7 @@ function updatePickups(dt, now) {
         state.speed *= 0.5
         state.shake = 0.5
         toast("撞到障碍！", 900)
-        sparks(p.x, 1.2, p.z, 0xff7a18, 24)
+        sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 24)
         sfxImpact()
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
@@ -2282,17 +2514,18 @@ function updatePickups(dt, now) {
 
 function updateRamps(dt, now) {
   for (const r of ramps) {
-    r.mesh.rotation.y = 0
     if (r.used) continue
-    if (Math.abs(r.z - state.z) < 4.6 && Math.abs(r.x - state.x) < 3.0 && state.y <= 0.4) {
+    const dProg = Math.abs(r.progress - state.progress)
+    const dLat = Math.abs(r.lateral - state.lateral)
+    if (dProg < 4.6 && dLat < 3.0 && state.y <= 0.4) {
       r.used = true
       const power = state.nitroTime > 0 ? 22 : 17
       state.vy = power
       state.airborne = true
       state.shake = 0.32
-      sparks(r.x, 1.0, r.z, 0xffd23a, 24)
+      const sparkPos = progressToWorld(r.progress, r.lateral, 1.0)
+      sparks(sparkPos.x, sparkPos.y, sparkPos.z, 0xffd23a, 24)
       toast(state.nitroTime > 0 ? "超级飞跃！" : "飞跃！", 900)
-      // small re-charge
       if (state.nitroCharges < 3) state.nitroCharges = Math.min(3, state.nitroCharges + 1)
     }
   }
@@ -2301,9 +2534,10 @@ function updateRamps(dt, now) {
 function updateCheckpoints(now) {
   for (const c of checkpoints) {
     if (c.passed) continue
-    if (state.z < c.z) {
+    if (state.progress > c.progress) {
       c.passed = true
-      sparks(0, 4.5, c.z, 0x36e0ff, 28)
+      const pos = progressToWorld(c.progress, 0, 4.5)
+      sparks(pos.x, pos.y, pos.z, 0x36e0ff, 28)
       toast("通过检查点！", 800)
       state.nitroCharges = Math.min(3, state.nitroCharges + 1)
     }
@@ -2317,20 +2551,24 @@ function updateCamera(dt) {
   const wide = innerWidth > innerHeight
   const back = wide ? 11 : 13
   const high = wide ? 4.6 : 5.4
-  // small lateral lag on camera so it "trails" steering input — gives the
-  // car a sense of weight when you swerve hard
-  const trailX = state.x * 0.55 + state.steerVisual * -0.6
-  cameraTarget.set(trailX, state.y + high, state.z + back)
+  // sample the curve a few meters BEHIND the player for camera position,
+  // and a few meters AHEAD for the look-at target. This makes the camera
+  // bend naturally with the track in corners.
+  const camProgress = clamp(state.progress - back, 0, Track.length)
+  const lookProgress = clamp(state.progress + 22, 0, Track.length)
+  const camWorld = progressToWorld(camProgress, state.lateral * 0.55 - state.steerVisual * 0.6, state.y + high)
+  const lookWorld = progressToWorld(lookProgress, state.lateral * 0.4, state.y + 1.1)
+  cameraTarget.copy(camWorld)
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
     cameraTarget.x += (Math.random() - 0.5) * 0.4
     cameraTarget.y += (Math.random() - 0.5) * 0.25
   }
   camera.position.lerp(cameraTarget, dt * 6)
-  cameraLook.set(state.x * 0.4, state.y + 1.1, state.z - 22)
+  cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
 
-  // FOV pulse driven by speed + nitro — makes high speed feel fast
+  // FOV pulse driven by speed + nitro
   const baseFov = wide ? 60 : 70
   const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
   const nitroBoost = state.nitroTime > 0 ? 8 : 0
@@ -2353,10 +2591,25 @@ function updateMenuCamera(now) {
 function updateHUD() {
   $("speed").textContent = Math.round(state.speed)
   $("nitroCount").textContent = state.nitroCharges
-  const progress = clamp((-state.z) / Math.abs(CFG.finishZ), 0, 1)
+  const progress = clamp(state.progress / Track.length, 0, 1)
   $("progressFill").style.height = `${Math.round(progress * 100)}%`
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
   $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
+  // nitro button state: ready (pulsing), firing (cyan), or empty (grey)
+  const nitroBtn = $("nitroBtn")
+  const nitroWrap = $("nitroBtn").parentElement
+  if (state.nitroTime > 0) {
+    nitroBtn.classList.add("firing")
+    nitroBtn.classList.remove("ready")
+    nitroWrap.classList.remove("empty")
+  } else if (state.nitroCharges > 0) {
+    nitroBtn.classList.add("ready")
+    nitroBtn.classList.remove("firing")
+    nitroWrap.classList.remove("empty")
+  } else {
+    nitroBtn.classList.remove("ready", "firing")
+    nitroWrap.classList.add("empty")
+  }
   if (performance.now() < state.toastUntil) {
     $("missionToast").textContent = state.toastText
     $("missionToast").classList.add("show")

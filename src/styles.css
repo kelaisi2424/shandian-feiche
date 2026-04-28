@@ -818,6 +818,31 @@ body,
 .nitro-btn:active {
   transform: scale(0.95);
 }
+.nitro-btn.ready {
+  animation: nitro-pulse 1.4s ease-in-out infinite;
+}
+@keyframes nitro-pulse {
+  0%, 100% {
+    box-shadow: 0 0 22px rgba(255, 200, 60, 0.65);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 36px rgba(255, 200, 60, 0.95), 0 0 18px rgba(255, 255, 200, 0.7);
+    transform: scale(1.04);
+  }
+}
+.nitro-btn.firing {
+  background: radial-gradient(circle at 30% 30%, #fff 0 25%, #16d6ff 60%, #0a4a8a 100%);
+  border-color: #16d6ff;
+}
+.nitro-wrap.empty .nitro-btn {
+  filter: grayscale(0.65) brightness(0.6);
+  animation: none;
+}
+.nitro-wrap.empty span {
+  background: #444;
+  color: #888;
+}
 .nitro-wrap span {
   position: absolute;
   right: calc(var(--ui) * -0.5);
@@ -1130,6 +1155,71 @@ body,
   position: absolute;
   inset: 0 var(--gap, 50%) 0 0;
   background: linear-gradient(90deg, #26f0ff, #ffe24a);
+}
+
+/* race-start countdown */
+.countdown-overlay {
+  position: fixed;
+  inset: var(--frame-h) 0 0 0;
+  z-index: 22;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: calc(var(--ui) * 1.5);
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 35%, rgba(0, 0, 0, 0.45) 90%);
+}
+.countdown-overlay.show { display: flex; }
+.countdown-lights {
+  display: flex;
+  gap: calc(var(--ui) * 1.4);
+}
+.cd-light {
+  width: calc(var(--ui) * 3);
+  height: calc(var(--ui) * 3);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5a1a1a, #1a0606);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.45);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.cd-light.lit {
+  background: radial-gradient(circle at 35% 30%, #ffe7e2, #ff2a2a 40%, #8a0a0a);
+  box-shadow:
+    0 0 24px rgba(255, 50, 50, 0.85),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.4);
+}
+.cd-light.go {
+  background: radial-gradient(circle at 35% 30%, #d8ffc0, #35dc0d 40%, #1f8a00);
+  box-shadow:
+    0 0 30px rgba(70, 255, 30, 0.95),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+  border-color: #fff;
+}
+.countdown-num {
+  font-family: "Arial Black", Arial, sans-serif;
+  font-size: calc(var(--ui) * 14);
+  font-weight: 900;
+  color: #ffd31a;
+  text-shadow:
+    0 0 30px rgba(255, 211, 26, 0.9),
+    0 6px 0 #b88200,
+    0 12px 30px rgba(0, 0, 0, 0.45);
+  letter-spacing: 4px;
+  animation: cd-pop 0.6s ease-out;
+}
+.countdown-num.go {
+  color: #6fff37;
+  text-shadow:
+    0 0 40px rgba(70, 255, 30, 0.95),
+    0 6px 0 #1a8a00,
+    0 12px 30px rgba(0, 0, 0, 0.45);
+}
+@keyframes cd-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  30% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* tutorial overlay */
