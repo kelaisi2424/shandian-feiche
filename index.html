@@ -203,6 +203,10 @@
         </div>
 
         <div class="hud-stats">
+          <div class="hud-chip hud-chip-rank" id="rankBadge">
+            <span class="hud-chip-label">RANK</span>
+            <b><span id="hudRank">1</span><sup id="hudRankSuffix">ST</sup></b>
+          </div>
           <div class="hud-chip hud-chip-time">
             <span class="hud-chip-label">TIME</span>
             <b id="hudTime">0:00</b>
@@ -247,9 +251,13 @@
           <button id="gasBtn" aria-label="gas" class="pedal-gas">▰</button>
         </div>
 
-        <div class="hud-progress">
-          <span id="progressFill"></span>
+        <div class="mini-map" id="miniMap" aria-hidden="true">
+          <span class="mini-finish"></span>
+          <span class="mini-dot mini-player" id="miniPlayer"></span>
         </div>
+
+        <div class="screen-fx" id="screenFx" aria-hidden="true"></div>
+        <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
       </section>
 
       <section id="pauseScreen" class="screen overlay-screen">
@@ -271,6 +279,7 @@
             <div><b id="resStatTopSpeed">0</b><span>最高速度</span></div>
             <div><b id="resStatHits">0</b><span>碰撞</span></div>
           </div>
+          <p class="final-rank" id="resFinalRank">第 <b>1</b> 名</p>
           <p class="new-record" id="resNewRecord" style="display:none">🏆 新纪录！</p>
           <p class="best-time">本地最佳: <b id="resBestTime">--</b></p>
           <ul class="leaderboard" id="resLeaderboard"></ul>

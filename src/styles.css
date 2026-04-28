@@ -23,19 +23,23 @@ body,
   width: 100%;
   height: 100%;
   margin: 0;
+  padding: 0;
   overflow: hidden;
   background: #0b1727;
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
   color: #fff;
-  /* iOS safe-area support for notch/home-bar */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+/* dvh tracks the actually-visible viewport on iOS Safari (excludes the
+ * collapsing toolbar). On older browsers it falls through to 100% above. */
+@supports (height: 100dvh) {
+  html, body, #app { height: 100dvh; }
 }
 
 #game {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   display: block;
   touch-action: none;        /* let the JS swipe handler own the gesture */
 }
@@ -141,12 +145,24 @@ body,
   color: #dcecff;
 }
 
-/* ---- screens ---- */
+/* ---- screens ----
+ * pinned to the visible viewport just below the title bar.
+ * dvh keeps the bottom edge above iOS Safari's collapsing address bar
+ * and accounts for the safe-area at the bottom (home indicator). */
 .screen {
   position: fixed;
-  inset: var(--frame-h) 0 0 0;
+  top: var(--frame-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100% - var(--frame-h));
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-sizing: border-box;
   display: none;
   z-index: 10;
+}
+@supports (height: 100dvh) {
+  .screen { height: calc(100dvh - var(--frame-h)); }
 }
 .screen.active {
   display: flex;
@@ -909,13 +925,24 @@ body,
     radial-gradient(ellipse at 35% 60%, rgba(255, 255, 255, 0.18), transparent 35%);
 }
 
-/* ---- HUD ---- */
+/* ---- HUD ----
+ * sized to the visible viewport so on-canvas controls (pedals, nitro,
+ * pause) stay reachable above iOS Safari's collapsing toolbar */
 .hud {
   position: fixed;
-  inset: var(--frame-h) 0 0 0;
+  top: var(--frame-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100% - var(--frame-h));
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-sizing: border-box;
   z-index: 5;
   display: none;
   pointer-events: none;
+}
+@supports (height: 100dvh) {
+  .hud { height: calc(100dvh - var(--frame-h)); }
 }
 .hud.active {
   display: block;
@@ -1022,6 +1049,44 @@ body,
 .hud-chip-coin { border-color: rgba(255, 211, 26, 0.4); }
 .hud-chip-coin b { color: #ffd31a; text-shadow: 0 0 10px rgba(255, 211, 26, 0.5); }
 .hud-chip-track b { font-size: calc(var(--ui) * 1.2); }
+
+/* RANK chip — gold/silver/bronze tinting based on player position */
+.hud-chip-rank {
+  border-color: rgba(255, 211, 26, 0.55);
+  background: linear-gradient(180deg, rgba(255, 211, 26, 0.18) 0%, rgba(5, 18, 38, 0.85) 100%);
+  position: relative;
+}
+.hud-chip-rank b {
+  color: #fff;
+  font-style: italic;
+  font-size: calc(var(--ui) * 1.9);
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: 0 0 12px rgba(255, 211, 26, 0.7);
+}
+.hud-chip-rank b sup {
+  font-size: calc(var(--ui) * 0.85);
+  font-weight: 900;
+  margin-left: 1px;
+  vertical-align: super;
+  letter-spacing: 1px;
+}
+.hud-chip-rank.gold {
+  border-color: #ffe45a;
+  background: linear-gradient(180deg, rgba(255, 228, 90, 0.45) 0%, rgba(255, 138, 22, 0.25) 100%);
+  box-shadow: 0 0 16px rgba(255, 211, 26, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.hud-chip-rank.gold b { color: #fff; text-shadow: 0 0 14px #ffe45a, 0 0 4px #fff; }
+.hud-chip-rank.silver {
+  border-color: #c4d3e3;
+  background: linear-gradient(180deg, rgba(196, 211, 227, 0.32) 0%, rgba(5, 18, 38, 0.85) 100%);
+}
+.hud-chip-rank.silver b { color: #e8eef5; text-shadow: 0 0 10px rgba(196, 211, 227, 0.6); }
+.hud-chip-rank.bronze {
+  border-color: #d99764;
+  background: linear-gradient(180deg, rgba(217, 151, 100, 0.32) 0%, rgba(5, 18, 38, 0.85) 100%);
+}
+.hud-chip-rank.bronze b { color: #ffcfa6; text-shadow: 0 0 10px rgba(217, 151, 100, 0.6); }
 .hud-coin-mini {
   width: calc(var(--ui) * 1);
   height: calc(var(--ui) * 1);
@@ -1267,24 +1332,139 @@ body,
   border: 2px solid rgba(255, 255, 255, 0.18);
 }
 
-.hud-progress {
+/* mini-map: vertical track strip showing player + rivals as dots
+ * 0% top = start, 100% bottom = finish line */
+.mini-map {
   position: absolute;
   top: calc(var(--ui) * 7.6);
   right: calc(var(--ui) * 4);
-  width: calc(var(--ui) * 0.85);
+  width: calc(var(--ui) * 1.6);
   height: calc(var(--ui) * 16);
-  background: rgba(5, 18, 38, 0.5);
-  border-radius: calc(var(--ui) * 0.4);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(180deg, rgba(38, 214, 255, 0.12) 0%, rgba(5, 18, 38, 0.55) 100%);
+  border-radius: calc(var(--ui) * 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  pointer-events: none;
+  overflow: visible;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
-.hud-progress span {
+/* center vertical track line — gradient to suggest direction */
+.mini-map::before {
+  content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  top: 4px;
+  bottom: calc(var(--ui) * 0.7);
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 211, 26, 0.7) 100%);
+  border-radius: 1px;
+}
+/* checker finish line at the bottom */
+.mini-finish {
+  position: absolute;
   bottom: 0;
-  height: 0%;
-  background: linear-gradient(180deg, #ffe45a, #ff8a16);
+  left: -2px;
+  right: -2px;
+  height: calc(var(--ui) * 0.6);
+  background:
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0)
+    0 0 / calc(var(--ui) * 0.4) calc(var(--ui) * 0.4);
+  border-top: 1px solid rgba(255, 211, 26, 0.65);
+  border-radius: 0 0 calc(var(--ui) * 0.4) calc(var(--ui) * 0.4);
+}
+.mini-dot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: top 0.16s linear;
+}
+.mini-player {
+  width: calc(var(--ui) * 1.1);
+  height: calc(var(--ui) * 1.1);
+  background: radial-gradient(circle at 35% 30%, #c8f6ff, #26d6ff 55%, #006e8a 100%);
+  box-shadow: 0 0 10px rgba(38, 214, 255, 0.95), 0 0 2px #fff inset;
+  z-index: 2;
+}
+.mini-rival {
+  width: calc(var(--ui) * 0.78);
+  height: calc(var(--ui) * 0.78);
+  background: radial-gradient(circle at 35% 30%, #ffb0a0, #ff3a3a 55%, #5a0000 100%);
+  box-shadow: 0 0 5px rgba(255, 60, 60, 0.75);
+}
+
+/* screen-fx: full-viewport flash overlay for impact / nitro / checkpoint */
+.screen-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+}
+.screen-fx.fx-impact {
+  animation: fxImpact 0.5s ease-out forwards;
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(255, 50, 50, 0.32) 70%, rgba(255, 0, 0, 0.55) 100%);
+}
+.screen-fx.fx-nitro {
+  animation: fxNitro 0.7s ease-out forwards;
+  background:
+    radial-gradient(ellipse at center, rgba(38, 214, 255, 0.25) 0%, rgba(38, 214, 255, 0.08) 35%, transparent 65%);
+}
+.screen-fx.fx-checkpoint {
+  animation: fxCheckpoint 0.55s ease-out forwards;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(38, 214, 255, 0.36) 75%, rgba(38, 214, 255, 0.6) 100%);
+}
+@keyframes fxImpact {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fxNitro {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fxCheckpoint {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* speed lines: streaks emanating from screen edges, intensifying with speed
+ * activated by JS by setting --speed-fx to 0..1 on the element */
+.speed-lines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  --speed-fx: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(255, 255, 255, calc(0.04 * var(--speed-fx))) 60%, transparent 70%),
+    repeating-radial-gradient(circle at center,
+      transparent 0,
+      transparent calc(40px + 60px * (1 - var(--speed-fx))),
+      rgba(255, 255, 255, calc(0.18 * var(--speed-fx))) calc(42px + 60px * (1 - var(--speed-fx))),
+      transparent calc(46px + 60px * (1 - var(--speed-fx))));
+  mix-blend-mode: screen;
+  transition: opacity 0.15s linear;
+}
+.speed-lines.active { opacity: 1; }
+.speed-lines.nitro {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse at center, transparent 25%, rgba(38, 214, 255, calc(0.18 * var(--speed-fx))) 65%, transparent 80%),
+    repeating-radial-gradient(circle at center,
+      transparent 0,
+      transparent 30px,
+      rgba(180, 240, 255, calc(0.32 * var(--speed-fx))) 32px,
+      transparent 36px);
 }
 
 /* ============== overlay screens (modals) — neon-glass ============== */
@@ -1410,6 +1590,43 @@ body,
   font-size: calc(var(--ui) * 1);
 }
 .best-time b { color: #ffe35a; font-size: calc(var(--ui) * 1.2); }
+
+/* final-rank: large podium-style banner in result modal */
+.final-rank {
+  margin: calc(var(--ui) * 1) 0 calc(var(--ui) * 0.6);
+  padding: calc(var(--ui) * 0.5) calc(var(--ui) * 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(var(--ui) * 1.2);
+  color: #fff;
+  border-radius: calc(var(--ui) * 0.6);
+  background: linear-gradient(180deg, rgba(255, 211, 26, 0.25), rgba(255, 138, 22, 0.18));
+  border: 1px solid rgba(255, 211, 26, 0.5);
+  letter-spacing: 1px;
+}
+.final-rank b {
+  font-size: calc(var(--ui) * 1.8);
+  font-style: italic;
+  color: #ffe35a;
+  text-shadow: 0 0 12px rgba(255, 211, 26, 0.85);
+  margin: 0 2px;
+}
+.final-rank.gold {
+  background: linear-gradient(180deg, rgba(255, 228, 90, 0.4), rgba(255, 138, 22, 0.3));
+  border-color: #ffe45a;
+  box-shadow: 0 0 16px rgba(255, 211, 26, 0.45);
+}
+.final-rank.silver {
+  background: linear-gradient(180deg, rgba(196, 211, 227, 0.3), rgba(120, 140, 168, 0.18));
+  border-color: #c4d3e3;
+}
+.final-rank.silver b { color: #e8eef5; text-shadow: 0 0 10px rgba(196, 211, 227, 0.7); }
+.final-rank.bronze {
+  background: linear-gradient(180deg, rgba(217, 151, 100, 0.3), rgba(165, 95, 50, 0.18));
+  border-color: #d99764;
+}
+.final-rank.bronze b { color: #ffcfa6; text-shadow: 0 0 10px rgba(217, 151, 100, 0.7); }
 .leaderboard {
   list-style: none;
   margin: 0 0 calc(var(--ui) * 1) 0;
@@ -1739,7 +1956,9 @@ body,
   }
 }
 
-/* compact phone landscape (e.g. iPhone SE 667×375) — make HUD even tighter */
+/* compact phone landscape (e.g. iPhone SE 667×375) — fit menu in viewport
+ * without overflow: tile-grid uses top/bottom anchors (not height calc),
+ * action-bar shrinks labels, CTA stays reachable. */
 @media (orientation: landscape) and (max-height: 430px) {
   :root {
     --ui: 9px;
@@ -1755,13 +1974,46 @@ body,
     font-size: calc(var(--ui) * 0.7);
     letter-spacing: 4px;
   }
+  .menu-topbar {
+    height: calc(var(--ui) * 5);
+    padding: 0 calc(var(--ui) * 1.4);
+  }
+  .menu-actionbar {
+    height: calc(var(--ui) * 6);
+    padding: 0 calc(var(--ui) * 1.2);
+    gap: calc(var(--ui) * 0.8);
+  }
+  /* hide the chinese label inside nav buttons — keep icon + EN tag for compactness */
+  .nav-btn span { display: none; }
+  .nav-btn em { font-size: calc(var(--ui) * 0.6); }
+  .action-nav {
+    gap: calc(var(--ui) * 1.2);
+    padding: 0 calc(var(--ui) * 0.8);
+  }
+  .cta-btn {
+    padding: calc(var(--ui) * 0.7) calc(var(--ui) * 1.6);
+  }
+  .cta-btn span { font-size: calc(var(--ui) * 1.3); }
+  .cta-btn em { display: none; }
+  .player-text small { display: none; }
+  .player-level .crown {
+    width: calc(var(--ui) * 2.6);
+    height: calc(var(--ui) * 2.6);
+    font-size: calc(var(--ui) * 1.5);
+  }
   .tile-grid {
-    width: calc(100vw - 16px);
-    height: calc(100vh - var(--frame-h) - calc(var(--ui) * 9));
-    margin-top: calc(var(--ui) * 9);
+    /* anchor to viewport edges so the bottom action-bar stays reachable */
+    top: calc(var(--ui) * 6);
+    bottom: calc(var(--ui) * 7);
+    left: calc(var(--ui) * 1);
+    right: calc(var(--ui) * 1);
+    width: auto;
+    max-width: none;
+    height: auto;
+    margin: 0;
     grid-template-columns: 1.4fr 1fr 1fr;
     gap: calc(var(--ui) * 0.7);
-    padding: 0 calc(var(--ui) * 0.6);
+    padding: 0;
   }
   .tall-tile {
     display: none;
@@ -1798,5 +2050,90 @@ body,
   :root {
     --ui: 8px;
     --frame-h: 24px;
+  }
+}
+
+/* ─── PORTRAIT phone: column layout with a scrollable tile area ───
+ * topbar + actionbar are flex items that don't shrink; the tile-grid in
+ * between flex-grows and scrolls internally if tiles don't fit. */
+@media (orientation: portrait) {
+  .menu-screen {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+  .menu-topbar {
+    position: relative;
+    height: calc(var(--ui) * 5.5);
+    padding: 0 calc(var(--ui) * 1.5);
+    flex-shrink: 0;
+    /* z-index above the cover, below the title-bar */
+    z-index: 4;
+  }
+  .currency-bar { gap: calc(var(--ui) * 0.5); }
+  .tile-grid {
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    flex: 1 1 0;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    margin: 0;
+    padding: calc(var(--ui) * 1) calc(var(--ui) * 1);
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-auto-rows: minmax(calc(var(--ui) * 6.5), max-content);
+    gap: calc(var(--ui) * 1);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    align-content: start;     /* don't stretch rows to fill flex height */
+    z-index: 3;
+  }
+  .start-tile {
+    grid-column: 1 / -1;     /* full row */
+    grid-row: auto;
+    min-height: calc(var(--ui) * 8);
+    aspect-ratio: 2.4 / 1;
+  }
+  .small-tile {
+    aspect-ratio: 1.25 / 1;
+    min-height: calc(var(--ui) * 6.5);
+  }
+  .start-tile .tile-icon {
+    width: calc(var(--ui) * 4.5);
+    height: calc(var(--ui) * 4.5);
+  }
+  .tall-tile { display: none; }
+  .menu-actionbar {
+    position: relative;
+    height: calc(var(--ui) * 7);
+    padding: 0 calc(var(--ui) * 1.2);
+    gap: calc(var(--ui) * 0.8);
+    flex-shrink: 0;
+    z-index: 4;
+  }
+  /* compact action-bar in portrait — hide the english tagline */
+  .nav-btn em { display: none; }
+  .nav-btn span { font-size: calc(var(--ui) * 0.85); }
+  .action-nav { gap: calc(var(--ui) * 1.2); padding: 0 calc(var(--ui) * 0.5); }
+  .cta-btn {
+    padding: calc(var(--ui) * 0.8) calc(var(--ui) * 1.4);
+  }
+  .cta-btn span { font-size: calc(var(--ui) * 1.3); }
+  .cta-btn em { display: none; }
+  .player-text small { display: none; }
+  .player-level .crown {
+    width: calc(var(--ui) * 2.6);
+    height: calc(var(--ui) * 2.6);
+    font-size: calc(var(--ui) * 1.5);
+  }
+  /* push rotate-tip just above the actionbar so it doesn't overlap */
+  .rotate-tip {
+    bottom: calc(var(--ui) * 8 + env(safe-area-inset-bottom, 0px));
   }
 }

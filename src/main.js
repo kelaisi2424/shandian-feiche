@@ -2040,6 +2040,13 @@ function setMode(mode) {
   $("pauseScreen").classList.toggle("active", mode === "paused")
   $("resultScreen").classList.toggle("active", mode === "result")
   $("splash").classList.toggle("active", mode === "boot")
+  // clear in-game overlays when leaving the race
+  if (mode !== "playing") {
+    const sl = $("speedLines")
+    if (sl) sl.classList.remove("active", "nitro")
+    const fx = $("screenFx")
+    if (fx) fx.classList.remove("fx-impact", "fx-nitro", "fx-checkpoint")
+  }
   // transition class for the screen that just became active (for fade-in)
   const active = document.querySelector(".screen.active")
   if (active) {
@@ -2127,6 +2134,8 @@ function showLeaderboard() {
   $("resStatTime").textContent = "--"
   $("resStatCoins").textContent = String(fresh.coins)
   $("resStatHits").textContent = String(fresh.totalRaces)
+  const rankEl = $("resFinalRank")
+  if (rankEl) rankEl.style.display = "none"
   const board = $("resLeaderboard")
   board.innerHTML = ""
   const entries = fresh.leaderboard
@@ -2397,6 +2406,7 @@ function startRace() {
   state.lastRivalHit = 0
   state.airborne = false
   state.topSpeed = 0   // tracked through the race for the result modal
+  state._finalRank = null   // frozen at finishRace() time
 
   // reset world
   pickups.forEach((p) => {
@@ -2507,12 +2517,14 @@ function fireNitro() {
   state.shake = 0.3
   toast("NITRO!", 900)
   sfxNitro()
+  flashFx("nitro")
 }
 
 function finishRace(success = true) {
   if (state.finished) return
   state.finished = true
   state.finishedAt = performance.now()
+  state._finalRank = computeRank()
   setTimeout(() => {
     const ms = state.finishedAt - state.startedAt - state.pauseAcc
     const win = success && state.hits < CFG.hitLimit
@@ -2537,6 +2549,16 @@ function finishRace(success = true) {
       ? `用 ${mmss(ms)} 冲过终点，最高速度 ${Math.round(state.topSpeed)} KM/H。`
       : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
     if ($("resNewRecord")) $("resNewRecord").style.display = isNewRecord ? "block" : "none"
+    // final rank banner — only meaningful on a real finish, not the leaderboard view
+    const rankEl = $("resFinalRank")
+    if (rankEl) {
+      const total = rivals.length + 1
+      rankEl.classList.remove("gold", "silver", "bronze")
+      const cls = rankClass(state._finalRank)
+      if (cls) rankEl.classList.add(cls)
+      rankEl.innerHTML = `第 <b>${state._finalRank}</b> 名 / ${total}`
+      rankEl.style.display = ""
+    }
     // best time + leaderboard
     const fresh = Save.get()
     const best = fresh.bestTimePerTrack[fresh.selectedTrack]
@@ -2670,10 +2692,16 @@ function updateDriving(dt, now) {
 
 function updateRivals(dt, now) {
   for (const r of rivals) {
-    // each rival drives at its own constant speed along the curve
-    r.progress += r.baseSpeed * dt * 0.278
     // gap to player along the track (positive = rival ahead)
     const dProgress = r.progress - state.progress
+    // soft rubber-band so the field stays close to the player without feeling
+    // scripted: rivals far behind catch up modestly, rivals far ahead coast.
+    // Caps at ±18% of base speed and only kicks in past 60m of separation,
+    // so direct head-to-head battles are still decided by driving.
+    let bandMul = 1
+    if (dProgress < -60) bandMul = 1 + Math.min(0.18, (-dProgress - 60) / 600)
+    else if (dProgress > 80) bandMul = 1 - Math.min(0.14, (dProgress - 80) / 700)
+    r.progress += r.baseSpeed * bandMul * dt * 0.278
     // far behind → respawn ahead
     if (dProgress < -60) {
       r.progress = state.progress + 90 + rand(0, 80)
@@ -2734,6 +2762,7 @@ function updateRivals(dt, now) {
         state.speed *= 0.65
         state.shake = 0.45
         toast("被撞了！稳住", 900)
+        flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
       const sparkPos = progressToWorld((r.progress + state.progress) / 2, (r.lateral + state.lateral) / 2, 1.6)
@@ -2776,6 +2805,7 @@ function updatePickups(dt, now) {
         state.speed *= 0.5
         state.shake = 0.5
         toast("撞到障碍！", 900)
+        flashFx("impact")
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 24)
         sfxImpact()
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -2811,6 +2841,7 @@ function updateCheckpoints(now) {
       const pos = progressToWorld(c.progress, 0, 4.5)
       sparks(pos.x, pos.y, pos.z, 0x36e0ff, 28)
       toast("通过检查点！", 800)
+      flashFx("checkpoint")
       state.nitroCharges = Math.min(3, state.nitroCharges + 1)
     }
   }
@@ -2860,14 +2891,102 @@ function updateMenuCamera(now) {
 // ────────────────────────────────────────────────────────────────────
 // HUD
 // ────────────────────────────────────────────────────────────────────
+
+// Player rank: 1 = leader. 1 + count of rivals further along the spline.
+function computeRank() {
+  let ahead = 0
+  for (const r of rivals) if (r.progress > state.progress) ahead++
+  return ahead + 1
+}
+
+// English ordinal suffix (used in the RANK chip — "1ST" / "2ND" / "3RD" / "4TH"…)
+function ordinalSuffix(n) {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return "TH"
+  switch (n % 10) {
+    case 1: return "ST"
+    case 2: return "ND"
+    case 3: return "RD"
+    default: return "TH"
+  }
+}
+
+function rankClass(rank) {
+  if (rank === 1) return "gold"
+  if (rank === 2) return "silver"
+  if (rank === 3) return "bronze"
+  return ""
+}
+
+function updateRankBadge() {
+  const badge = $("rankBadge")
+  if (!badge) return
+  const rank = state.finished && state._finalRank != null ? state._finalRank : computeRank()
+  $("hudRank").textContent = String(rank)
+  $("hudRankSuffix").textContent = ordinalSuffix(rank)
+  badge.classList.remove("gold", "silver", "bronze")
+  const cls = rankClass(rank)
+  if (cls) badge.classList.add(cls)
+}
+
+// Sync the mini-map: ensure one .mini-rival per rival, place player + rivals
+// vertically by their progress fraction along the curve.
+function updateMiniMap(progress) {
+  const map = $("miniMap")
+  if (!map) return
+  // ensure rival dots exist (created lazily, kept across frames)
+  let rivalDots = map.querySelectorAll(".mini-rival")
+  if (rivalDots.length !== rivals.length) {
+    // remove old, add new
+    map.querySelectorAll(".mini-rival").forEach((d) => d.remove())
+    for (let i = 0; i < rivals.length; i++) {
+      const d = document.createElement("span")
+      d.className = "mini-dot mini-rival"
+      map.appendChild(d)
+    }
+    rivalDots = map.querySelectorAll(".mini-rival")
+  }
+  for (let i = 0; i < rivals.length; i++) {
+    const pct = clamp(rivals[i].progress / Track.length, 0, 1)
+    rivalDots[i].style.top = `${pct * 100}%`
+  }
+  const player = $("miniPlayer")
+  if (player) player.style.top = `${progress * 100}%`
+}
+
+// Speed lines overlay: opacity scales with speed, switches to cyan during nitro.
+// Threshold 150 km/h so they only show at racing speeds, not while cruising.
+function updateSpeedLines() {
+  const el = $("speedLines")
+  if (!el) return
+  const speedRatio = clamp((state.speed - 150) / 150, 0, 1)
+  const nitro = state.nitroTime > 0
+  const intensity = nitro ? Math.max(0.7, speedRatio) : speedRatio
+  el.style.setProperty("--speed-fx", intensity.toFixed(3))
+  el.classList.toggle("active", intensity > 0.05)
+  el.classList.toggle("nitro", nitro)
+}
+
+// One-shot screen flash. kind: "impact" | "nitro" | "checkpoint"
+let _screenFxTimer = 0
+function flashFx(kind) {
+  const fx = $("screenFx")
+  if (!fx) return
+  fx.classList.remove("fx-impact", "fx-nitro", "fx-checkpoint")
+  // force reflow so the next animation restarts cleanly even on rapid retriggers
+  void fx.offsetWidth
+  fx.classList.add(`fx-${kind}`)
+  clearTimeout(_screenFxTimer)
+  _screenFxTimer = setTimeout(() => fx.classList.remove(`fx-${kind}`), 750)
+}
+
 function updateHUD() {
   $("speed").textContent = Math.round(state.speed)
   $("nitroCount").textContent = state.nitroCharges
   const progress = clamp(state.progress / Track.length, 0, 1)
-  $("progressFill").style.height = `${Math.round(progress * 100)}%`
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
   $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
-  // top centred chips: TIME / COIN / TRACK
+  // top centred chips: RANK / TIME / COIN / TRACK
   const elapsedMs = state.countdown > 0
     ? 0
     : Math.max(0, performance.now() - state.startedAt - state.pauseAcc)
@@ -2877,6 +2996,9 @@ function updateHUD() {
     const tCfg = TRACKS[Save.get().selectedTrack]
     $("hudTrack").textContent = tCfg?.label ?? ""
   }
+  updateRankBadge()
+  updateMiniMap(progress)
+  updateSpeedLines()
   // nitro button state: ready (pulsing), firing (cyan), or empty (grey)
   const nitroBtn = $("nitroBtn")
   const nitroWrap = $("nitroBtn").parentElement
