@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import { Save } from "./save.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -12,21 +13,105 @@ const rand = (a, b) => a + Math.random() * (b - a)
 const tau = Math.PI * 2
 
 const CFG = {
-  trackLength: 2300,
   segLength: 8,
   roadHalfWidth: 7.4,
   laneHalfWidth: 5.4,
   playerHalfWidth: 4.6,
-  maxSpeed: 215,
-  nitroSpeed: 305,
-  nitroDuration: 2.4,
-  finishZ: -2250,
   rivalCount: 5,
   pickupGap: 26,
   rampGap: 180,
   checkpointGap: 260,
   hitLimit: 10,
-  coinGoal: 18
+  coinGoal: 18,
+  // overridden when track loads
+  trackLength: 2300,
+  finishZ: -2250,
+  maxSpeed: 215,
+  nitroSpeed: 305,
+  nitroDuration: 2.4
+}
+
+// 3 selectable cars: id, label, GLB asset, body color, accent, stats (1-5)
+const CARS = {
+  sport: {
+    id: "sport",
+    label: "电光跑车",
+    asset: "raceFuture",
+    body: 0x18b6ff,
+    accent: 0x05213d,
+    cost: 0,
+    maxSpeed: 215,
+    nitroSpeed: 305,
+    accel: 2.0,
+    steerRate: 7.5,
+    grip: 4
+  },
+  future: {
+    id: "future",
+    label: "极速未来",
+    asset: "race",
+    body: 0xff5826,
+    accent: 0x4a0808,
+    cost: 800,
+    maxSpeed: 240,
+    nitroSpeed: 330,
+    accel: 1.7,
+    steerRate: 6.3,
+    grip: 3
+  },
+  sedan: {
+    id: "sedan",
+    label: "灵敏小钢炮",
+    asset: "sedanSports",
+    body: 0x9be32a,
+    accent: 0x143807,
+    cost: 1500,
+    maxSpeed: 195,
+    nitroSpeed: 285,
+    accel: 2.4,
+    steerRate: 9.2,
+    grip: 5
+  }
+}
+
+// 3 selectable tracks
+const TRACKS = {
+  sky: {
+    id: "sky",
+    label: "蓝天跳台",
+    desc: "经典空中赛道",
+    cost: 0,
+    length: 2200,
+    sky: 0x9bd0f6,
+    fog: [0x9bd0f6, 220, 760],
+    sun: 0xfff5d8,
+    edgeMode: "chevron",
+    rampGap: 180
+  },
+  sunset: {
+    id: "sunset",
+    label: "落日大道",
+    desc: "金色黄昏",
+    cost: 600,
+    length: 2600,
+    sky: 0xff9b56,
+    fog: [0xff9b56, 200, 700],
+    sun: 0xffe1aa,
+    edgeMode: "chevron",
+    rampGap: 150
+  },
+  neon: {
+    id: "neon",
+    label: "霓虹夜幕",
+    desc: "夜间高速",
+    cost: 1200,
+    length: 3000,
+    sky: 0x0a1338,
+    fog: [0x0a1338, 200, 760],
+    sun: 0xb0e0ff,
+    edgeMode: "chevron",
+    rampGap: 130
+  }
 }
 
 const state = {
@@ -89,8 +174,12 @@ function unlockAudio() {
   if (!Ctx) return
   audio.ctx = new Ctx()
   audio.master = audio.ctx.createGain()
-  audio.master.gain.value = 0.6
+  audio.master.gain.value = (Save?.get?.()?.settings?.sfxVolume) ?? 0.6
   audio.master.connect(audio.ctx.destination)
+  audio.musicGain = audio.ctx.createGain()
+  audio.musicGain.gain.value = (Save?.get?.()?.settings?.musicVolume) ?? 0.4
+  audio.musicGain.connect(audio.ctx.destination)
+  initMusic()
 
   // engine: two saw oscillators slightly detuned + lowpass + gain
   const osc1 = audio.ctx.createOscillator()
@@ -179,6 +268,66 @@ function sfxNitro() {
   osc.start(now); osc.stop(now + 0.55)
 }
 
+// Procedural BGM: 8-step arpeggio + sub bass. Two tempos: chill (menu) and
+// race (faster + filtered up). Generated via repeating setTimeout-style
+// scheduler on the AudioContext clock.
+let musicTimer = null
+let musicMode = "menu"
+function initMusic() {
+  setMusicMode("menu")
+}
+function setMusicMode(mode) {
+  if (!audio.ctx) return
+  if (mode === musicMode) return
+  musicMode = mode
+  if (musicTimer) {
+    clearTimeout(musicTimer)
+    musicTimer = null
+  }
+  scheduleMusic()
+}
+function scheduleMusic() {
+  if (!audio.ctx) return
+  const ctx = audio.ctx
+  const now = ctx.currentTime
+  // chill: A minor pentatonic, race: same notes faster + brighter
+  const notes = [220, 261.63, 329.63, 392, 440, 392, 329.63, 261.63]
+  const tempo = musicMode === "race" ? 0.18 : 0.32  // seconds per note
+  const filterFreq = musicMode === "race" ? 2400 : 1100
+  const noteCount = notes.length
+  for (let i = 0; i < noteCount; i++) {
+    const t = now + i * tempo
+    const f = notes[i]
+    const osc = ctx.createOscillator()
+    osc.type = "triangle"
+    osc.frequency.value = f
+    const filt = ctx.createBiquadFilter()
+    filt.type = "lowpass"
+    filt.frequency.value = filterFreq
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(0.18, t + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.001, t + tempo * 0.95)
+    osc.connect(filt); filt.connect(g); g.connect(audio.musicGain)
+    osc.start(t); osc.stop(t + tempo)
+
+    // bass on every 2nd note
+    if (i % 2 === 0) {
+      const b = ctx.createOscillator()
+      b.type = "sine"
+      b.frequency.value = f / 2
+      const bg = ctx.createGain()
+      bg.gain.setValueAtTime(0.0, t)
+      bg.gain.linearRampToValueAtTime(0.12, t + 0.02)
+      bg.gain.exponentialRampToValueAtTime(0.001, t + tempo * 1.6)
+      b.connect(bg); bg.connect(audio.musicGain)
+      b.start(t); b.stop(t + tempo * 1.7)
+    }
+  }
+  // schedule next loop
+  musicTimer = setTimeout(scheduleMusic, noteCount * tempo * 1000)
+}
+
 function sfxCoin() {
   if (!audio.ctx) return
   const now = audio.ctx.currentTime
@@ -238,17 +387,22 @@ async function init() {
   spawnRamps()
   spawnCheckpoints()
   bindControls()
+  bindMetaControls()
   bindAudioUnlock()
+  refreshCurrencyHud()
+  applyQuality()
   addEventListener("resize", resize)
 
-  // splash → menu auto fade
+  // assets ready → flick the splash off into the menu
+  $("splashStatus").textContent = "准备就绪"
   setTimeout(() => {
     $("splash").classList.add("fade-out")
     setTimeout(() => {
       $("splash").classList.remove("active", "fade-out")
       setMode("menu")
-    }, 650)
-  }, 1700)
+      maybeShowDailyBonus()
+    }, 600)
+  }, 350)
 
   requestAnimationFrame(loop)
 }
@@ -449,16 +603,30 @@ async function loadAssets() {
     treeLarge: "/models/racing/treeLarge.gltf",
     billboard: "/models/racing/billboard.gltf"
   }
-  const list = await Promise.all(Object.entries(items).map(async ([k, url]) => {
+  const entries = Object.entries(items)
+  const total = entries.length
+  let done = 0
+  const setProgress = (label) => {
+    const fill = $("splashFill")
+    const status = $("splashStatus")
+    const pct = Math.round((done / total) * 100)
+    if (fill) fill.style.width = `${pct}%`
+    if (status) status.textContent = label || `加载资源 ${pct}%`
+  }
+  setProgress("加载资源 0%")
+  const results = []
+  for (const [k, url] of entries) {
     try {
       const g = await loader.loadAsync(url)
-      return [k, g.scene]
+      results.push([k, g.scene])
     } catch (e) {
       console.warn("asset missing", url, e)
-      return [k, null]
+      results.push([k, null])
     }
-  }))
-  assets = Object.fromEntries(list)
+    done++
+    setProgress(`加载资源 ${Math.round(done / total * 100)}%`)
+  }
+  assets = Object.fromEntries(results)
 }
 
 function cloneAsset(name, targetSize, axis = "x") {
@@ -863,17 +1031,12 @@ function makeTower(seed) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// player car — Kenney CC0 race car, deeply tinted bright blue
+// player car — uses selected car from save state
 // ────────────────────────────────────────────────────────────────────
 function buildPlayer() {
   player = new THREE.Group()
   scene.add(player)
-
-  const car = cloneAsset("raceFuture", 4.6, "z") || cloneAsset("sedanSports", 4.6, "z") || makeHypercar({ body: 0x16a8ff })
-  car.rotation.y = Math.PI
-  recolorCar(car, { body: 0x18b6ff, accent: 0x05213d })
-  playerBody = car
-  player.add(car)
+  rebuildPlayerCar()
 
   // glow underside (cyan light bar)
   const glow = new THREE.Mesh(
@@ -913,6 +1076,37 @@ function buildPlayer() {
 
 function makeFallbackCar(color, trim) {
   return makeHypercar({ body: color, accent: trim, wing: 0x111 })
+}
+
+// Rebuild player visual to match the currently-selected car (called on car
+// switch). Existing player Group, glow, plumes, headlight stay intact.
+function rebuildPlayerCar() {
+  const carId = Save.get().selectedCar
+  const cfg = CARS[carId] ?? CARS.sport
+  // remove the old visual body if any
+  if (playerBody) player.remove(playerBody)
+  const car = cloneAsset(cfg.asset, 4.6, "z") || makeHypercar({ body: cfg.body })
+  car.rotation.y = Math.PI
+  recolorCar(car, { body: cfg.body, accent: cfg.accent })
+  player.add(car)
+  playerBody = car
+  // apply stats to runtime CFG
+  CFG.maxSpeed = cfg.maxSpeed
+  CFG.nitroSpeed = cfg.nitroSpeed
+  CFG.carAccel = cfg.accel
+  CFG.carSteer = cfg.steerRate
+}
+
+// Apply the currently-selected track config: update length, finish, sky,
+// fog. Track geometry will be rebuilt at race start.
+function applyTrack() {
+  const trackId = Save.get().selectedTrack
+  const t = TRACKS[trackId] ?? TRACKS.sky
+  CFG.trackLength = t.length
+  CFG.finishZ = -(t.length - 50)
+  CFG.rampGap = t.rampGap
+  scene.background = new THREE.Color(t.sky)
+  scene.fog = new THREE.Fog(t.fog[0], t.fog[1], t.fog[2])
 }
 
 // Koenigsegg-ish hypercar with sloped hood, bubble cabin, side scoops, big rear wing.
@@ -1408,6 +1602,263 @@ function setMode(mode) {
   $("pauseScreen").classList.toggle("active", mode === "paused")
   $("resultScreen").classList.toggle("active", mode === "result")
   $("splash").classList.toggle("active", mode === "boot")
+  // transition class for the screen that just became active (for fade-in)
+  const active = document.querySelector(".screen.active")
+  if (active) {
+    active.classList.remove("fade-in")
+    void active.offsetWidth
+    active.classList.add("fade-in")
+  }
+  // music: switch loop based on mode
+  setMusicMode(mode === "playing" ? "race" : "menu")
+}
+
+function showOverlay(id) {
+  const el = $(id)
+  if (!el) return
+  el.classList.add("active", "fade-in")
+}
+function hideOverlay(id) {
+  const el = $(id)
+  if (!el) return
+  el.classList.remove("active", "fade-in")
+}
+
+// ────────────────────────────────────────────────────────────────────
+// settings, garage, track, daily, tutorial, share — UI wiring
+// ────────────────────────────────────────────────────────────────────
+function bindMetaControls() {
+  // gear → settings
+  $("gearBtn").addEventListener("click", openSettings)
+  $("settingsCloseBtn").addEventListener("click", () => hideOverlay("settingsScreen"))
+  $("setSfx").addEventListener("input", (e) => {
+    Save.setSettings({ sfxVolume: +e.target.value })
+    if (audio.master) audio.master.gain.value = +e.target.value
+  })
+  $("setMusic").addEventListener("input", (e) => {
+    Save.setSettings({ musicVolume: +e.target.value })
+    if (audio.musicGain) audio.musicGain.gain.value = +e.target.value
+  })
+  $("setQuality").addEventListener("change", (e) => {
+    Save.setSettings({ quality: e.target.value })
+    applyQuality()
+  })
+  $("setControl").addEventListener("change", (e) => {
+    Save.setSettings({ controlHint: e.target.value })
+  })
+
+  // garage tile
+  $("garageTile").addEventListener("click", openGarage)
+  $("garageCloseBtn").addEventListener("click", () => hideOverlay("garageScreen"))
+  // tracks tile
+  $("tracksTile").addEventListener("click", openTracks)
+  $("trackCloseBtn").addEventListener("click", () => hideOverlay("trackScreen"))
+  // daily tile
+  $("dailyTile").addEventListener("click", () => maybeShowDailyBonus(true))
+  $("dailyClaimBtn").addEventListener("click", () => {
+    hideOverlay("dailyScreen")
+    refreshCurrencyHud()
+  })
+  // privacy
+  $("privacyAckBtn").addEventListener("click", () => {
+    Save.setSettings({ privacyAck: true })
+    hideOverlay("privacyScreen")
+    setTimeout(() => maybeShowDailyBonus(), 250)
+  })
+  // share button
+  $("shareBtn").addEventListener("click", shareResult)
+}
+
+function openSettings() {
+  const s = Save.get().settings
+  $("setSfx").value = s.sfxVolume
+  $("setMusic").value = s.musicVolume
+  $("setQuality").value = s.quality
+  $("setControl").value = s.controlHint
+  showOverlay("settingsScreen")
+}
+
+function openGarage() {
+  const list = $("garageList")
+  list.innerHTML = ""
+  const save = Save.get()
+  Object.values(CARS).forEach((c) => {
+    const unlocked = save.unlockedCars.includes(c.id)
+    const selected = save.selectedCar === c.id
+    const card = document.createElement("div")
+    card.className = `garage-card ${unlocked ? "" : "locked"} ${selected ? "selected" : ""}`
+    const previewBg = `linear-gradient(135deg, #${c.body.toString(16).padStart(6, "0")}, #${c.accent.toString(16).padStart(6, "0")})`
+    card.innerHTML = `
+      <div class="preview" style="background:${previewBg}"></div>
+      <b>${c.label}</b>
+      <div class="stats">
+        <div class="stat-bar"><b>极速</b><i style="--gap:${100 - c.maxSpeed / 2.6}%"></i></div>
+        <div class="stat-bar"><b>加速</b><i style="--gap:${100 - c.accel * 30}%"></i></div>
+        <div class="stat-bar"><b>操控</b><i style="--gap:${100 - c.steerRate * 9}%"></i></div>
+      </div>
+      ${unlocked ? "" : `<small>解锁: ${c.cost} 金币</small>`}
+    `
+    card.addEventListener("click", () => {
+      if (unlocked) {
+        Save.set({ selectedCar: c.id })
+        openGarage()
+      } else {
+        const cur = Save.get()
+        if (cur.coins >= c.cost) {
+          Save.addCoins(-c.cost)
+          Save.unlockCar(c.id)
+          Save.set({ selectedCar: c.id })
+          refreshCurrencyHud()
+          openGarage()
+        } else {
+          toast(`金币不足 (${cur.coins}/${c.cost})`, 1200)
+        }
+      }
+    })
+    list.appendChild(card)
+  })
+  showOverlay("garageScreen")
+}
+
+function openTracks() {
+  const list = $("trackList")
+  list.innerHTML = ""
+  const save = Save.get()
+  Object.values(TRACKS).forEach((t) => {
+    const unlocked = save.unlockedTracks.includes(t.id)
+    const selected = save.selectedTrack === t.id
+    const best = save.bestTimePerTrack[t.id]
+    const card = document.createElement("div")
+    card.className = `track-card ${unlocked ? "" : "locked"} ${selected ? "selected" : ""}`
+    const previewBg = `linear-gradient(180deg, #${t.sky.toString(16).padStart(6, "0")}, #${t.fog[0].toString(16).padStart(6, "0")})`
+    card.innerHTML = `
+      <div class="preview" style="background:${previewBg}"></div>
+      <b>${t.label}</b>
+      <small style="color:#cfe0ff;font-size:calc(var(--ui)*0.85)">${t.desc}</small>
+      ${best ? `<small style="color:#ffe35a">最佳: ${mmss(best.ms)}</small>` : ""}
+      ${unlocked ? "" : `<small>解锁: ${t.cost} 金币</small>`}
+    `
+    card.addEventListener("click", () => {
+      if (unlocked) {
+        Save.set({ selectedTrack: t.id })
+        openTracks()
+      } else {
+        const cur = Save.get()
+        if (cur.coins >= t.cost) {
+          Save.addCoins(-t.cost)
+          Save.unlockTrack(t.id)
+          Save.set({ selectedTrack: t.id })
+          refreshCurrencyHud()
+          openTracks()
+        } else {
+          toast(`金币不足 (${cur.coins}/${t.cost})`, 1200)
+        }
+      }
+    })
+    list.appendChild(card)
+  })
+  showOverlay("trackScreen")
+}
+
+function maybeShowDailyBonus(force = false) {
+  // first show privacy ack on first run
+  if (!Save.get().settings.privacyAck) {
+    showOverlay("privacyScreen")
+    return
+  }
+  if (force) {
+    // force claim
+    const r = Save.claimDaily()
+    if (r.granted) {
+      $("dailyDay").textContent = r.day
+      $("dailyAmount").textContent = `+${r.amount}`
+      showOverlay("dailyScreen")
+    } else {
+      toast("今天已领取", 900)
+    }
+    refreshCurrencyHud()
+    return
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  if (Save.get().lastDaily === today) {
+    refreshCurrencyHud()
+    return
+  }
+  const r = Save.claimDaily()
+  if (r.granted) {
+    $("dailyDay").textContent = r.day
+    $("dailyAmount").textContent = `+${r.amount}`
+    showOverlay("dailyScreen")
+  }
+  refreshCurrencyHud()
+}
+
+function refreshCurrencyHud() {
+  const s = Save.get()
+  if ($("coinTotal")) $("coinTotal").textContent = String(s.coins)
+  if ($("cashTotal")) $("cashTotal").textContent = String(s.gems)
+}
+
+// Apply quality settings (pixelRatio + shadowMap)
+function applyQuality() {
+  const q = Save.get().settings.quality
+  const dpr = q === "low" ? 1 : q === "medium" ? 1.5 : q === "high" ? 2 : Math.min(window.devicePixelRatio || 1, 2)
+  if (renderer) renderer.setPixelRatio(dpr)
+}
+
+// First-time tutorial overlay — shown on the very first race only
+function maybeShowTutorial() {
+  if (Save.get().hasOnboarded) return
+  $("tutorialOverlay").classList.add("show")
+  setTimeout(() => {
+    $("tutorialOverlay").classList.remove("show")
+    Save.set({ hasOnboarded: true })
+  }, 5000)
+}
+
+// Generate a result-screenshot PNG and offer it to the user
+function shareResult() {
+  try {
+    const c = document.createElement("canvas")
+    c.width = 720
+    c.height = 480
+    const g = c.getContext("2d")
+    // backdrop
+    const grd = g.createLinearGradient(0, 0, 0, 480)
+    grd.addColorStop(0, "#0a1c3a")
+    grd.addColorStop(1, "#1c4a99")
+    g.fillStyle = grd
+    g.fillRect(0, 0, 720, 480)
+    // logo
+    g.fillStyle = "#ffd31a"
+    g.font = "bold 64px sans-serif"
+    g.textAlign = "center"
+    g.fillText("⚡ 闪电飞车", 360, 80)
+    // result
+    g.fillStyle = "#fff"
+    g.font = "bold 38px sans-serif"
+    g.fillText($("resultTitle").textContent, 360, 160)
+    g.font = "bold 28px sans-serif"
+    g.fillStyle = "#cfe0ff"
+    g.fillText(`用时 ${$("resStatTime").textContent}`, 360, 240)
+    g.fillText(`金币 ${$("resStatCoins").textContent}`, 360, 290)
+    g.fillText(`碰撞 ${$("resStatHits").textContent}`, 360, 340)
+    // footer
+    g.font = "16px sans-serif"
+    g.fillStyle = "#93a8c8"
+    g.fillText("shandian-feiche.netlify.app", 360, 440)
+    c.toBlob((blob) => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `shandian-feiche-${Date.now()}.png`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      toast("成绩已保存到相册/下载", 1200)
+    })
+  } catch (e) {
+    toast("分享生成失败", 900)
+  }
 }
 
 // Unlock audio on first user gesture (browsers require this).
@@ -1422,6 +1873,15 @@ function bindAudioUnlock() {
 }
 
 function startRace() {
+  // apply currently-selected car + track BEFORE resetting world
+  rebuildPlayerCar()
+  applyTrack()
+  buildTrack()
+  spawnPickups()
+  spawnRamps()
+  spawnCheckpoints()
+  spawnRivals()
+
   // reset run state
   state.speed = 0
   state.x = 0
@@ -1465,6 +1925,7 @@ function startRace() {
   player.rotation.set(0, 0, 0)
   setMode("playing")
   toast("准备... 出发！", 1200)
+  maybeShowTutorial()
 }
 
 function pauseRace() {
@@ -1492,14 +1953,38 @@ function finishRace(success = true) {
   state.finishedAt = performance.now()
   setTimeout(() => {
     const ms = state.finishedAt - state.startedAt - state.pauseAcc
+    const win = success && state.hits < CFG.hitLimit
+    const save = Save.get()
+    Save.recordRace({
+      trackId: save.selectedTrack,
+      carId: save.selectedCar,
+      ms,
+      coins: state.coins,
+      hits: state.hits,
+      success: win
+    })
     $("resStatTime").textContent = mmss(ms)
     $("resStatCoins").textContent = String(state.coins)
     $("resStatHits").textContent = String(state.hits)
-    const win = success && state.hits < CFG.hitLimit
     $("resultTitle").textContent = win ? "闯关成功！" : "再试一次"
     $("resultCopy").textContent = win
       ? `用 ${mmss(ms)} 冲过终点，收集 ${state.coins} 枚金币。`
       : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
+    // best time + leaderboard
+    const fresh = Save.get()
+    const best = fresh.bestTimePerTrack[fresh.selectedTrack]
+    $("resBestTime").textContent = best ? mmss(best.ms) : "--"
+    const board = $("resLeaderboard")
+    board.innerHTML = ""
+    fresh.leaderboard
+      .filter((x) => x.trackId === fresh.selectedTrack)
+      .slice(0, 5)
+      .forEach((row, i) => {
+        const li = document.createElement("li")
+        li.innerHTML = `<span>#${i + 1} · ${CARS[row.carId]?.label ?? row.carId}</span><b>${mmss(row.ms)}</b>`
+        board.appendChild(li)
+      })
+    refreshCurrencyHud()
     setMode("result")
   }, 1100)
 }
@@ -1534,10 +2019,10 @@ function loop(now) {
 }
 
 function updateDriving(dt, now) {
-  // throttle / brake
+  // throttle / brake (uses currently-selected car's stats)
   if (!state.finished) {
     const target = state.brake ? 0 : (state.nitroTime > 0 ? CFG.nitroSpeed : (state.gas ? CFG.maxSpeed : 95))
-    const accel = state.gas ? 2.0 : 0.8
+    const accel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
     state.speed = lerp(state.speed, target, dt * accel)
     if (state.brake) state.speed = Math.max(0, state.speed - 200 * dt)
   } else {
@@ -1547,7 +2032,7 @@ function updateDriving(dt, now) {
 
   // steering — visual lean + lateral velocity
   state.steerVisual = lerp(state.steerVisual, state.steer, dt * 6)
-  const steerStrength = 6.5 + state.speed * 0.05
+  const steerStrength = (CFG.carSteer ?? 6.5) + state.speed * 0.05
   state.x = clamp(state.x + state.steer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
 
   // gravity / jump
@@ -1878,4 +2363,19 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight)
 }
 
-init()
+// register service worker (PWA offline cache)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {})
+  })
+}
+
+// init with friendly error UI on hard failure
+init().catch((err) => {
+  console.error("init failed", err)
+  const status = document.getElementById("splashStatus")
+  if (status) {
+    status.style.color = "#ff8a8a"
+    status.innerHTML = '加载失败 — <a href="javascript:location.reload()" style="color:#ffd31a;text-decoration:underline">点这里重试</a>'
+  }
+})

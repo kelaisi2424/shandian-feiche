@@ -1,0 +1,26 @@
+{
+  "name": "闪电飞车 Lightning Racer",
+  "short_name": "闪电飞车",
+  "description": "横屏 3D 跳台赛车小游戏",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a1c3a",
+  "theme_color": "#ffd31a",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -2,8 +2,14 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>闪电飞车 Web 试玩版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffd31a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <title>闪电飞车 Lightning Racer</title>
   </head>
   <body>
     <div id="app">
@@ -26,15 +32,14 @@
       </div>
 
       <section id="splash" class="screen splash-screen active">
-        <div class="splash-stage">
-          <div class="splash-tag">MADE<br />WITH</div>
-          <div class="splash-cube">
-            <span class="cube-top"></span>
-            <span class="cube-left"></span>
-            <span class="cube-right"></span>
-          </div>
-          <div class="splash-brand">Unity</div>
-          <div class="splash-reg">®</div>
+        <div class="splash-logo">
+          <span class="splash-bolt">⚡</span>
+          <h1>闪电飞车</h1>
+          <p>Lightning Racer</p>
+        </div>
+        <div class="splash-progress">
+          <div class="splash-bar"><span id="splashFill"></span></div>
+          <small id="splashStatus">加载资源…</small>
         </div>
       </section>
 
@@ -57,19 +62,16 @@
             <span class="tile-arc"></span>
             <strong>开始游戏 》</strong>
           </button>
-          <button class="tile wide-tile locked">
+          <button id="tracksTile" class="tile wide-tile">
             <span class="tile-photo open-world"></span>
-            <em class="lock">🔒</em>
-            <strong>开放世界</strong>
+            <strong>赛道</strong>
           </button>
-          <button class="tile small-tile garage-tile locked">
+          <button id="garageTile" class="tile small-tile garage-tile">
             <span class="tile-photo garage-art"></span>
-            <em class="lock">🔒</em>
             <strong>车库</strong>
           </button>
-          <button class="tile small-tile task-tile locked">
+          <button id="dailyTile" class="tile small-tile task-tile">
             <span class="tile-photo task-art"></span>
-            <em class="lock">🔒</em>
             <strong>任务</strong>
           </button>
           <button class="tile tall-tile muted">
@@ -140,8 +142,95 @@
             <div><b id="resStatCoins">0</b><span>金币</span></div>
             <div><b id="resStatHits">0</b><span>碰撞</span></div>
           </div>
-          <button id="againBtn" class="primary">再玩一局</button>
-          <button id="resultHomeBtn" class="secondary">返回菜单</button>
+          <p class="best-time">本地最佳: <b id="resBestTime">--</b></p>
+          <ul class="leaderboard" id="resLeaderboard"></ul>
+          <div class="result-actions">
+            <button id="againBtn" class="primary">再玩一局</button>
+            <button id="shareBtn" class="ghost">分享</button>
+            <button id="resultHomeBtn" class="secondary">返回菜单</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="settingsScreen" class="screen overlay-screen">
+        <div class="modal">
+          <h2>设置</h2>
+          <div class="setting-row">
+            <label for="setSfx">音效</label>
+            <input type="range" id="setSfx" min="0" max="1" step="0.05" value="0.7" />
+          </div>
+          <div class="setting-row">
+            <label for="setMusic">音乐</label>
+            <input type="range" id="setMusic" min="0" max="1" step="0.05" value="0.5" />
+          </div>
+          <div class="setting-row">
+            <label for="setQuality">画质</label>
+            <select id="setQuality">
+              <option value="auto">自动</option>
+              <option value="low">流畅</option>
+              <option value="medium">均衡</option>
+              <option value="high">高清</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="setControl">控制方式</label>
+            <select id="setControl">
+              <option value="swipe">屏幕滑动</option>
+              <option value="buttons">按钮</option>
+            </select>
+          </div>
+          <button id="settingsCloseBtn" class="primary">关闭</button>
+        </div>
+      </section>
+
+      <section id="dailyScreen" class="screen overlay-screen">
+        <div class="modal">
+          <h2>每日登录</h2>
+          <p>第 <b id="dailyDay">1</b> 天打卡，赠送：</p>
+          <div class="daily-prize">
+            <i class="coin-bottle"></i>
+            <strong id="dailyAmount">+50</strong>
+          </div>
+          <p class="muted">每天回来都有奖励，连续登录还会变多。</p>
+          <button id="dailyClaimBtn" class="primary">收下</button>
+        </div>
+      </section>
+
+      <section id="tutorialOverlay" class="tutorial-overlay">
+        <div class="tutorial-tip">
+          <strong>左右滑动屏幕 = 转向</strong>
+          <span>双击屏幕 = 释放氮气</span>
+          <small>5 秒后自动消失</small>
+        </div>
+      </section>
+
+      <section id="garageScreen" class="screen overlay-screen">
+        <div class="modal modal-wide">
+          <h2>车库</h2>
+          <div class="garage-list" id="garageList"></div>
+          <button id="garageCloseBtn" class="primary">确定</button>
+        </div>
+      </section>
+
+      <section id="trackScreen" class="screen overlay-screen">
+        <div class="modal modal-wide">
+          <h2>赛道</h2>
+          <div class="track-list" id="trackList"></div>
+          <button id="trackCloseBtn" class="primary">确定</button>
+        </div>
+      </section>
+
+      <section id="privacyScreen" class="screen overlay-screen">
+        <div class="modal">
+          <h2>隐私说明</h2>
+          <p style="text-align:left;line-height:1.7">
+            本游戏是一个本地试玩 demo。我们：<br/>
+            • 仅使用浏览器 <b>localStorage</b> 保存你的进度（金币、最佳时间、解锁的车）<br/>
+            • <b>不</b>采集任何个人信息，<b>不</b>上传任何数据<br/>
+            • 资源全部来自 Kenney CC0 公共素材<br/>
+            点击下方继续即表示你同意以本地方式存储进度。
+          </p>
+          <button id="privacyAckBtn" class="primary">我同意</button>
         </div>
       </section>
     </div>
