@@ -256,42 +256,7 @@ body,
   /* slow drift for life */
   animation: cover-drift 24s ease-in-out infinite alternate;
 }
-/* Brand-logo blur patch — duplicate of the cover image with `filter: blur()`
-   applied, masked so it only shows over the Audi/Mercedes/Ferrari banner
-   strip and the HOT WHEELS sign. The masked-in pixels are the SAME image
-   pre-blurred, so they read as natural depth-of-field instead of dark
-   patches. Sits between .menu-cover and .menu-overlay. */
-.menu-blur-patch {
-  position: absolute;
-  inset: 0;
-  background-image: url("/menu-bg.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter: blur(22px) saturate(1.05) brightness(0.85);
-  /* keep the patch in sync with the slow drift of the cover */
-  animation: cover-drift 24s ease-in-out infinite alternate;
-  /* mask: only show this blurred copy in the two logo zones */
-  -webkit-mask-image:
-    radial-gradient(ellipse 22% 9% at 50% 25%, #000 0%, #000 55%, transparent 100%),
-    radial-gradient(ellipse 14% 16% at 84% 26%, #000 0%, #000 55%, transparent 100%);
-  mask-image:
-    radial-gradient(ellipse 22% 9% at 50% 25%, #000 0%, #000 55%, transparent 100%),
-    radial-gradient(ellipse 14% 16% at 84% 26%, #000 0%, #000 55%, transparent 100%);
-  -webkit-mask-composite: source-over;
-  mask-composite: add;
-  pointer-events: none;
-}
-/* extra subtle horizontal haze over upper band so the whole top reads as
-   atmospheric fog, hiding any residual sharp edges from the blur patch */
-.menu-overlay::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(5,10,24,0.42) 0%, rgba(5,10,24,0.0) 50%);
-  pointer-events: none;
-}
+/* (no brand-logo masking — image shown as-is) */
 @keyframes cover-drift {
   0%   { transform: scale(1.04) translate(-0.4%, 0); }
   100% { transform: scale(1.04) translate(0.4%, -1%); }
@@ -300,10 +265,11 @@ body,
 .menu-overlay {
   position: absolute;
   inset: 0;
+  /* very light vignette so top-bar / action-bar still have contrast,
+     but the centre of the image stays at full brightness */
   background:
-    linear-gradient(180deg, rgba(5, 10, 24, 0.72) 0%, rgba(5, 10, 24, 0.28) 30%, rgba(5, 10, 24, 0.72) 100%),
-    radial-gradient(ellipse at 30% 40%, rgba(38, 214, 255, 0.12), transparent 50%),
-    radial-gradient(ellipse at 75% 60%, rgba(255, 211, 26, 0.08), transparent 50%);
+    linear-gradient(180deg, rgba(5, 10, 24, 0.25) 0%, rgba(5, 10, 24, 0) 18%, rgba(5, 10, 24, 0) 82%, rgba(5, 10, 24, 0.25) 100%);
+  pointer-events: none;
 }
 
 /* legacy hero title — no longer rendered (top-bar carries the logo) */
