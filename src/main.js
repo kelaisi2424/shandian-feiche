@@ -3411,11 +3411,15 @@ function updateCamera(dt) {
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
 
-  // FOV pulse driven by speed + nitro + gas-pull (extra punch when accelerating)
+  // FOV pulse driven by speed + nitro + gas-pull (extra punch when accelerating).
+  // Nitro pushes the lerp target to ~75 on landscape (60 base + 15 boost)
+  // and snaps in twice as fast for a hit-the-button-feel-it punch, then
+  // eases back when nitro ends.
   const baseFov = wide ? 60 : 70
-  const nitroBoost = state.nitroTime > 0 ? 10 : 0
+  const nitroOn = state.nitroTime > 0
+  const nitroBoost = nitroOn ? 15 : 0
   const targetFov = baseFov + speedRatio * 6 + accelPull * 2 + nitroBoost
-  camera.fov = lerp(camera.fov, targetFov, dt * 4)
+  camera.fov = lerp(camera.fov, targetFov, dt * (nitroOn ? 8 : 4))
   camera.updateProjectionMatrix()
 }
 

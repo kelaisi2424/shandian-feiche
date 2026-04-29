@@ -1543,15 +1543,23 @@ body.gate-dismissed.is-portrait .speed-lines {
   transition: opacity 0.15s linear;
 }
 .speed-lines.active { opacity: 1; }
+/* During nitro, fatter and brighter rays from the centre — sells the
+ * tunnel-vision punch. Lines are ~3x wider, the cyan ring tighter, and
+ * a second steeper-stride layer adds inner streaks that flicker past. */
 .speed-lines.nitro {
   opacity: 1;
   background:
-    radial-gradient(ellipse at center, transparent 25%, rgba(38, 214, 255, calc(0.18 * var(--speed-fx))) 65%, transparent 80%),
+    radial-gradient(ellipse at center, transparent 18%, rgba(38, 214, 255, calc(0.32 * var(--speed-fx))) 55%, transparent 78%),
     repeating-radial-gradient(circle at center,
       transparent 0,
-      transparent 30px,
-      rgba(180, 240, 255, calc(0.32 * var(--speed-fx))) 32px,
-      transparent 36px);
+      transparent 22px,
+      rgba(190, 245, 255, calc(0.55 * var(--speed-fx))) 24px,
+      transparent 32px),
+    repeating-radial-gradient(circle at center,
+      transparent 0,
+      transparent 60px,
+      rgba(255, 255, 255, calc(0.45 * var(--speed-fx))) 62px,
+      transparent 70px);
 }
 
 /* ============== overlay screens (modals) — neon-glass ============== */
