@@ -250,6 +250,11 @@ function sfxImpact() {
   src.connect(bp); bp.connect(g); g.connect(audio.master)
   src.start(now)
   src.stop(now + 0.3)
+  // public hook for future external SFX (e.g. swap in a real crash sample
+  // by reassigning window.sfxHit = () => myAudio.play()). No-op by default.
+  if (typeof window !== "undefined" && typeof window.sfxHit === "function") {
+    try { window.sfxHit() } catch (_) {}
+  }
 }
 
 function sfxNitro() {
@@ -1761,25 +1766,42 @@ function spawnRivals() {
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
   }
   const chosen = pool.slice(0, fieldSize)
+  // Per-rival AI style from the level config (steady / aggressive / mistake)
+  // — order matters and matches the rival index.
+  const styles = state.level?.rivalStyles ?? []
 
   // 2 of them sit on the start grid alongside the player; the rest stagger
   // ahead so the player has someone to chase down the straight.
   const lanes = [-3.6, 3.6, -4.0, 4.0, -2.0, 2.0, 0]
   chosen.forEach((opp, i) => {
+    const style = styles[i] ?? "steady"
     if (i < 2) {
       addRival({
         opp,
+        style,
         lateral: i === 0 ? -3.6 : 3.6,
         progress: 6
       })
     } else {
       addRival({
         opp,
+        style,
         lateral: lanes[i % lanes.length],
-        progress: 100 + (i - 2) * 180
+        progress: 100 + (i - 2) * 140
       })
     }
   })
+}
+
+// Style-driven AI knobs. Each rival picks one of these and the update loop
+// consults them every frame:
+//   steady     — consistent pace, smooth lane
+//   aggressive — faster, frequent lane changes, dodges harder
+//   mistake    — slower baseline, occasional speed dips + wider wobble
+const RIVAL_STYLE = {
+  steady:     { speedMul: 1.00, swayMul: 1.0, bobble: 0.0, mistakeFreq: 0,    aggressionMul: 1.0 },
+  aggressive: { speedMul: 1.10, swayMul: 1.6, bobble: 0.0, mistakeFreq: 0,    aggressionMul: 1.7 },
+  mistake:    { speedMul: 0.92, swayMul: 1.4, bobble: 0.5, mistakeFreq: 0.10, aggressionMul: 0.7 }
 }
 
 // Spawn the level-5 ghost pacer: a single car running at a fixed speed
@@ -1827,6 +1849,8 @@ function spawnGhost() {
 
 function addRival(cfg) {
   const opp = cfg.opp
+  const style = cfg.style ?? "steady"
+  const knobs = RIVAL_STYLE[style] ?? RIVAL_STYLE.steady
   const car = cloneAsset(opp.asset, 4.4, "z") || makeHypercar({ body: opp.body })
   car.rotation.y = Math.PI
   if (opp.body !== undefined) {
@@ -1839,7 +1863,12 @@ function addRival(cfg) {
   rivals.push({
     car,
     opp,
-    baseSpeed: rivalBaseSpeed(opp),
+    style,
+    knobs,
+    baseSpeed: Math.round(rivalBaseSpeed(opp) * knobs.speedMul),
+    speedMod: 1,                       // transient slow-down used by "mistake"
+    speedModUntil: 0,
+    nextMistakeAt: 1500 + Math.random() * 4000,
     progress: cfg.progress,
     lateral: cfg.lateral,
     laneTarget: cfg.lateral,
@@ -1852,6 +1881,12 @@ function addRival(cfg) {
 function spawnPickups() {
   pickups.forEach((p) => dynamic.remove(p.mesh))
   pickups = []
+  // Hand-placed layout for the polished lv1 slice — controls exact nitro
+  // and cone-cluster positions. Other levels keep the procedural pattern.
+  if (state.level?.heroLayout) {
+    spawnHeroPickups()
+    return
+  }
   // pattern table: index of `pattern` mod 4 → coin row / nitro / coin / skip.
   // For "nitroRich" levels (lv4) we flip the table so half the slots are
   // nitro pickups instead of coin trios.
@@ -1886,6 +1921,54 @@ function spawnPickups() {
       const s = 240 + (span * i) / Math.max(1, hazardCount - 1)
       const m = makeHazard()
       const lat = (Math.sin(s * 0.03) > 0 ? 1 : -1) * rand(2.4, 4.4)
+      placeAlongTrack(m, s, lat, 0.6 - 0.22)
+      dynamic.add(m)
+      pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
+    }
+  }
+}
+
+// Hand-placed pickups + hazards for the lv1 vertical slice. Drives a
+// readable rhythm: coin trail throughout, exactly one nitro can mid-track,
+// and two cone clusters that the player has to swerve around.
+function spawnHeroPickups() {
+  const lvl = state.level
+  const len = Track.length
+  // ── coin trail (skip the immediate area around each hazard cluster
+  // so cones aren't sitting on top of coins) ──
+  const skipZones = (lvl.hazardClusters ?? []).map((c) => ({
+    from: len * c.at - 18,
+    to: len * c.at + 18
+  }))
+  const inSkip = (s) => skipZones.some((z) => s >= z.from && s <= z.to)
+  for (let s = 40; s < len - 40; s += CFG.pickupGap) {
+    if (inSkip(s)) continue
+    const lane = Math.sin(s * 0.012) * 3.6
+    for (const off of [-1.3, 0, 1.3]) {
+      const m = makeCoin()
+      const lat = clamp(lane + off, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+      const prog = s + off * 1.2
+      placeAlongTrack(m, prog, lat, 2.0 - 0.22)
+      dynamic.add(m)
+      pickups.push({ mesh: m, progress: prog, lateral: lat, type: "coin", taken: false })
+    }
+  }
+  // ── nitro pickup(s) at the level's preferred fractions ──
+  for (const at of (lvl.nitroAt ?? [0.5])) {
+    const s = len * at
+    const m = makeNitroPickup()
+    placeAlongTrack(m, s, 0, 1.9 - 0.22)
+    dynamic.add(m)
+    pickups.push({ mesh: m, progress: s, lateral: 0, type: "nitro", taken: false })
+  }
+  // ── cone clusters: each cluster = N cones in a short staggered line ──
+  for (const cluster of (lvl.hazardClusters ?? [])) {
+    const baseS = len * cluster.at
+    const baseLane = cluster.lane ?? 0
+    for (let i = 0; i < cluster.count; i++) {
+      const s = baseS + (i - (cluster.count - 1) / 2) * 6
+      const lat = baseLane + (i % 2 === 0 ? 0 : 0.8)
+      const m = makeHazard()
       placeAlongTrack(m, s, lat, 0.6 - 0.22)
       dynamic.add(m)
       pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
@@ -2279,6 +2362,8 @@ function showLeaderboard() {
   if (gradeEl) gradeEl.style.display = "none"
   const unlockEl = $("resUnlock")
   if (unlockEl) unlockEl.style.display = "none"
+  const rewardEl = $("resReward")
+  if (rewardEl) rewardEl.style.display = "none"
   const board = $("resLeaderboard")
   board.innerHTML = ""
   const entries = fresh.leaderboard
@@ -2570,6 +2655,8 @@ function startRace() {
   state._finalRank = null   // frozen at finishRace() time
   state.beatGhost = false
   state.timedOut = false
+  state._lastRank = null      // for overtake toasts
+  state._lastOvertakeAt = 0
 
   // reset world (rivals already placed correctly by spawnRivals above)
   pickups.forEach((p) => {
@@ -2623,29 +2710,44 @@ function runCountdown() {
         o.start()
         o.stop(audio.ctx.currentTime + 0.35)
       }
+      // small camera nudge per beep — sells the build-up
+      state.shake = Math.max(state.shake, 0.12)
       step--
       state.countdown = step + 1
       setTimeout(tick, 900)
     } else {
-      // GO!
+      // GO! — full countdown payoff: flash, shake, pitch-up sweep, nitro burst
       num.textContent = "GO!"
       num.classList.add("go")
       lights.forEach((l) => l.classList.add("go"))
       state.countdown = 0
       state.gas = 1
-      state.shake = 0.35
-      // GO sound: short pitch-up sweep
+      state.shake = 0.55              // bigger kick than before
+      flashFx("nitro")                // green-white screen pop
+      // GO sound: short pitch-up sweep + sub-bass thud
       if (audio.ctx) {
-        const o = audio.ctx.createOscillator()
-        const g = audio.ctx.createGain()
+        const ctx = audio.ctx
+        const o = ctx.createOscillator()
+        const g = ctx.createGain()
         o.type = "sawtooth"
-        o.frequency.setValueAtTime(200, audio.ctx.currentTime)
-        o.frequency.exponentialRampToValueAtTime(800, audio.ctx.currentTime + 0.3)
-        g.gain.setValueAtTime(0.3, audio.ctx.currentTime)
-        g.gain.exponentialRampToValueAtTime(0.001, audio.ctx.currentTime + 0.45)
+        o.frequency.setValueAtTime(200, ctx.currentTime)
+        o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.32)
+        g.gain.setValueAtTime(0.34, ctx.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
         o.connect(g); g.connect(audio.master)
         o.start()
-        o.stop(audio.ctx.currentTime + 0.5)
+        o.stop(ctx.currentTime + 0.55)
+        // sub-bass thud
+        const sub = ctx.createOscillator()
+        const sg = ctx.createGain()
+        sub.type = "sine"
+        sub.frequency.setValueAtTime(80, ctx.currentTime)
+        sub.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3)
+        sg.gain.setValueAtTime(0.45, ctx.currentTime)
+        sg.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32)
+        sub.connect(sg); sg.connect(audio.master)
+        sub.start()
+        sub.stop(ctx.currentTime + 0.34)
       }
       setTimeout(() => overlay.classList.remove("show"), 600)
     }
@@ -2694,6 +2796,7 @@ function finishRace(success = true) {
     // ── grade for the level (S/A/B/C) ──
     let grade = null
     let unlocked = null
+    let gradeBonus = 0
     if (lvl) {
       grade = gradeForRun(lvl, {
         ms,
@@ -2709,13 +2812,18 @@ function finishRace(success = true) {
         topSpeed: Math.round(state.topSpeed),
         beatGhost: state.beatGhost
       })
-      // success → unlock the next level (if there is one)
+      // success → unlock the next level (if there is one) + award a grade bonus.
       if (win) {
         const next = nextLevelId(lvl.id)
         if (next && !Save.get().unlockedLevels.includes(next)) {
           Save.unlockLevel(next)
           unlocked = next
         }
+        gradeBonus = grade === "S" ? 80
+                  : grade === "A" ? 50
+                  : grade === "B" ? 25
+                  : 10
+        Save.addCoins(gradeBonus)
       }
     }
     // determine "new record" BEFORE the new ms is recorded
@@ -2747,6 +2855,18 @@ function finishRace(success = true) {
         : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
     }
     if ($("resNewRecord")) $("resNewRecord").style.display = isNewRecord ? "block" : "none"
+    // reward line: in-race coins + grade bonus, totalling what was just added
+    const rewardEl = $("resReward")
+    if (rewardEl) {
+      const totalReward = state.coins + gradeBonus
+      if (win && totalReward > 0) {
+        rewardEl.innerHTML = `🪙 奖励 +<b>${totalReward}</b> 金币` +
+          (gradeBonus > 0 ? ` <span class="reward-bonus">(基础 ${state.coins} + ${grade ?? ""} 评分 ${gradeBonus})</span>` : "")
+        rewardEl.style.display = ""
+      } else {
+        rewardEl.style.display = "none"
+      }
+    }
     // grade badge (S / A / B / C / fail)
     const gradeEl = $("resGrade")
     if (gradeEl) {
@@ -2927,7 +3047,15 @@ function updateRivals(dt, now) {
     let bandMul = 1
     if (dProgress < -60) bandMul = 1 + Math.min(0.18, (-dProgress - 60) / 600)
     else if (dProgress > 80) bandMul = 1 - Math.min(0.14, (dProgress - 80) / 700)
-    r.progress += r.baseSpeed * bandMul * dt * 0.278
+    // ── style-driven mistakes (the "mistake-prone" rival occasionally lifts) ──
+    if (r.knobs?.mistakeFreq > 0 && now > r.nextMistakeAt && r.speedMod === 1) {
+      r.speedMod = 0.55 + Math.random() * 0.2     // 55-75% pace for a moment
+      r.speedModUntil = now + 700 + Math.random() * 600
+      // schedule the next mistake well after this one finishes
+      r.nextMistakeAt = r.speedModUntil + 3500 + Math.random() * 5000
+    }
+    if (r.speedMod !== 1 && now >= r.speedModUntil) r.speedMod = 1
+    r.progress += r.baseSpeed * bandMul * (r.speedMod ?? 1) * dt * 0.278
     // far behind → respawn ahead
     if (dProgress < -60) {
       r.progress = state.progress + 90 + rand(0, 80)
@@ -2943,12 +3071,15 @@ function updateRivals(dt, now) {
       r.laneTarget = lanes[Math.floor(Math.random() * lanes.length)]
       r.lateral = r.laneTarget
     }
-    // lane sway + dodge if player close behind in same lane
+    // lane sway + dodge if player close behind in same lane.
+    // Style knobs scale how wide the rival weaves and how hard it dodges.
+    const k = r.knobs ?? RIVAL_STYLE.steady
     const playerCloseBehind = dProgress < 16 && dProgress > -2
     const playerAligned = Math.abs(r.lateral - state.lateral) < 1.4
-    let lane = r.laneTarget + Math.sin(now * 0.0010 + r.swayPhase) * 1.4
+    const swayAmp = 1.4 * k.swayMul + (k.bobble ?? 0)
+    let lane = r.laneTarget + Math.sin(now * 0.0010 + r.swayPhase) * swayAmp
     if (playerCloseBehind && playerAligned) {
-      const dodge = state.lateral < 0 ? 2.4 : -2.4
+      const dodge = (state.lateral < 0 ? 2.4 : -2.4) * k.aggressionMul
       lane = clamp(r.laneTarget + dodge, -CFG.playerHalfWidth, CFG.playerHalfWidth)
     }
     r.lateral = lerp(r.lateral, lane, dt * 1.6)
@@ -3115,11 +3246,16 @@ function updateCheckpoints(now) {
 // ────────────────────────────────────────────────────────────────────
 function updateCamera(dt) {
   const wide = innerWidth > innerHeight
-  // dynamic camera distance: pulls back as speed climbs and during nitro,
-  // creating a "punch into the screen" feel of acceleration.
+  // dynamic camera distance: pulls back as speed climbs, further when actively
+  // accelerating (gas held + speed still rising), and most during nitro —
+  // sells the "punch into the screen" feel of acceleration.
   const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
+  // smoothed gas-pull: grows while gas is held, decays when released.
+  // Bounded to [0..1] so it never dominates the base layout.
+  state._gasPull = lerp(state._gasPull ?? 0, state.gas ? 1 : 0, dt * 3)
+  const accelPull = state._gasPull * 1.4
   const baseBack = wide ? 11 : 13
-  const back = baseBack + speedRatio * 2.5 + (state.nitroTime > 0 ? 1.6 : 0)
+  const back = baseBack + speedRatio * 2.5 + accelPull + (state.nitroTime > 0 ? 2.4 : 0)
   const high = (wide ? 4.6 : 5.4) + speedRatio * 0.4
   const camProgress = clamp(state.progress - back, 0, Track.length)
   const lookProgress = clamp(state.progress + 22 + speedRatio * 8, 0, Track.length)
@@ -3128,17 +3264,18 @@ function updateCamera(dt) {
   cameraTarget.copy(camWorld)
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
-    cameraTarget.x += (Math.random() - 0.5) * 0.4
-    cameraTarget.y += (Math.random() - 0.5) * 0.25
+    const k = state.shake
+    cameraTarget.x += (Math.random() - 0.5) * 0.4 * (1 + k)
+    cameraTarget.y += (Math.random() - 0.5) * 0.25 * (1 + k)
   }
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
 
-  // FOV pulse driven by speed + nitro (speedRatio reused from above)
+  // FOV pulse driven by speed + nitro + gas-pull (extra punch when accelerating)
   const baseFov = wide ? 60 : 70
-  const nitroBoost = state.nitroTime > 0 ? 8 : 0
-  const targetFov = baseFov + speedRatio * 6 + nitroBoost
+  const nitroBoost = state.nitroTime > 0 ? 10 : 0
+  const targetFov = baseFov + speedRatio * 6 + accelPull * 2 + nitroBoost
   camera.fov = lerp(camera.fov, targetFov, dt * 4)
   camera.updateProjectionMatrix()
 }
@@ -3190,6 +3327,23 @@ function updateRankBadge() {
   badge.classList.remove("gold", "silver", "bronze")
   const cls = rankClass(rank)
   if (cls) badge.classList.add(cls)
+  // ── overtake / overtaken toast ──
+  // Throttle to one toast per 1.2s so a brief rank flicker doesn't spam.
+  const now = performance.now()
+  if (state._lastRank == null) {
+    state._lastRank = rank
+  } else if (rank !== state._lastRank && !state.finished && state.countdown === 0) {
+    if (now - state._lastOvertakeAt > 1200) {
+      if (rank < state._lastRank) {
+        toast("超车！+1 RANK", 900)
+        flashFx("checkpoint")
+      } else if (rank > state._lastRank) {
+        toast("被超车！", 900)
+      }
+      state._lastOvertakeAt = now
+    }
+    state._lastRank = rank
+  }
 }
 
 // Sync the mini-map: ensure one .mini-rival per rival, place player + rivals

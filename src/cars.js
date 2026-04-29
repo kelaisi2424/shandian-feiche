@@ -8,6 +8,13 @@
 // even with placeholder geometry. Once high-poly real GLBs replace these,
 // drop the body/accent fields and let the model's own paint speak.
 
+// Three fictional cars — no real brand names / logos. Tier badges drive
+// the colour chip in the garage; price is the coin cost to unlock past
+// the starter LIGHTNING S1.
+//
+// blaze_r / vortex_rs / shadow_zx GLBs still ship in public/models/ so
+// they're available for future use, but they're intentionally not in
+// this player roster per the 3-car spec.
 export const PLAYER_CARS = [
   {
     id: "lightning_s1",
@@ -47,45 +54,6 @@ export const PLAYER_CARS = [
     price: 150000,
     body: 0xd0202a,
     accent: 0x340606
-  },
-  {
-    id: "blaze_r",
-    name: "BLAZE R",
-    tier: "B",
-    asset: "blaze_r",
-    topSpeed: 255,
-    accel0to100: 4.1,
-    handling: 8.6,
-    nitro: 7.0,
-    price: 100000,
-    body: 0x4ec028,
-    accent: 0x0e2c08
-  },
-  {
-    id: "vortex_rs",
-    name: "VORTEX RS",
-    tier: "A",
-    asset: "vortex_rs",
-    topSpeed: 283,
-    accel0to100: 3.6,
-    handling: 9.1,
-    nitro: 8.5,
-    price: 180000,
-    body: 0x8a3ad4,
-    accent: 0x220c3a
-  },
-  {
-    id: "shadow_zx",
-    name: "SHADOW ZX",
-    tier: "S",
-    asset: "shadow_zx",
-    topSpeed: 312,
-    accel0to100: 3.0,
-    handling: 9.4,
-    nitro: 9.1,
-    price: 250000,
-    body: 0x202028,
-    accent: 0xd6a83a
   }
 ]
 

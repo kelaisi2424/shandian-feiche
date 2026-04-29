@@ -12,23 +12,32 @@ export const LEVELS = [
     num: 1,
     name: "新手教学",
     sub: "STARTER LESSON",
-    desc: "学会左右移动、吃金币、通过检查点",
+    desc: "直道 + 2 个中弯，吃金币 · 闪过路障 · 跟住对手",
     trackStyle: "sky",
-    length: 1400,
-    bend: 0.2,             // mostly straight
-    checkpointGap: 280,    // → ~4 checkpoints
-    pickupGap: 22,         // dense coin trail
-    rampCount: 1,
-    hazardCount: 0,
-    rivalCount: 0,
+    length: 2400,            // ~50s lap at average 170 km/h
+    bend: 0.55,              // gentle natural curves; layout has 2 obvious ones
+    heroLayout: true,        // hand-placed pickups/hazards (see spawnHeroPickups)
+    // hand-placed scene beats — fractions are along [0..1] of the track:
+    nitroAt: [0.46],
+    hazardClusters: [
+      { at: 0.32, count: 4, lane: -2.0 },
+      { at: 0.68, count: 4, lane: 2.0 }
+    ],
+    checkpointCount: 4,
+    checkpointSpread: "even",
+    pickupGap: 24,           // dense coin trail
+    rampCount: 0,            // no jumps for tutorial — keep it grounded
+    hazardCount: 0,          // unused when heroLayout=true; clusters drive it
+    rivalCount: 3,
+    rivalStyles: ["steady", "aggressive", "mistake"],
     ghost: null,
     timeLimit: 0,
     tutorial: true,
     rainShader: false,
     grades: {
-      S: { time: 26, coins: 16, hits: 0 },
-      A: { time: 34, coins: 12, hits: 1 },
-      B: { time: 50, coins: 6, hits: 4 }
+      S: { time: 50, coins: 28, hits: 0 },
+      A: { time: 60, coins: 22, hits: 2 },
+      B: { time: 70, coins: 14, hits: 5 }
     }
   },
   {
