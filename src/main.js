@@ -1586,10 +1586,10 @@ function buildPlayer() {
   scene.add(player)
   rebuildPlayerCar()
 
-  // glow underside (cyan light bar)
+  // glow underside (cyan light bar) — sized to the enlarged player body
   const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 5),
-    new THREE.MeshBasicMaterial({ color: 0x36e0ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending })
+    new THREE.PlaneGeometry(5.5, 11.5),
+    new THREE.MeshBasicMaterial({ color: 0x36e0ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending })
   )
   glow.rotation.x = -Math.PI / 2
   glow.position.y = 0.05
@@ -1631,9 +1631,12 @@ function makeFallbackCar(color, trim) {
 function rebuildPlayerCar() {
   const carId = Save.get().selectedCar
   const cfg = CAR_BY_ID[carId] ?? CAR_BY_ID[DEFAULT_CAR_ID]
-  // remove the old visual body if any
+  // remove the old visual body + neon outline if any
   if (playerBody) player.remove(playerBody)
-  const car = cloneAsset(cfg.asset, 4.6, "z") || makeHypercar({ body: cfg.body })
+  if (player.userData.neonOutline) player.remove(player.userData.neonOutline)
+  // The Kenney pack ships small cars (~4.6m long); scale them up so the
+  // player vehicle reads as a hero element on screen instead of a speck.
+  const car = cloneAsset(cfg.asset, 11, "z") || makeHypercar({ body: cfg.body })
   // GLB pack convention: car nose points -Z, same as the camera-forward in
   // our scene. cloneAsset doesn't change orientation; flip 180° so the
   // player faces "into" the track when placed at progress 0.
@@ -1646,6 +1649,27 @@ function rebuildPlayerCar() {
   }
   player.add(car)
   playerBody = car
+
+  // Neon outline: a back-side-only clone scaled slightly larger paints a
+  // luminous halo around the car silhouette. Reads at any track distance
+  // and keeps the player visible against busy scenery.
+  const outline = car.clone(true)
+  const rim = new THREE.Color(cfg.rim ?? 0x36e0ff)
+  outline.traverse((m) => {
+    if (!m.isMesh) return
+    m.material = new THREE.MeshBasicMaterial({
+      color: rim,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  })
+  outline.scale.multiplyScalar(1.05)
+  player.add(outline)
+  player.userData.neonOutline = outline
+
   // apply stats to runtime CFG via the shared physics derivation
   const phys = deriveCarPhysics(cfg)
   CFG.maxSpeed = phys.maxSpeed
