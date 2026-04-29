@@ -25,6 +25,42 @@ import {
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
+// orientation guard — runs FIRST, before any other init.
+// Two product states only:
+//   body.is-landscape → playable game shell renders
+//   body.is-portrait  → only the rotate-gate renders
+// Wired to resize + orientationchange + matchMedia so any of the three
+// signals can trigger a state flip the moment the device rotates.
+// ────────────────────────────────────────────────────────────────────
+function applyOrientationClass() {
+  // viewport-size check is the source of truth — matchMedia lies on some
+  // mobile browsers when the address bar collapses. Both must agree on
+  // "portrait" before we lock to portrait.
+  const portraitByMM = window.matchMedia
+    ? window.matchMedia("(orientation: portrait)").matches
+    : false
+  const portraitBySize = window.innerHeight > window.innerWidth
+  const portrait = portraitByMM && portraitBySize
+  const apply = () => {
+    const b = document.body
+    if (!b) return
+    b.classList.toggle("is-portrait", portrait)
+    b.classList.toggle("is-landscape", !portrait)
+  }
+  if (document.body) apply()
+  else document.addEventListener("DOMContentLoaded", apply, { once: true })
+}
+applyOrientationClass()
+window.addEventListener("resize", applyOrientationClass)
+window.addEventListener("orientationchange", applyOrientationClass)
+if (window.matchMedia) {
+  const mm = window.matchMedia("(orientation: portrait)")
+  // newer addEventListener form first, fall back to deprecated addListener
+  if (mm.addEventListener) mm.addEventListener("change", applyOrientationClass)
+  else if (mm.addListener) mm.addListener(applyOrientationClass)
+}
+
+// ────────────────────────────────────────────────────────────────────
 // helpers
 // ────────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id)
@@ -444,23 +480,15 @@ async function init() {
   window.__Track = Track
   window.__player = player
 
-  // assets ready → flick the splash off into the menu
-  $("splashStatus").textContent = "准备就绪"
-  setTimeout(() => {
-    $("splash").classList.add("fade-out")
-    setTimeout(() => {
-      $("splash").classList.remove("active", "fade-out")
-      setMode("menu")
-      // demo / autopilot URL: ?demo=1 — for screen-recording the vertical
-      // slice. Skips dailies, swaps to NOVA GT, runs the lv1 race with
-      // automatic nitro pulses. Otherwise show the normal daily prompt.
-      if (new URLSearchParams(location.search).get("demo") === "1") {
-        runDemoSequence()
-      } else {
-        maybeShowDailyBonus()
-      }
-    }, 600)
-  }, 350)
+  // assets ready → menu is the initial state. No splash, no two-stage
+  // launch flow. The menu HTML markup ships with `class="… active"` so
+  // it's already on screen by the time we get here.
+  setMode("menu")
+  if (new URLSearchParams(location.search).get("demo") === "1") {
+    runDemoSequence()
+  } else {
+    maybeShowDailyBonus()
+  }
 
   requestAnimationFrame(loop)
 }
@@ -702,14 +730,13 @@ async function loadAssets() {
   const entries = Object.entries(items)
   const total = entries.length
   let done = 0
-  const setProgress = (label) => {
-    const fill = $("splashFill")
-    const status = $("splashStatus")
-    const pct = Math.round((done / total) * 100)
-    if (fill) fill.style.width = `${pct}%`
-    if (status) status.textContent = label || `加载资源 ${pct}%`
+  const setProgress = () => {
+    // Splash overlay was removed; loading happens silently while the
+    // menu HTML is already rendered (the 3D scene populates as models
+    // arrive). Kept as a no-op so the loop math below is unchanged.
+    void done; void total
   }
-  setProgress("加载资源 0%")
+  setProgress()
   const results = []
   for (const [k, url] of entries) {
     try {
@@ -720,7 +747,7 @@ async function loadAssets() {
       results.push([k, null])
     }
     done++
-    setProgress(`加载资源 ${Math.round(done / total * 100)}%`)
+    setProgress()
   }
   assets = Object.fromEntries(results)
 }
@@ -2322,7 +2349,6 @@ function setMode(mode) {
   $("hud").classList.toggle("active", mode === "playing" || mode === "paused")
   $("pauseScreen").classList.toggle("active", mode === "paused")
   $("resultScreen").classList.toggle("active", mode === "result")
-  $("splash").classList.toggle("active", mode === "boot")
   // clear in-game overlays when leaving the race
   if (mode !== "playing") {
     const sl = $("speedLines")
@@ -3650,9 +3676,10 @@ if ("serviceWorker" in navigator) {
 // init with friendly error UI on hard failure
 init().catch((err) => {
   console.error("init failed", err)
-  const status = document.getElementById("splashStatus")
-  if (status) {
-    status.style.color = "#ff8a8a"
-    status.innerHTML = '加载失败 — <a href="javascript:location.reload()" style="color:#ffd31a;text-decoration:underline">点这里重试</a>'
-  }
+  // Splash overlay was removed; surface init errors as a centred banner
+  // appended to the body so the user isn't staring at a blank canvas.
+  const banner = document.createElement("div")
+  banner.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:300;background:#1a0606;color:#ffd0d0;padding:14px 22px;border:1px solid #ff5a5a;border-radius:10px;font-size:14px;text-align:center"
+  banner.innerHTML = '加载失败 — <a href="javascript:location.reload()" style="color:#ffd31a;text-decoration:underline">点这里重试</a>'
+  document.body.appendChild(banner)
 })

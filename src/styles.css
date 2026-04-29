@@ -170,17 +170,34 @@ body {
 #rotateAck:active { transform: translateY(1px); }
 
 /* ---- the orientation switch ----
- * Landscape: game shell + 3D canvas visible, rotate-gate hidden.
- * Portrait : ONLY rotate-gate visible — every other overlay is killed
- * so we never render two pages on top of each other. */
+ * Two states only — playable and rotate-gate. JS adds .is-portrait or
+ * .is-landscape on <body> based on matchMedia + a viewport-size fallback,
+ * and the rules below toggle which DOM tree renders. The legacy
+ * `(orientation: portrait)` media query is kept as a backup so the
+ * gate appears even if the JS hasn't run yet. */
+body.is-landscape .rotate-gate {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+body.is-portrait #game,
+body.is-portrait #app.stage,
+body.is-portrait .screen-fx,
+body.is-portrait .speed-lines {
+  display: none !important;
+}
+body.is-portrait .rotate-gate {
+  display: flex !important;
+}
 @media (orientation: portrait) {
-  #game,
-  #app.stage,
-  .screen-fx,
-  .speed-lines {
+  /* fallback for the brief moment before JS runs */
+  body:not(.is-landscape) #game,
+  body:not(.is-landscape) #app.stage,
+  body:not(.is-landscape) .screen-fx,
+  body:not(.is-landscape) .speed-lines {
     display: none !important;
   }
-  .rotate-gate {
+  body:not(.is-landscape) .rotate-gate {
     display: flex;
   }
 }
@@ -279,86 +296,9 @@ body {
   display: flex;
 }
 
-/* ---- branded splash + loader ---- */
-.splash-screen {
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 80;
-  background:
-    radial-gradient(ellipse at center, rgba(255, 213, 80, 0.15), transparent 60%),
-    linear-gradient(180deg, #0a1c3a 0%, #122e60 50%, #1c4a99 100%);
-  transition: opacity 0.6s;
-}
-.splash-screen.fade-out {
-  opacity: 0;
-  pointer-events: none;
-}
-.splash-logo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--ui) * 0.5);
-  color: #fff;
-  text-align: center;
-  filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.45));
-}
-.splash-bolt {
-  font-size: calc(var(--ui) * 6);
-  line-height: 1;
-  color: #ffd31a;
-  filter: drop-shadow(0 0 16px rgba(255, 211, 26, 0.7));
-  animation: bolt-pulse 1.4s ease-in-out infinite;
-}
-@keyframes bolt-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
-}
-.splash-logo h1 {
-  margin: 0;
-  font-size: calc(var(--ui) * 4);
-  font-weight: 900;
-  letter-spacing: calc(var(--ui) * 0.4);
-  background: linear-gradient(180deg, #fff 30%, #ffd31a 70%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.splash-logo p {
-  margin: 0;
-  font-size: calc(var(--ui) * 1.1);
-  color: #cfe0ff;
-  letter-spacing: 4px;
-  font-weight: 600;
-}
-.splash-progress {
-  position: absolute;
-  bottom: calc(var(--ui) * 6);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(360px, 70vw);
-  text-align: center;
-  color: #cfe0ff;
-}
-.splash-bar {
-  height: calc(var(--ui) * 0.5);
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.splash-bar span {
-  display: block;
-  width: 0%;
-  height: 100%;
-  background: linear-gradient(90deg, #ffd31a, #ff8a16);
-  transition: width 0.18s;
-}
-.splash-progress small {
-  display: block;
-  margin-top: calc(var(--ui) * 0.6);
-  font-size: calc(var(--ui) * 0.95);
-  letter-spacing: 1px;
-}
+/* The branded loading splash was removed in favour of going straight
+ * to the menu — the menu HTML ships with `class="… active"` so it
+ * renders immediately, and the 3D scene populates as models stream in. */
 
 /* ---- menu (主菜单) ---- */
 .menu-screen {
@@ -371,11 +311,13 @@ body {
   position: absolute;
   inset: 0;
   background: #050a18;
+  pointer-events: none;     /* decorative — never absorbs clicks */
 }
 /* full-bleed PS-render-style background image */
 .menu-cover {
   position: absolute;
   inset: 0;
+  pointer-events: none;     /* decorative — never absorbs clicks */
   background-image: url("/menu-bg.png");
   background-size: cover;
   background-position: center;
