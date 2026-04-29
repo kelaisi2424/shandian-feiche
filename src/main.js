@@ -2302,9 +2302,13 @@ function bindCanvasGestures() {
   canvas.addEventListener("pointermove", (e) => {
     if (!active || state.mode !== "playing") return
     e.preventDefault()
-    const dx = e.clientX - startX
-    // map horizontal drag distance to steer amount, normalised by viewport width
-    const norm = clamp(dx / (innerWidth * 0.18), -1, 1)
+    // In the portrait rotated-shim mode the canvas is CSS-rotated 90deg CW,
+    // so the game's "right" appears at the bottom of the viewport. A
+    // downward viewport swipe must map to a rightward in-game steer.
+    const rot = isRotatedPortrait()
+    const drag = rot ? (e.clientY - startY) : (e.clientX - startX)
+    const span = rot ? innerHeight : innerWidth
+    const norm = clamp(drag / (span * 0.18), -1, 1)
     state.steer = norm
   })
 
@@ -3618,13 +3622,26 @@ function updateParticles(dt) {
   }
 }
 
+// `body.gate-dismissed.is-portrait` puts the page into a rotated-shim mode:
+// the canvas + stage are CSS-rotated 90deg so a landscape game can render
+// onto a portrait viewport (WeChat iOS in particular refuses to rotate).
+// In that mode the WebGL backbuffer + stage scale must use swapped
+// dimensions to fill the rotated box.
+function isRotatedPortrait() {
+  const b = document.body
+  return !!(b && b.classList.contains("gate-dismissed") && b.classList.contains("is-portrait"))
+}
+
 function resize() {
-  camera.aspect = innerWidth / innerHeight
-  camera.fov = innerWidth > innerHeight ? 60 : 70
+  const rot = isRotatedPortrait()
+  const w = rot ? innerHeight : innerWidth
+  const h = rot ? innerWidth : innerHeight
+  camera.aspect = w / h
+  camera.fov = w > h ? 60 : 70
   camera.updateProjectionMatrix()
-  renderer.setSize(innerWidth, innerHeight)
-  if (composer) composer.setSize(innerWidth, innerHeight)
-  if (bloomPass) bloomPass.setSize(innerWidth, innerHeight)
+  renderer.setSize(w, h)
+  if (composer) composer.setSize(w, h)
+  if (bloomPass) bloomPass.setSize(w, h)
 }
 
 // Compute the uniform scale that fits the 1920×1080 design stage into the
@@ -3636,24 +3653,26 @@ function setStageScale() {
   if (!stage) return
   const designW = 1920
   const designH = 1080
-  const vw = window.innerWidth
-  const vh = window.innerHeight
+  const rot = isRotatedPortrait()
+  const vw = rot ? window.innerHeight : window.innerWidth
+  const vh = rot ? window.innerWidth : window.innerHeight
   const scale = Math.min(vw / designW, vh / designH)
   // round to 4 decimals to keep CSS tidy and avoid sub-pixel jitter
   document.documentElement.style.setProperty("--stage-scale", scale.toFixed(4))
 }
 
-// Wire the rotate-gate's "我知道了" button. Clicking it tries the modern
-// orientation-lock API (Android Chrome supports this in fullscreen); on
-// other browsers it just toasts a friendly "rotate the device" hint, since
-// the CSS media query auto-switches once the user actually rotates.
+// Wire the rotate-gate's "我知道了" button. We try the orientation-lock APIs
+// for the browsers that support them (Android Chrome in fullscreen), but
+// always fall through to dismissing the gate — iOS Safari doesn't expose
+// screen.orientation.lock at all, and the WeChat in-app browser refuses to
+// rotate even when the device is rotated. Without an unconditional dismiss
+// the click is a silent no-op and the user is permanently stuck on the gate.
 function bindRotateGate() {
   const btn = document.getElementById("rotateAck")
   if (!btn) return
   btn.addEventListener("click", async () => {
     btn.blur()
     try {
-      // Some browsers require fullscreen first
       if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen().catch(() => {})
       }
@@ -3661,8 +3680,13 @@ function bindRotateGate() {
         await screen.orientation.lock("landscape").catch(() => {})
       }
     } catch (_) {
-      // ignore — user just needs to rotate the device manually
+      // lock unsupported (iOS / WeChat) — fall through to manual dismiss
     }
+    document.body.classList.add("gate-dismissed")
+    // Recompute scale + WebGL viewport against the (possibly swapped) target
+    // dimensions so the game renders correctly in the rotated portrait shim.
+    setStageScale()
+    if (typeof resize === "function") resize()
   })
 }
 

@@ -175,31 +175,65 @@ body {
  * and the rules below toggle which DOM tree renders. The legacy
  * `(orientation: portrait)` media query is kept as a backup so the
  * gate appears even if the JS hasn't run yet. */
-body.is-landscape .rotate-gate {
+body.is-landscape .rotate-gate,
+body.gate-dismissed .rotate-gate {
   display: none !important;
   pointer-events: none !important;
   visibility: hidden !important;
 }
-body.is-portrait #game,
-body.is-portrait #app.stage,
-body.is-portrait .screen-fx,
-body.is-portrait .speed-lines {
+/* In portrait we hide the game shell behind the gate — UNLESS the user has
+ * tapped "我知道了". After that we render a rotated-shim landscape view so
+ * WeChat iOS users (where orientation lock is a no-op) can still play. */
+body.is-portrait:not(.gate-dismissed) #game,
+body.is-portrait:not(.gate-dismissed) #app.stage,
+body.is-portrait:not(.gate-dismissed) .screen-fx,
+body.is-portrait:not(.gate-dismissed) .speed-lines {
   display: none !important;
 }
-body.is-portrait .rotate-gate {
+body.is-portrait:not(.gate-dismissed) .rotate-gate {
   display: flex !important;
 }
 @media (orientation: portrait) {
   /* fallback for the brief moment before JS runs */
-  body:not(.is-landscape) #game,
-  body:not(.is-landscape) #app.stage,
-  body:not(.is-landscape) .screen-fx,
-  body:not(.is-landscape) .speed-lines {
+  body:not(.is-landscape):not(.gate-dismissed) #game,
+  body:not(.is-landscape):not(.gate-dismissed) #app.stage,
+  body:not(.is-landscape):not(.gate-dismissed) .screen-fx,
+  body:not(.is-landscape):not(.gate-dismissed) .speed-lines {
     display: none !important;
   }
-  body:not(.is-landscape) .rotate-gate {
+  body:not(.is-landscape):not(.gate-dismissed) .rotate-gate {
     display: flex;
   }
+}
+
+/* ---- portrait rotated-shim ----
+ * Triggered when the user dismisses the gate while the device is still
+ * portrait (iOS WeChat in particular refuses to rotate the page). We
+ * CSS-rotate the canvas + stage 90deg CW so a landscape design fills the
+ * portrait viewport. resize()/setStageScale()/canvas swipe handler in
+ * main.js read body.gate-dismissed.is-portrait and use swapped dims to
+ * keep the WebGL aspect ratio and touch input consistent. */
+body.gate-dismissed.is-portrait #game {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 100vh;
+  height: 100vw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center center;
+}
+body.gate-dismissed.is-portrait #app.stage {
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--stage-scale));
+}
+body.gate-dismissed.is-portrait .screen-fx,
+body.gate-dismissed.is-portrait .speed-lines {
+  width: 100vh;
+  height: 100vw;
+  top: 50%;
+  left: 50%;
+  inset: auto;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center center;
 }
 
 /* ---- title bar at top of screen (像截图里的窗口) ---- */

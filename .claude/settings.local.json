@@ -53,7 +53,10 @@
       "Bash(curl -sL --max-time 10 \"http://127.0.0.1:5174/src/main.js\" -o /tmp/main-served.js)",
       "Bash(node --input-type=module -e ' *)",
       "Bash(git commit -m ' *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(ffmpeg -version)",
+      "Bash(where.exe ffmpeg *)",
+      "Bash(where.exe magick *)"
     ]
   }
 }
