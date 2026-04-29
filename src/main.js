@@ -3250,8 +3250,8 @@ function updateRivals(dt, now) {
         toast("撞开对手！", 800)
       } else {
         state.hits++
-        state.speed *= 0.65
-        state.shake = 0.45
+        state.speed *= 0.7              // -30% speed on collision
+        state.shake = 0.3               // 0.3s camera shake
         toast("被撞了！稳住", 900)
         flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -3293,8 +3293,8 @@ function updatePickups(dt, now) {
         p.taken = true
         p.mesh.visible = false
         state.hits++
-        state.speed *= 0.5
-        state.shake = 0.5
+        state.speed *= 0.7              // -30% speed on hazard hit
+        state.shake = 0.3               // 0.3s camera shake
         toast("撞到障碍！", 900)
         flashFx("impact")
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 24)
@@ -3398,9 +3398,14 @@ function updateCamera(dt) {
   cameraTarget.copy(camWorld)
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
+    // Punchier shake: amplitude scales with remaining shake time, so a 0.3s
+    // collision kick stays violent through its whole window instead of a
+    // single perceptible jolt that quickly fades.
     const k = state.shake
-    cameraTarget.x += (Math.random() - 0.5) * 0.4 * (1 + k)
-    cameraTarget.y += (Math.random() - 0.5) * 0.25 * (1 + k)
+    const amp = 0.7 + k * 1.4
+    cameraTarget.x += (Math.random() - 0.5) * amp
+    cameraTarget.y += (Math.random() - 0.5) * amp * 0.6
+    cameraTarget.z += (Math.random() - 0.5) * amp * 0.4
   }
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.copy(lookWorld)

@@ -1492,9 +1492,9 @@ body.gate-dismissed.is-portrait .speed-lines {
   opacity: 0;
 }
 .screen-fx.fx-impact {
-  animation: fxImpact 0.5s ease-out forwards;
+  animation: fxImpact 0.45s ease-out forwards;
   background:
-    radial-gradient(ellipse at center, transparent 30%, rgba(255, 50, 50, 0.32) 70%, rgba(255, 0, 0, 0.55) 100%);
+    radial-gradient(ellipse at center, rgba(255, 90, 60, 0.18) 0%, rgba(255, 40, 40, 0.55) 55%, rgba(220, 0, 0, 0.85) 100%);
 }
 .screen-fx.fx-nitro {
   animation: fxNitro 0.7s ease-out forwards;
@@ -1507,8 +1507,9 @@ body.gate-dismissed.is-portrait .speed-lines {
     radial-gradient(ellipse at center, transparent 35%, rgba(38, 214, 255, 0.36) 75%, rgba(38, 214, 255, 0.6) 100%);
 }
 @keyframes fxImpact {
-  0% { opacity: 0; }
-  18% { opacity: 1; }
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  35%  { opacity: 0.85; }
   100% { opacity: 0; }
 }
 @keyframes fxNitro {
