@@ -14,6 +14,14 @@ import {
   rivalBaseSpeed,
   TIER_STYLE
 } from "./cars.js"
+import {
+  LEVELS,
+  LEVEL_BY_ID,
+  DEFAULT_LEVEL_ID,
+  gradeForRun,
+  nextLevelId,
+  TUTORIAL_HINT
+} from "./levels.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -115,7 +123,12 @@ const state = {
   lastRivalHit: 0,
   airborne: false,
   airSince: 0,
-  countdown: 0
+  countdown: 0,
+  // level system
+  level: null,           // current LEVEL_BY_ID entry while a race is running
+  ghost: null,           // { car, progress, speed, beaten } when level.ghost is set
+  beatGhost: false,
+  timedOut: false        // true if level.timeLimit hit before finish
 }
 
 // the curved track itself (CatmullRom spline + length cache + helpers)
@@ -773,13 +786,19 @@ function makeCloud() {
 // progress (meters from start, increasing) maps to world position via
 // progressToWorld(). Each track has its own bend amplitude / hill profile.
 function buildTrackCurve() {
-  const tCfg = TRACKS[Save.get().selectedTrack] ?? TRACKS.sky
-  const totalLen = tCfg.length
+  const lvl = state.level
+  const tCfg = TRACKS[lvl?.trackStyle ?? Save.get().selectedTrack] ?? TRACKS.sky
+  const totalLen = lvl?.length ?? tCfg.length
   const points = []
   // start: 24m back from origin so the start gantry has space behind player
   points.push(new THREE.Vector3(0, 0, 24))
-  const wobble = tCfg.id === "neon" ? 36 : tCfg.id === "sunset" ? 26 : 18
-  const hills = tCfg.id === "neon" ? 2.6 : tCfg.id === "sunset" ? 2.0 : 1.4
+  // bend multiplier: level.bend = 0.2 means tutorial-style near-straight,
+  // level.bend = 1.2 means twistier neon city-night track.
+  const bendMul = lvl?.bend ?? 1
+  const baseWobble = tCfg.id === "neon" ? 36 : tCfg.id === "sunset" ? 26 : 18
+  const baseHills = tCfg.id === "neon" ? 2.6 : tCfg.id === "sunset" ? 2.0 : 1.4
+  const wobble = baseWobble * bendMul
+  const hills = baseHills * bendMul
   // sample control points every ~70m
   const step = 70
   let z = 0
@@ -1523,16 +1542,46 @@ function rebuildPlayerCar() {
   CFG.carSteer = phys.steerRate
 }
 
-// Apply the currently-selected track config: update length, finish, sky,
-// fog. Track geometry will be rebuilt at race start.
+// Activate the level the player picked from the levels screen. The level
+// drives track length, curvature, pickup density, hazards, rivals, ghost
+// pacer, and time limit. Track aesthetic (sky/sunset/neon) is selected by
+// level.trackStyle which still maps through the TRACKS table.
+function applyLevel() {
+  const levelId = Save.get().currentLevel ?? DEFAULT_LEVEL_ID
+  const lvl = LEVEL_BY_ID[levelId] ?? LEVELS[0]
+  state.level = lvl
+  // also keep selectedTrack in sync so HUD chips / share screen work
+  Save.set({ selectedTrack: lvl.trackStyle })
+  applyTrack()
+  CFG.trackLength = lvl.length
+  CFG.finishZ = -(lvl.length - 50)
+  // rivalCount in the level overrides the global default; main.js's
+  // spawnRivals samples this many opponents from the OPPONENT_CARS pool
+  CFG.rivalCount = lvl.rivalCount
+  // pickup / ramp / hazard density via level config
+  CFG.pickupGap = lvl.pickupGap ?? 26
+  CFG.rampCount = lvl.rampCount ?? 0
+  CFG.hazardCount = lvl.hazardCount ?? 0
+  // checkpoints: either a fixed gap, or a fixed count with a spacing pattern
+  CFG.checkpointGap = lvl.checkpointGap ?? 260
+  CFG.checkpointCount = lvl.checkpointCount ?? null
+  CFG.checkpointSpread = lvl.checkpointSpread ?? "even"
+  CFG.nitroRich = !!lvl.nitroRich
+}
+
+// Apply the cosmetic backdrop (sky / sunset / neon). Called by applyLevel.
 function applyTrack() {
-  const trackId = Save.get().selectedTrack
+  const lvl = state.level
+  const trackId = lvl?.trackStyle ?? Save.get().selectedTrack
   const t = TRACKS[trackId] ?? TRACKS.sky
-  CFG.trackLength = t.length
-  CFG.finishZ = -(t.length - 50)
-  CFG.rampGap = t.rampGap
   scene.background = new THREE.Color(t.sky)
   scene.fog = new THREE.Fog(t.fog[0], t.fog[1], t.fog[2])
+  // wet-night look for level 5: tint the fog darker + hint of teal so the
+  // road's specular highlights read as water reflection.
+  if (lvl?.rainShader) {
+    scene.fog = new THREE.Fog(0x0a1428, 90, 380)
+    scene.background = new THREE.Color(0x040814)
+  }
 }
 
 // Koenigsegg-ish hypercar with sloped hood, bubble cabin, side scoops, big rear wing.
@@ -1699,11 +1748,14 @@ function loftGeometry(sections, cols = 16) {
 function spawnRivals() {
   rivals.forEach((r) => dynamic.remove(r.car))
   rivals = []
-  // pick 3-5 distinct opponents from the pool — gives every race a fresh
-  // grid instead of always-the-same lineup.
-  const fieldSize = 3 + Math.floor(Math.random() * 3)   // 3..5
+  // level says how many rivals to spawn; 0 = no field (tutorial / time trial).
+  // when missing fall back to a 3-5 random field for the legacy "free race".
+  const levelCount = state.level?.rivalCount
+  const fieldSize = (levelCount != null)
+    ? levelCount
+    : 3 + Math.floor(Math.random() * 3)
+  if (fieldSize <= 0) return
   const pool = [...OPPONENT_CARS]
-  // Fisher-Yates shuffle, take first fieldSize
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
@@ -1728,6 +1780,49 @@ function spawnRivals() {
       })
     }
   })
+}
+
+// Spawn the level-5 ghost pacer: a single car running at a fixed speed
+// the player has to catch. Uses the GHOST opponent model with a very
+// translucent material so it reads as "target marker, not real opponent".
+function spawnGhost() {
+  if (state.ghost?.car) {
+    dynamic.remove(state.ghost.car)
+    state.ghost = null
+  }
+  const cfg = state.level?.ghost
+  if (!cfg) return
+  const opp = OPPONENT_CARS.find((o) => o.id === "ghost") ?? OPPONENT_CARS[0]
+  const car = cloneAsset(opp.asset, 4.4, "z") || makeHypercar({ body: 0xa0c8ff })
+  car.rotation.y = Math.PI
+  // semi-transparent cyan tint so it reads as "ghost" target
+  car.traverse((m) => {
+    if (!m.isMesh || !m.material) return
+    const arr = Array.isArray(m.material) ? m.material : [m.material]
+    for (let i = 0; i < arr.length; i++) {
+      const mat = arr[i].clone()
+      mat.transparent = true
+      mat.opacity = 0.62
+      if (mat.color) mat.color.setHex(0xa0d8ff)
+      if (mat.emissive) {
+        mat.emissive.setHex(0x4ab8ff)
+        mat.emissiveIntensity = 0.6
+      }
+      arr[i] = mat
+    }
+    m.material = Array.isArray(m.material) ? arr : arr[0]
+  })
+  const startProgress = cfg.headStart ?? 80
+  const pos = progressToWorld(startProgress, 0, 0.22)
+  car.position.copy(pos)
+  dynamic.add(car)
+  state.ghost = {
+    car,
+    progress: startProgress,
+    speed: cfg.speed ?? 160,
+    catchDistance: cfg.catchDistance ?? 6
+  }
+  state.beatGhost = false
 }
 
 function addRival(cfg) {
@@ -1757,11 +1852,16 @@ function addRival(cfg) {
 function spawnPickups() {
   pickups.forEach((p) => dynamic.remove(p.mesh))
   pickups = []
+  // pattern table: index of `pattern` mod 4 → coin row / nitro / coin / skip.
+  // For "nitroRich" levels (lv4) we flip the table so half the slots are
+  // nitro pickups instead of coin trios.
+  const nitroRich = !!CFG.nitroRich
   for (let s = 40; s < Track.length - 40; s += CFG.pickupGap) {
     const lane = Math.sin(s * 0.012) * 3.6
     const pattern = Math.floor(s / 100) % 4
     if (pattern === 3) continue
-    if (pattern === 2) {
+    const isNitroSlot = nitroRich ? pattern % 2 === 0 : pattern === 2
+    if (isNitroSlot) {
       const m = makeNitroPickup()
       placeAlongTrack(m, s, lane, 1.9 - 0.22)
       dynamic.add(m)
@@ -1777,13 +1877,19 @@ function spawnPickups() {
       }
     }
   }
-  // hazard barriers
-  for (let s = 300; s < Track.length - 30; s += 320) {
-    const m = makeHazard()
-    const lat = (Math.sin(s * 0.03) > 0 ? 1 : -1) * rand(2.8, 4.2)
-    placeAlongTrack(m, s, lat, 0.6 - 0.22)
-    dynamic.add(m)
-    pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
+  // hazards: cones + barriers, spread evenly across the level.
+  // hazardCount=0 (tutorial / time-trial) skips this pass entirely.
+  const hazardCount = CFG.hazardCount ?? 0
+  if (hazardCount > 0) {
+    const span = Track.length - 360
+    for (let i = 0; i < hazardCount; i++) {
+      const s = 240 + (span * i) / Math.max(1, hazardCount - 1)
+      const m = makeHazard()
+      const lat = (Math.sin(s * 0.03) > 0 ? 1 : -1) * rand(2.4, 4.4)
+      placeAlongTrack(m, s, lat, 0.6 - 0.22)
+      dynamic.add(m)
+      pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
+    }
   }
 }
 
@@ -1824,17 +1930,26 @@ function makeHazard() {
 function spawnRamps() {
   ramps.forEach((r) => dynamic.remove(r.mesh))
   ramps = []
-  // dramatic first ramp 30m ahead of the start so the player sees it immediately
+  const want = CFG.rampCount ?? 0
+  if (want <= 0) return
+  // dramatic first ramp 32m ahead of start so the player sees it immediately
   const m0 = makeRamp()
   placeAlongTrack(m0, 32, 0, 0.3 - 0.22)
   dynamic.add(m0)
   ramps.push({ mesh: m0, progress: 32, lateral: 0, used: false })
-  for (let s = 180; s < Track.length - 90; s += CFG.rampGap + rand(-30, 30)) {
-    const lat = Math.sin(s * 0.02) * 2.5
-    const m = makeRamp()
-    placeAlongTrack(m, s, lat, 0.3 - 0.22)
-    dynamic.add(m)
-    ramps.push({ mesh: m, progress: s, lateral: lat, used: false })
+  // remaining ramps spaced evenly across the rest of the track
+  const rest = want - 1
+  if (rest > 0) {
+    const start = 240
+    const span = Track.length - start - 120
+    for (let i = 0; i < rest; i++) {
+      const s = start + (span * (i + 1)) / (rest + 1)
+      const lat = Math.sin(s * 0.02) * 2.5
+      const m = makeRamp()
+      placeAlongTrack(m, s, lat, 0.3 - 0.22)
+      dynamic.add(m)
+      ramps.push({ mesh: m, progress: s, lateral: lat, used: false })
+    }
   }
 }
 
@@ -1916,11 +2031,35 @@ function makeRamp() {
 function spawnCheckpoints() {
   checkpoints.forEach((c) => dynamic.remove(c.mesh))
   checkpoints = []
-  for (let s = 200; s < Track.length - 80; s += CFG.checkpointGap) {
-    const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
-    placeAlongTrack(m, s)
-    dynamic.add(m)
-    checkpoints.push({ mesh: m, progress: s, passed: false })
+  // Two modes:
+  //   1. fixed gap (level.checkpointGap > 0) — one gantry every N metres
+  //   2. fixed count (level.checkpointCount) with a spread pattern:
+  //      "even" = uniform spacing, "increasing" = quadratic (gaps widen)
+  if (CFG.checkpointCount && CFG.checkpointCount > 0) {
+    const n = CFG.checkpointCount
+    const start = 180
+    const end = Track.length - 80
+    const span = end - start
+    for (let i = 0; i < n; i++) {
+      let t = (i + 1) / (n + 1)
+      if (CFG.checkpointSpread === "increasing") {
+        // bias later samples to the back half — gaps grow as you progress
+        t = 0.25 * t + 0.75 * (t * t)
+      }
+      const s = start + span * t
+      const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
+      placeAlongTrack(m, s)
+      dynamic.add(m)
+      checkpoints.push({ mesh: m, progress: s, passed: false })
+    }
+  } else {
+    const gap = CFG.checkpointGap ?? 260
+    for (let s = 200; s < Track.length - 80; s += gap) {
+      const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
+      placeAlongTrack(m, s)
+      dynamic.add(m)
+      checkpoints.push({ mesh: m, progress: s, passed: false })
+    }
   }
 }
 
@@ -2095,8 +2234,8 @@ function bindMetaControls() {
   // garage tile
   $("garageTile").addEventListener("click", openGarage)
   $("garageCloseBtn").addEventListener("click", () => hideOverlay("garageScreen"))
-  // tracks tile
-  $("tracksTile").addEventListener("click", openTracks)
+  // levels tile (formerly "tracks" — repurposed as the 5-level campaign picker)
+  $("tracksTile").addEventListener("click", openLevels)
   $("trackCloseBtn").addEventListener("click", () => hideOverlay("trackScreen"))
   // daily tile
   $("dailyTile").addEventListener("click", () => maybeShowDailyBonus(true))
@@ -2136,6 +2275,10 @@ function showLeaderboard() {
   $("resStatHits").textContent = String(fresh.totalRaces)
   const rankEl = $("resFinalRank")
   if (rankEl) rankEl.style.display = "none"
+  const gradeEl = $("resGrade")
+  if (gradeEl) gradeEl.style.display = "none"
+  const unlockEl = $("resUnlock")
+  if (unlockEl) unlockEl.style.display = "none"
   const board = $("resLeaderboard")
   board.innerHTML = ""
   const entries = fresh.leaderboard
@@ -2233,40 +2376,42 @@ function openGarage() {
   showOverlay("garageScreen")
 }
 
-function openTracks() {
+// 5-level campaign picker (replaces the old free-track picker). Cards show
+// number, name, sub-tagline, lock state, and best grade so far.
+function openLevels() {
   const list = $("trackList")
   list.innerHTML = ""
   const save = Save.get()
-  Object.values(TRACKS).forEach((t) => {
-    const unlocked = save.unlockedTracks.includes(t.id)
-    const selected = save.selectedTrack === t.id
-    const best = save.bestTimePerTrack[t.id]
+  LEVELS.forEach((lvl) => {
+    const unlocked = save.unlockedLevels.includes(lvl.id)
+    const selected = save.currentLevel === lvl.id
+    const best = save.bestPerLevel[lvl.id]
     const card = document.createElement("div")
-    card.className = `track-card ${unlocked ? "" : "locked"} ${selected ? "selected" : ""}`
-    const previewBg = `linear-gradient(180deg, #${t.sky.toString(16).padStart(6, "0")}, #${t.fog[0].toString(16).padStart(6, "0")})`
+    card.className = `level-card ${unlocked ? "" : "locked"} ${selected ? "selected" : ""}`
+    // map each level to a backdrop gradient using its trackStyle
+    const tCfg = TRACKS[lvl.trackStyle] ?? TRACKS.sky
+    const previewBg = `linear-gradient(180deg, #${tCfg.sky.toString(16).padStart(6, "0")}, #${tCfg.fog[0].toString(16).padStart(6, "0")})`
+    const gradeChip = best?.grade
+      ? `<span class="lvl-grade g-${best.grade}">${best.grade}</span>`
+      : ""
     card.innerHTML = `
-      <div class="preview" style="background:${previewBg}"></div>
-      <b>${t.label}</b>
-      <small style="color:#cfe0ff;font-size:calc(var(--ui)*0.85)">${t.desc}</small>
-      ${best ? `<small style="color:#ffe35a">最佳: ${mmss(best.ms)}</small>` : ""}
-      ${unlocked ? "" : `<small>解锁: ${t.cost} 金币</small>`}
+      <div class="preview" style="background:${previewBg}">
+        <span class="lvl-num">第 ${lvl.num} 关</span>
+        ${gradeChip}
+      </div>
+      <b>${lvl.name}</b>
+      <em class="lvl-sub">${lvl.sub}</em>
+      <small class="lvl-desc">${lvl.desc}</small>
+      ${best ? `<small class="lvl-best">最佳: ${mmss(best.ms)} · ${best.coins} 金币</small>` : ""}
+      ${unlocked ? "" : `<small class="lvl-lock">🔒 通关上一关解锁</small>`}
     `
     card.addEventListener("click", () => {
-      if (unlocked) {
-        Save.set({ selectedTrack: t.id })
-        openTracks()
-      } else {
-        const cur = Save.get()
-        if (cur.coins >= t.cost) {
-          Save.addCoins(-t.cost)
-          Save.unlockTrack(t.id)
-          Save.set({ selectedTrack: t.id })
-          refreshCurrencyHud()
-          openTracks()
-        } else {
-          toast(`金币不足 (${cur.coins}/${t.cost})`, 1200)
-        }
+      if (!unlocked) {
+        toast(`先通关第 ${lvl.num - 1} 关`, 1200)
+        return
       }
+      Save.set({ currentLevel: lvl.id })
+      openLevels()
     })
     list.appendChild(card)
   })
@@ -2386,15 +2531,19 @@ function bindAudioUnlock() {
 }
 
 function startRace() {
-  // apply currently-selected car + track BEFORE resetting world
+  // apply currently-selected car + level BEFORE resetting world. applyLevel
+  // sets state.level, plugs the level's curve/length/density into CFG and
+  // updates the cosmetic backdrop. All subsequent build/spawn calls then
+  // read those CFG values, so this is the single switch that "loads" a level.
   rebuildPlayerCar()
-  applyTrack()
+  applyLevel()
   buildTrack()
   buildScenery()
   spawnPickups()
   spawnRamps()
   spawnCheckpoints()
   spawnRivals()
+  spawnGhost()
 
   // reset run state
   state.speed = 0
@@ -2419,6 +2568,8 @@ function startRace() {
   state.airborne = false
   state.topSpeed = 0   // tracked through the race for the result modal
   state._finalRank = null   // frozen at finishRace() time
+  state.beatGhost = false
+  state.timedOut = false
 
   // reset world (rivals already placed correctly by spawnRivals above)
   pickups.forEach((p) => {
@@ -2529,8 +2680,9 @@ function finishRace(success = true) {
   state._finalRank = computeRank()
   setTimeout(() => {
     const ms = state.finishedAt - state.startedAt - state.pauseAcc
-    const win = success && state.hits < CFG.hitLimit
+    const win = success && state.hits < CFG.hitLimit && !state.timedOut
     const save = Save.get()
+    const lvl = state.level
     Save.recordRace({
       trackId: save.selectedTrack,
       carId: save.selectedCar,
@@ -2539,6 +2691,33 @@ function finishRace(success = true) {
       hits: state.hits,
       success: win
     })
+    // ── grade for the level (S/A/B/C) ──
+    let grade = null
+    let unlocked = null
+    if (lvl) {
+      grade = gradeForRun(lvl, {
+        ms,
+        coins: state.coins,
+        hits: state.hits,
+        finished: win,
+        beatGhost: state.beatGhost
+      })
+      Save.recordLevelResult(lvl.id, {
+        grade,
+        ms,
+        coins: state.coins,
+        topSpeed: Math.round(state.topSpeed),
+        beatGhost: state.beatGhost
+      })
+      // success → unlock the next level (if there is one)
+      if (win) {
+        const next = nextLevelId(lvl.id)
+        if (next && !Save.get().unlockedLevels.includes(next)) {
+          Save.unlockLevel(next)
+          unlocked = next
+        }
+      }
+    }
     // determine "new record" BEFORE the new ms is recorded
     const prevBest = save.bestTimePerTrack[save.selectedTrack]
     const isNewRecord = win && (!prevBest || ms < prevBest.ms)
@@ -2546,11 +2725,53 @@ function finishRace(success = true) {
     $("resStatCoins").textContent = String(state.coins)
     if ($("resStatTopSpeed")) $("resStatTopSpeed").textContent = `${Math.round(state.topSpeed)}`
     $("resStatHits").textContent = String(state.hits)
-    $("resultTitle").textContent = win ? "闯关成功！" : "再试一次"
-    $("resultCopy").textContent = win
-      ? `用 ${mmss(ms)} 冲过终点，最高速度 ${Math.round(state.topSpeed)} KM/H。`
-      : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
+    // title + copy reflect the level pass/fail reason
+    if (lvl) {
+      if (state.timedOut) {
+        $("resultTitle").textContent = "时间到 · 挑战失败"
+        $("resultCopy").textContent = `第 ${lvl.num} 关「${lvl.name}」未在 ${lvl.timeLimit}s 内完成`
+      } else if (win) {
+        $("resultTitle").textContent = `第 ${lvl.num} 关 · ${lvl.name}`
+        const ghostMsg = lvl.ghost
+          ? (state.beatGhost ? "追上目标车！" : "未追上目标车")
+          : ""
+        $("resultCopy").textContent = `${mmss(ms)} 冲线，最高 ${Math.round(state.topSpeed)} KM/H${ghostMsg ? "，" + ghostMsg : ""}`
+      } else {
+        $("resultTitle").textContent = `第 ${lvl.num} 关 · 失败`
+        $("resultCopy").textContent = `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
+      }
+    } else {
+      $("resultTitle").textContent = win ? "闯关成功！" : "再试一次"
+      $("resultCopy").textContent = win
+        ? `用 ${mmss(ms)} 冲过终点，最高速度 ${Math.round(state.topSpeed)} KM/H。`
+        : `碰撞太多 (${state.hits}/${CFG.hitLimit})，再来一局！`
+    }
     if ($("resNewRecord")) $("resNewRecord").style.display = isNewRecord ? "block" : "none"
+    // grade badge (S / A / B / C / fail)
+    const gradeEl = $("resGrade")
+    if (gradeEl) {
+      gradeEl.classList.remove("g-S", "g-A", "g-B", "g-C", "g-fail")
+      if (grade) {
+        gradeEl.classList.add(`g-${grade}`)
+        gradeEl.textContent = grade
+        gradeEl.style.display = ""
+      } else {
+        gradeEl.classList.add("g-fail")
+        gradeEl.textContent = "—"
+        gradeEl.style.display = ""
+      }
+    }
+    // unlock-next banner
+    const unlockEl = $("resUnlock")
+    if (unlockEl) {
+      if (unlocked && LEVEL_BY_ID[unlocked]) {
+        const u = LEVEL_BY_ID[unlocked]
+        unlockEl.textContent = `🔓 解锁了第 ${u.num} 关「${u.name}」`
+        unlockEl.style.display = ""
+      } else {
+        unlockEl.style.display = "none"
+      }
+    }
     // final rank banner — only meaningful on a real finish, not the leaderboard view
     const rankEl = $("resFinalRank")
     if (rankEl) {
@@ -2559,7 +2780,8 @@ function finishRace(success = true) {
       const cls = rankClass(state._finalRank)
       if (cls) rankEl.classList.add(cls)
       rankEl.innerHTML = `第 <b>${state._finalRank}</b> 名 / ${total}`
-      rankEl.style.display = ""
+      // hide rank in solo levels (no rivals)
+      rankEl.style.display = (lvl && lvl.rivalCount === 0 && !lvl.ghost) ? "none" : ""
     }
     // best time + leaderboard
     const fresh = Save.get()
@@ -2590,9 +2812,11 @@ function loop(now) {
   if (state.mode === "playing") {
     updateDriving(dt, now)
     updateRivals(dt, now)
+    updateGhost(dt, now)
     updatePickups(dt, now)
     updateRamps(dt, now)
     updateCheckpoints(now)
+    checkTimeLimit(now)
     updateCamera(dt)
     updateHUD()
   } else if (state.mode === "menu" || state.mode === "boot") {
@@ -2835,6 +3059,43 @@ function updateRamps(dt, now) {
   }
 }
 
+// Drive the ghost pacer along the spline at its constant speed. Mark
+// `state.beatGhost` true the first frame the player overtakes it.
+function updateGhost(dt, now) {
+  const g = state.ghost
+  if (!g || state.finished) return
+  // ghost only moves once the GO! has fired so the player isn't chasing
+  // from -100m while still on the start light.
+  if (state.countdown > 0) return
+  g.progress += g.speed * dt * 0.278
+  // clamp at finish so it doesn't fly off the end of the curve
+  g.progress = Math.min(g.progress, Track.length - 6)
+  const pos = progressToWorld(g.progress, 0, 0.22)
+  const tan = progressTangent(g.progress).clone()
+  g.car.position.copy(pos)
+  g.car.lookAt(pos.clone().add(tan))
+  g.car.rotateY(Math.PI)
+  // bobbing ghost shimmer
+  g.car.position.y += 0.06 * Math.sin(now * 0.006)
+  if (!state.beatGhost && state.progress >= g.progress - g.catchDistance) {
+    state.beatGhost = true
+    toast("追上目标车！", 1100)
+    flashFx("checkpoint")
+  }
+}
+
+// Force-finish (with `success=false`) when level.timeLimit elapses.
+function checkTimeLimit(now) {
+  const limit = state.level?.timeLimit ?? 0
+  if (limit <= 0 || state.finished || state.countdown > 0) return
+  const elapsed = (now - state.startedAt - state.pauseAcc) / 1000
+  if (elapsed >= limit) {
+    state.timedOut = true
+    toast("时间到", 1100)
+    finishRace(false)
+  }
+}
+
 function updateCheckpoints(now) {
   for (const c of checkpoints) {
     if (c.passed) continue
@@ -2988,15 +3249,28 @@ function updateHUD() {
   const progress = clamp(state.progress / Track.length, 0, 1)
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
   $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
-  // top centred chips: RANK / TIME / COIN / TRACK
+  // top centred chips: RANK / TIME / COIN / TRACK.
+  // If the active level has a time limit, TIME counts down and turns red
+  // in the last 10 seconds so the player feels the pressure.
   const elapsedMs = state.countdown > 0
     ? 0
     : Math.max(0, performance.now() - state.startedAt - state.pauseAcc)
-  if ($("hudTime")) $("hudTime").textContent = mmss(elapsedMs)
+  const limit = state.level?.timeLimit ?? 0
+  if ($("hudTime")) {
+    if (limit > 0) {
+      const remainMs = Math.max(0, limit * 1000 - elapsedMs)
+      $("hudTime").textContent = mmss(remainMs)
+      const chip = $("hudTime").parentElement
+      chip?.classList.toggle("hud-chip-time-low", remainMs < 10000)
+    } else {
+      $("hudTime").textContent = mmss(elapsedMs)
+      $("hudTime").parentElement?.classList.remove("hud-chip-time-low")
+    }
+  }
   if ($("hudCoins")) $("hudCoins").textContent = String(state.coins)
   if ($("hudTrack")) {
-    const tCfg = TRACKS[Save.get().selectedTrack]
-    $("hudTrack").textContent = tCfg?.label ?? ""
+    const lvl = state.level
+    $("hudTrack").textContent = lvl ? `第 ${lvl.num} 关` : ""
   }
   updateRankBadge()
   updateMiniMap(progress)

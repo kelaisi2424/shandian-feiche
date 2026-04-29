@@ -110,14 +110,14 @@
           <button id="tracksTile" class="tile small-tile">
             <span class="tile-icon">
               <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#5cf2a4" stroke-width="3"/>
-                <ellipse cx="32" cy="38" rx="22" ry="6" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 3"/>
-                <circle cx="22" cy="38" r="3" fill="#26d6ff"/>
-                <circle cx="42" cy="38" r="3" fill="#ffd31a"/>
+                <path d="M14 50 L20 14 L32 14 L26 50 Z" fill="#26d6ff" opacity="0.85"/>
+                <path d="M30 50 L36 14 L48 14 L42 50 Z" fill="#ffd31a" opacity="0.85"/>
+                <text x="22" y="42" font-family="Arial Black" font-size="14" font-weight="900" fill="#0a1428">1</text>
+                <text x="38" y="42" font-family="Arial Black" font-size="14" font-weight="900" fill="#0a1428">5</text>
               </svg>
             </span>
-            <strong>赛道</strong>
-            <em class="tile-sub">TRACKS</em>
+            <strong>关卡</strong>
+            <em class="tile-sub">LEVELS</em>
           </button>
           <button id="garageTile" class="tile small-tile">
             <span class="tile-icon">
@@ -273,6 +273,7 @@
         <div class="modal">
           <h2 id="resultTitle">闯关成功</h2>
           <p id="resultCopy">收集金币，躲开障碍，冲过终点。</p>
+          <div class="grade-badge" id="resGrade" aria-label="grade" style="display:none">S</div>
           <div class="result-stats">
             <div><b id="resStatTime">--</b><span>用时</span></div>
             <div><b id="resStatCoins">0</b><span>金币</span></div>
@@ -280,6 +281,7 @@
             <div><b id="resStatHits">0</b><span>碰撞</span></div>
           </div>
           <p class="final-rank" id="resFinalRank">第 <b>1</b> 名</p>
+          <p class="unlock-banner" id="resUnlock" style="display:none">🔓 解锁下一关</p>
           <p class="new-record" id="resNewRecord" style="display:none">🏆 新纪录！</p>
           <p class="best-time">本地最佳: <b id="resBestTime">--</b></p>
           <ul class="leaderboard" id="resLeaderboard"></ul>
@@ -372,8 +374,9 @@
 
       <section id="trackScreen" class="screen overlay-screen">
         <div class="modal modal-wide">
-          <h2>赛道</h2>
-          <div class="track-list" id="trackList"></div>
+          <h2>关卡</h2>
+          <p class="modal-sub">5 关挑战 · 通关解锁下一关</p>
+          <div class="track-list level-list" id="trackList"></div>
           <button id="trackCloseBtn" class="primary">确定</button>
         </div>
       </section>

@@ -28,6 +28,10 @@ const DEFAULT = {
   unlockedTracks: ["neon"],           // sky, sunset, neon — neon default for cinematic look
   selectedCar: "lightning_s1",
   selectedTrack: "neon",
+  // level progression (5-level campaign)
+  unlockedLevels: ["lv1"],            // unlock the next on success
+  currentLevel: "lv1",
+  bestPerLevel: {},                   // { [levelId]: { grade, ms, coins, topSpeed, beatGhost } }
   leaderboard: [],          // [{trackId, carId, ms, coins, hits, at}], top 10 by ms
   // engagement
   lastDaily: null,          // YYYY-MM-DD
@@ -155,5 +159,33 @@ export const Save = {
     return { granted: true, amount, day: s.consecutiveDays }
   },
   isCarUnlocked(id) { return load().unlockedCars.includes(id) },
-  isTrackUnlocked(id) { return load().unlockedTracks.includes(id) }
+  isTrackUnlocked(id) { return load().unlockedTracks.includes(id) },
+  // ─── level system ───
+  isLevelUnlocked(id) { return load().unlockedLevels.includes(id) },
+  unlockLevel(id) {
+    const s = load()
+    if (!s.unlockedLevels.includes(id)) s.unlockedLevels.push(id)
+    save()
+  },
+  // Stash the best run per level. Higher grades and faster times overwrite;
+  // weaker results are dropped.
+  recordLevelResult(id, run) {
+    const s = load()
+    const prev = s.bestPerLevel[id]
+    const order = { S: 4, A: 3, B: 2, C: 1, null: 0, undefined: 0 }
+    const better =
+      !prev ||
+      order[run.grade] > order[prev.grade] ||
+      (order[run.grade] === order[prev.grade] && run.ms < (prev.ms ?? Infinity))
+    if (better) {
+      s.bestPerLevel[id] = {
+        grade: run.grade,
+        ms: run.ms,
+        coins: run.coins,
+        topSpeed: run.topSpeed,
+        beatGhost: !!run.beatGhost
+      }
+      save()
+    }
+  }
 }
