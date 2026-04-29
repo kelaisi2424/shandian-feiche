@@ -182,9 +182,9 @@ body.gate-dismissed .rotate-gate {
   visibility: hidden !important;
 }
 /* In portrait, the gate covers the game until the user taps "我知道了".
- * After dismissal the gate hides and the game renders into the actual
- * portrait viewport at whatever scale fits — small but interactive, so
- * users on browsers that won't rotate (WeChat iOS) are never stuck. */
+ * After dismissal we render the landscape stage rotated 90deg into the
+ * portrait viewport (rules below) so users on browsers that won't rotate
+ * (WeChat iOS) get full-size landscape gameplay anyway. */
 body.is-portrait:not(.gate-dismissed) #game,
 body.is-portrait:not(.gate-dismissed) #app.stage,
 body.is-portrait:not(.gate-dismissed) .screen-fx,
@@ -205,6 +205,36 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate {
   body:not(.is-landscape):not(.gate-dismissed) .rotate-gate {
     display: flex;
   }
+}
+
+/* ---- portrait rotation shim ----
+ * Triggered when the user dismisses the gate while the device is still
+ * portrait. CSS-rotates the canvas + stage 90deg CW so the 1920×1080
+ * landscape design fills a portrait viewport. resize() / setStageScale()
+ * / canvas swipe handler in main.js read body.gate-dismissed.is-portrait
+ * via isRotatedPortrait() and use swapped dims so WebGL aspect, stage
+ * scale, and steer input all match the rotated layout. */
+body.gate-dismissed.is-portrait #game {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 100vh;
+  height: 100vw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: 50% 50%;
+}
+body.gate-dismissed.is-portrait #app.stage {
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--stage-scale));
+}
+body.gate-dismissed.is-portrait .screen-fx,
+body.gate-dismissed.is-portrait .speed-lines {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 100vh;
+  height: 100vw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: 50% 50%;
 }
 
 /* ---- title bar at top of screen (像截图里的窗口) ---- */

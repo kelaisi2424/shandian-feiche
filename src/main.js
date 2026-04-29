@@ -472,9 +472,23 @@ async function init() {
   refreshCurrencyHud()
   applyQuality()
   setStageScale()
+  resize()
   bindRotateGate()
-  addEventListener("resize", () => { resize(); setStageScale() })
-  addEventListener("orientationchange", () => { setStageScale(); setTimeout(setStageScale, 250) })
+  const refit = () => { setStageScale(); resize() }
+  addEventListener("resize", refit)
+  addEventListener("orientationchange", () => { refit(); setTimeout(refit, 250) })
+  if (window.matchMedia) {
+    const mm = window.matchMedia("(orientation: portrait)")
+    if (mm.addEventListener) mm.addEventListener("change", refit)
+    else if (mm.addListener) mm.addListener(refit)
+  }
+  // Mobile browsers can report a stale viewport during page-load (address
+  // bar collapsing, WeChat's settled-after-launch dimensions, async asset
+  // loading). Re-run scale + WebGL viewport sync on staggered timers so the
+  // visible layout always catches up to the actual viewport.
+  setTimeout(refit, 80)
+  setTimeout(refit, 320)
+  setTimeout(refit, 1000)
   // expose for debugging
   window.__state = state
   window.__Track = Track
@@ -2302,9 +2316,13 @@ function bindCanvasGestures() {
   canvas.addEventListener("pointermove", (e) => {
     if (!active || state.mode !== "playing") return
     e.preventDefault()
-    const dx = e.clientX - startX
-    // map horizontal drag distance to steer amount, normalised by viewport width
-    const norm = clamp(dx / (innerWidth * 0.18), -1, 1)
+    // Rotated-shim mode: the canvas is CSS-rotated 90deg CW, so the game's
+    // "right" lives at the bottom of the viewport. A downward viewport
+    // swipe should map to a rightward in-game steer.
+    const rot = isRotatedPortrait()
+    const drag = rot ? (e.clientY - startY) : (e.clientX - startX)
+    const span = rot ? innerHeight : innerWidth
+    const norm = clamp(drag / (span * 0.18), -1, 1)
     state.steer = norm
   })
 
@@ -3618,28 +3636,48 @@ function updateParticles(dt) {
   }
 }
 
+// `body.gate-dismissed.is-portrait` activates the rotation shim: the canvas
+// + stage are CSS-rotated 90deg CW so the landscape design fills a portrait
+// viewport (necessary on WeChat iOS where orientation lock is a no-op). The
+// renderer/scale math then runs against swapped dims so WebGL aspect and
+// touch input stay correct.
+function isRotatedPortrait() {
+  const b = document.body
+  return !!(b && b.classList.contains("gate-dismissed") && b.classList.contains("is-portrait"))
+}
+
 function resize() {
-  camera.aspect = innerWidth / innerHeight
-  camera.fov = innerWidth > innerHeight ? 60 : 70
-  camera.updateProjectionMatrix()
-  renderer.setSize(innerWidth, innerHeight)
-  if (composer) composer.setSize(innerWidth, innerHeight)
-  if (bloomPass) bloomPass.setSize(innerWidth, innerHeight)
+  if (!renderer) return
+  const rot = isRotatedPortrait()
+  const w = rot ? innerHeight : innerWidth
+  const h = rot ? innerWidth : innerHeight
+  if (w < 50 || h < 50) return
+  if (camera) {
+    camera.aspect = w / h
+    camera.fov = w > h ? 60 : 70
+    camera.updateProjectionMatrix()
+  }
+  renderer.setSize(w, h)
+  if (composer) composer.setSize(w, h)
+  if (bloomPass) bloomPass.setSize(w, h)
 }
 
 // Compute the uniform scale that fits the 1920×1080 design stage into the
 // current viewport. CSS pulls --stage-scale and applies it via
 // transform: scale(...). Internal layout never reflows — only the wrapper
-// scales, so the same composition reads at every device size. In portrait
-// the scale is small (game is shown shrunken in the centre) — that's the
-// fallback path for users on browsers that won't rotate.
+// scales, so the same composition reads at every device size. Mobile
+// browsers can briefly report a stale viewport at page-load (address-bar
+// animations, WeChat settle-in) — callers re-run this on staggered timers
+// to pick up the corrected dims.
 function setStageScale() {
   const stage = document.getElementById("app")
   if (!stage) return
   const designW = 1920
   const designH = 1080
-  const vw = window.innerWidth
-  const vh = window.innerHeight
+  const rot = isRotatedPortrait()
+  const vw = rot ? window.innerHeight : window.innerWidth
+  const vh = rot ? window.innerWidth : window.innerHeight
+  if (vw < 50 || vh < 50) return  // viewport not ready yet — skip
   const scale = Math.min(vw / designW, vh / designH)
   // round to 4 decimals to keep CSS tidy and avoid sub-pixel jitter
   document.documentElement.style.setProperty("--stage-scale", scale.toFixed(4))
