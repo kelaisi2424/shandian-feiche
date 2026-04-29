@@ -389,6 +389,13 @@ const cameraLook = new THREE.Vector3()
 // init
 // ────────────────────────────────────────────────────────────────────
 async function init() {
+  // CRITICAL: bind the rotate-gate button FIRST, before any async work.
+  // loadAssets() below pulls 20+ GLB files which can take tens of seconds
+  // on slow mobile networks — if we wait until after that to wire the
+  // button, the user's click during loading is a silent no-op.
+  bindRotateGate()
+  setStageScale()
+
   renderer = new THREE.WebGLRenderer({
     canvas: $("game"),
     antialias: true,
@@ -471,9 +478,7 @@ async function init() {
   bindAudioUnlock()
   refreshCurrencyHud()
   applyQuality()
-  setStageScale()
   resize()
-  bindRotateGate()
   const refit = () => { setStageScale(); resize() }
   addEventListener("resize", refit)
   addEventListener("orientationchange", () => { refit(); setTimeout(refit, 250) })

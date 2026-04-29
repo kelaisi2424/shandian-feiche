@@ -403,6 +403,33 @@
       </div>
     </div>
 
+    <!-- Safety-net click handler. Wires the rotate-gate button immediately,
+         before /src/main.js (a module — loaded async) can run. On slow
+         mobile networks the module + its 20+ GLB asset deps can take tens
+         of seconds; without this script the user's tap during loading
+         would be a silent no-op. main.js's bindRotateGate() runs later
+         and adds its own listener — both fire, both are idempotent
+         (gate-dismissed is a class toggle, not a counter). -->
+    <script>
+      (function () {
+        var btn = document.getElementById("rotateAck")
+        if (!btn) return
+        btn.addEventListener("click", function () {
+          btn.blur()
+          document.body.classList.add("gate-dismissed")
+          try {
+            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen().catch(function () {})
+            }
+            if (screen.orientation && typeof screen.orientation.lock === "function") {
+              screen.orientation.lock("landscape").catch(function () {})
+            }
+          } catch (e) {}
+          window.dispatchEvent(new Event("resize"))
+        })
+      })()
+    </script>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
