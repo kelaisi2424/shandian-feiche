@@ -5,6 +5,15 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js"
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js"
 import { Save } from "./save.js"
+import {
+  PLAYER_CARS,
+  OPPONENT_CARS,
+  CAR_BY_ID,
+  DEFAULT_CAR_ID,
+  deriveCarPhysics,
+  rivalBaseSpeed,
+  TIER_STYLE
+} from "./cars.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -35,48 +44,9 @@ const CFG = {
   nitroDuration: 2.4
 }
 
-// 3 selectable cars: id, label, GLB asset, body color, accent, stats (1-5)
-const CARS = {
-  sport: {
-    id: "sport",
-    label: "电光跑车",
-    asset: "raceFuture",
-    body: 0x18b6ff,
-    accent: 0x05213d,
-    cost: 0,
-    maxSpeed: 215,
-    nitroSpeed: 305,
-    accel: 2.0,
-    steerRate: 7.5,
-    grip: 4
-  },
-  future: {
-    id: "future",
-    label: "极速未来",
-    asset: "race",
-    body: 0xff5826,
-    accent: 0x4a0808,
-    cost: 800,
-    maxSpeed: 240,
-    nitroSpeed: 330,
-    accel: 1.7,
-    steerRate: 6.3,
-    grip: 3
-  },
-  sedan: {
-    id: "sedan",
-    label: "灵敏小钢炮",
-    asset: "sedanSports",
-    body: 0x9be32a,
-    accent: 0x143807,
-    cost: 1500,
-    maxSpeed: 195,
-    nitroSpeed: 285,
-    accel: 2.4,
-    steerRate: 9.2,
-    grip: 5
-  }
-}
+// All cars (player + rivals) come from src/cars.js — sourced from the
+// no-logo GLB pack. Lookup helpers are imported above; the rest of the
+// game refers to a car by `CAR_BY_ID[id]`.
 
 // 3 selectable tracks
 const TRACKS = {
@@ -629,10 +599,13 @@ function bannerTexture() {
 // ────────────────────────────────────────────────────────────────────
 async function loadAssets() {
   const loader = new GLTFLoader()
+  // GLBs for the 6 player cars + 9 rival cars come from the no-logo pack at
+  // public/models/. Asset key = car id, so cloneAsset(car.asset, …) just works.
+  const carItems = {}
+  for (const c of PLAYER_CARS) carItems[c.asset] = `/models/${c.asset}.glb`
+  for (const c of OPPONENT_CARS) carItems[c.asset] = `/models/${c.asset}.glb`
   const items = {
-    raceFuture: "/models/race-future.glb",
-    race: "/models/race.glb",
-    sedanSports: "/models/sedan-sports.glb",
+    ...carItems,
     cone: "/models/cone.glb",
     box: "/models/box.glb",
     flagCheckers: "/models/racing/flagCheckers.gltf",
@@ -1526,19 +1499,28 @@ function makeFallbackCar(color, trim) {
 // switch). Existing player Group, glow, plumes, headlight stay intact.
 function rebuildPlayerCar() {
   const carId = Save.get().selectedCar
-  const cfg = CARS[carId] ?? CARS.sport
+  const cfg = CAR_BY_ID[carId] ?? CAR_BY_ID[DEFAULT_CAR_ID]
   // remove the old visual body if any
   if (playerBody) player.remove(playerBody)
   const car = cloneAsset(cfg.asset, 4.6, "z") || makeHypercar({ body: cfg.body })
+  // GLB pack convention: car nose points -Z, same as the camera-forward in
+  // our scene. cloneAsset doesn't change orientation; flip 180° so the
+  // player faces "into" the track when placed at progress 0.
   car.rotation.y = Math.PI
-  recolorCar(car, { body: cfg.body, accent: cfg.accent })
+  // recolor only if the new pack ships untextured placeholders — when a
+  // future high-poly GLB carries its own paint, dropping `body`/`accent`
+  // from the car entry will skip this and keep the model's native colours.
+  if (cfg.body !== undefined) {
+    recolorCar(car, { body: cfg.body, accent: cfg.accent })
+  }
   player.add(car)
   playerBody = car
-  // apply stats to runtime CFG
-  CFG.maxSpeed = cfg.maxSpeed
-  CFG.nitroSpeed = cfg.nitroSpeed
-  CFG.carAccel = cfg.accel
-  CFG.carSteer = cfg.steerRate
+  // apply stats to runtime CFG via the shared physics derivation
+  const phys = deriveCarPhysics(cfg)
+  CFG.maxSpeed = phys.maxSpeed
+  CFG.nitroSpeed = phys.nitroSpeed
+  CFG.carAccel = phys.accel
+  CFG.carSteer = phys.steerRate
 }
 
 // Apply the currently-selected track config: update length, finish, sky,
@@ -1717,34 +1699,52 @@ function loftGeometry(sections, cols = 16) {
 function spawnRivals() {
   rivals.forEach((r) => dynamic.remove(r.car))
   rivals = []
-  // 2 rivals on the start grid, just ahead of the player on the curve
-  addRival({ lateral: -3.6, progress: 6, color: 0xee2424, accent: 0x4a0808, baseSpeed: 118 })
-  addRival({ lateral: 3.6, progress: 6, color: 0xff5826, accent: 0x520f00, baseSpeed: 124 })
-  // staggered rivals further down the track, spread across deterministic lanes
-  const lanes = [-4.0, 4.0, -2.0, 2.0, 0]
-  for (let i = 0; i < CFG.rivalCount; i++) {
-    addRival({
-      lateral: lanes[i % lanes.length],
-      progress: 100 + i * 180,
-      color: i % 2 ? 0xff3a3a : 0xff812a,
-      accent: 0x3a0808,
-      baseSpeed: 95 + i * 9 + rand(0, 12)
-    })
+  // pick 3-5 distinct opponents from the pool — gives every race a fresh
+  // grid instead of always-the-same lineup.
+  const fieldSize = 3 + Math.floor(Math.random() * 3)   // 3..5
+  const pool = [...OPPONENT_CARS]
+  // Fisher-Yates shuffle, take first fieldSize
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
   }
+  const chosen = pool.slice(0, fieldSize)
+
+  // 2 of them sit on the start grid alongside the player; the rest stagger
+  // ahead so the player has someone to chase down the straight.
+  const lanes = [-3.6, 3.6, -4.0, 4.0, -2.0, 2.0, 0]
+  chosen.forEach((opp, i) => {
+    if (i < 2) {
+      addRival({
+        opp,
+        lateral: i === 0 ? -3.6 : 3.6,
+        progress: 6
+      })
+    } else {
+      addRival({
+        opp,
+        lateral: lanes[i % lanes.length],
+        progress: 100 + (i - 2) * 180
+      })
+    }
+  })
 }
 
 function addRival(cfg) {
-  const assetName = (rivals.length % 2 === 0) ? "race" : "sedanSports"
-  const car = cloneAsset(assetName, 4.4, "z") || makeHypercar({ body: cfg.color })
+  const opp = cfg.opp
+  const car = cloneAsset(opp.asset, 4.4, "z") || makeHypercar({ body: opp.body })
   car.rotation.y = Math.PI
-  recolorCar(car, { body: cfg.color, accent: cfg.accent ?? 0x300404 })
+  if (opp.body !== undefined) {
+    recolorCar(car, { body: opp.body, accent: opp.accent ?? 0x300404 })
+  }
   // place along curve at given progress
   const pos = progressToWorld(cfg.progress, cfg.lateral, 0.22)
   car.position.copy(pos)
   dynamic.add(car)
   rivals.push({
     car,
-    baseSpeed: cfg.baseSpeed,
+    opp,
+    baseSpeed: rivalBaseSpeed(opp),
     progress: cfg.progress,
     lateral: cfg.lateral,
     laneTarget: cfg.lateral,
@@ -2148,7 +2148,7 @@ function showLeaderboard() {
   } else {
     entries.forEach((row, i) => {
       const li = document.createElement("li")
-      li.innerHTML = `<span>#${i + 1} · ${CARS[row.carId]?.label ?? row.carId}</span><b>${mmss(row.ms)}</b>`
+      li.innerHTML = `<span>#${i + 1} · ${CAR_BY_ID[row.carId]?.name ?? row.carId}</span><b>${mmss(row.ms)}</b>`
       board.appendChild(li)
     })
   }
@@ -2183,21 +2183,33 @@ function openGarage() {
   const list = $("garageList")
   list.innerHTML = ""
   const save = Save.get()
-  Object.values(CARS).forEach((c) => {
+  PLAYER_CARS.forEach((c) => {
     const unlocked = save.unlockedCars.includes(c.id)
     const selected = save.selectedCar === c.id
     const card = document.createElement("div")
     card.className = `garage-card ${unlocked ? "" : "locked"} ${selected ? "selected" : ""}`
-    const previewBg = `linear-gradient(135deg, #${c.body.toString(16).padStart(6, "0")}, #${c.accent.toString(16).padStart(6, "0")})`
+    const bodyHex = (c.body ?? 0x6a7280).toString(16).padStart(6, "0")
+    const accentHex = (c.accent ?? 0x101820).toString(16).padStart(6, "0")
+    const previewBg = `linear-gradient(135deg, #${bodyHex}, #${accentHex})`
+    const tier = TIER_STYLE[c.tier] ?? TIER_STYLE.C
+    // Stat bars use a 0-100% scale tuned for the current top-tier values
+    // (Shadow ZX: 312/3.0/9.4/9.1) so S-tier reads near-full.
+    const speedPct = clamp((c.topSpeed - 200) / 130 * 100, 0, 100)
+    const accelPct = clamp((5.0 - c.accel0to100) / 2.2 * 100, 0, 100)
+    const handlePct = clamp((c.handling - 7) / 2.6 * 100, 0, 100)
+    const nitroPct = clamp((c.nitro - 5) / 4.5 * 100, 0, 100)
     card.innerHTML = `
-      <div class="preview" style="background:${previewBg}"></div>
-      <b>${c.label}</b>
-      <div class="stats">
-        <div class="stat-bar"><b>极速</b><i style="--gap:${100 - c.maxSpeed / 2.6}%"></i></div>
-        <div class="stat-bar"><b>加速</b><i style="--gap:${100 - c.accel * 30}%"></i></div>
-        <div class="stat-bar"><b>操控</b><i style="--gap:${100 - c.steerRate * 9}%"></i></div>
+      <div class="preview" style="background:${previewBg}">
+        <span class="tier-chip" style="background:${tier.bg};color:${tier.fg}">${c.tier}</span>
       </div>
-      ${unlocked ? "" : `<small>解锁: ${c.cost} 金币</small>`}
+      <b>${c.name}</b>
+      <div class="stats">
+        <div class="stat-bar"><b>极速</b><i style="--gap:${100 - speedPct}%"></i><u>${c.topSpeed}</u></div>
+        <div class="stat-bar"><b>加速</b><i style="--gap:${100 - accelPct}%"></i><u>${c.accel0to100}s</u></div>
+        <div class="stat-bar"><b>操控</b><i style="--gap:${100 - handlePct}%"></i><u>${c.handling}</u></div>
+        <div class="stat-bar"><b>氮气</b><i style="--gap:${100 - nitroPct}%"></i><u>${c.nitro}</u></div>
+      </div>
+      ${unlocked ? (selected ? `<small class="badge-owned">已选定</small>` : `<small class="badge-owned">已拥有</small>`) : `<small class="badge-lock">🔒 ${c.price.toLocaleString()} 金币</small>`}
     `
     card.addEventListener("click", () => {
       if (unlocked) {
@@ -2205,14 +2217,14 @@ function openGarage() {
         openGarage()
       } else {
         const cur = Save.get()
-        if (cur.coins >= c.cost) {
-          Save.addCoins(-c.cost)
+        if (cur.coins >= c.price) {
+          Save.addCoins(-c.price)
           Save.unlockCar(c.id)
           Save.set({ selectedCar: c.id })
           refreshCurrencyHud()
           openGarage()
         } else {
-          toast(`金币不足 (${cur.coins}/${c.cost})`, 1200)
+          toast(`金币不足 (${cur.coins}/${c.price})`, 1200)
         }
       }
     })
@@ -2408,23 +2420,13 @@ function startRace() {
   state.topSpeed = 0   // tracked through the race for the result modal
   state._finalRank = null   // frozen at finishRace() time
 
-  // reset world
+  // reset world (rivals already placed correctly by spawnRivals above)
   pickups.forEach((p) => {
     p.taken = false
     p.mesh.visible = true
   })
   ramps.forEach((r) => (r.used = false))
   checkpoints.forEach((c) => (c.passed = false))
-  // reset rivals
-  rivals.forEach((r, i) => {
-    if (i < 2) {
-      r.car.position.set(i === 0 ? -3.6 : 3.6, 0.22, 6)
-      r.laneTarget = i === 0 ? -3.6 : 3.6
-    } else {
-      r.car.position.set(rand(-CFG.playerHalfWidth, CFG.playerHalfWidth), 0.22, -90 - i * 160)
-    }
-    r.bumpVx = 0
-  })
 
   // place player on the curve at progress=0
   const startPos = progressToWorld(0, 0, state.y)
@@ -2570,7 +2572,7 @@ function finishRace(success = true) {
       .slice(0, 5)
       .forEach((row, i) => {
         const li = document.createElement("li")
-        li.innerHTML = `<span>#${i + 1} · ${CARS[row.carId]?.label ?? row.carId}</span><b>${mmss(row.ms)}</b>`
+        li.innerHTML = `<span>#${i + 1} · ${CAR_BY_ID[row.carId]?.name ?? row.carId}</span><b>${mmss(row.ms)}</b>`
         board.appendChild(li)
       })
     refreshCurrencyHud()

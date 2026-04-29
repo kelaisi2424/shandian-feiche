@@ -1736,27 +1736,41 @@ body,
   cursor: not-allowed;
 }
 .garage-card .preview, .track-card .preview {
+  position: relative;
   height: calc(var(--ui) * 5);
   border-radius: 4px;
 }
+.garage-card .preview .tier-chip {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  font-size: calc(var(--ui) * 0.75);
+  font-weight: 900;
+  letter-spacing: 1px;
+  border-radius: 3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
 .garage-card b, .track-card b {
   font-size: calc(var(--ui) * 1.2);
+  letter-spacing: 1px;
 }
 .garage-card .stats {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 2px;
+  gap: 3px;
   font-size: calc(var(--ui) * 0.85);
   color: #cfe0ff;
 }
 .garage-card .stat-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: calc(var(--ui) * 2.6) 1fr auto;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
-.garage-card .stat-bar b { font-size: 10px; color: #93a8c8; min-width: 32px; }
+.garage-card .stat-bar b { font-size: calc(var(--ui) * 0.8); color: #93a8c8; }
 .garage-card .stat-bar i {
-  flex: 1;
   height: calc(var(--ui) * 0.4);
   background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
@@ -1768,6 +1782,43 @@ body,
   position: absolute;
   inset: 0 var(--gap, 50%) 0 0;
   background: linear-gradient(90deg, #26f0ff, #ffe24a);
+}
+.garage-card .stat-bar u {
+  font-size: calc(var(--ui) * 0.8);
+  color: #ffe35a;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  min-width: calc(var(--ui) * 2.4);
+  text-align: right;
+}
+.garage-card .badge-owned {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-top: 2px;
+  font-size: calc(var(--ui) * 0.8);
+  color: #5cf2a4;
+  background: rgba(92, 242, 164, 0.12);
+  border: 1px solid rgba(92, 242, 164, 0.4);
+  border-radius: 3px;
+  letter-spacing: 1px;
+  width: max-content;
+}
+.garage-card.selected .badge-owned {
+  color: #ffd31a;
+  background: rgba(255, 211, 26, 0.18);
+  border-color: rgba(255, 211, 26, 0.5);
+}
+.garage-card .badge-lock {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-top: 2px;
+  font-size: calc(var(--ui) * 0.8);
+  color: #ffd31a;
+  background: rgba(255, 211, 26, 0.1);
+  border: 1px solid rgba(255, 211, 26, 0.35);
+  border-radius: 3px;
+  letter-spacing: 1px;
+  width: max-content;
 }
 
 /* race-start countdown */

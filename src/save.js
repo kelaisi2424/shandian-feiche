@@ -4,6 +4,18 @@
 
 const KEY = "shandian-feiche.save.v1"
 
+// Legacy ids from before the no-logo GLB pack landed. load() rewrites
+// these to the closest current car so existing players don't get a save
+// pointing at a car asset that no longer exists.
+const LEGACY_CAR_MAP = {
+  sport: "lightning_s1",
+  future: "phantom_x",
+  sedan: "blaze_r"
+}
+const VALID_CAR_IDS = new Set([
+  "lightning_s1", "nova_gt", "phantom_x", "blaze_r", "vortex_rs", "shadow_zx"
+])
+
 const DEFAULT = {
   // economy
   coins: 0,
@@ -12,9 +24,9 @@ const DEFAULT = {
   totalRaces: 0,
   bestTimeMs: null,         // best lap on track #0 by car #0
   bestTimePerTrack: {},     // { [trackId]: { ms, carId } }
-  unlockedCars: ["sport"],     // sport, future, sedan
-  unlockedTracks: ["neon"],    // sky, sunset, neon — default to neon night for the cinematic look
-  selectedCar: "sport",
+  unlockedCars: ["lightning_s1"],     // 6 cars total — others unlock with coins
+  unlockedTracks: ["neon"],           // sky, sunset, neon — neon default for cinematic look
+  selectedCar: "lightning_s1",
   selectedTrack: "neon",
   leaderboard: [],          // [{trackId, carId, ms, coins, hits, at}], top 10 by ms
   // engagement
@@ -44,6 +56,28 @@ function deepMerge(target, src) {
   return target
 }
 
+function migrateLegacyCarIds(s) {
+  // remap selectedCar
+  if (LEGACY_CAR_MAP[s.selectedCar]) {
+    s.selectedCar = LEGACY_CAR_MAP[s.selectedCar]
+  } else if (!VALID_CAR_IDS.has(s.selectedCar)) {
+    s.selectedCar = "lightning_s1"
+  }
+  // remap unlockedCars (preserve set semantics — no duplicates)
+  if (Array.isArray(s.unlockedCars)) {
+    const next = new Set()
+    for (const id of s.unlockedCars) {
+      const mapped = LEGACY_CAR_MAP[id] ?? id
+      if (VALID_CAR_IDS.has(mapped)) next.add(mapped)
+    }
+    next.add("lightning_s1")   // always own the starter car
+    s.unlockedCars = Array.from(next)
+  } else {
+    s.unlockedCars = ["lightning_s1"]
+  }
+  return s
+}
+
 function load() {
   if (cache) return cache
   try {
@@ -52,6 +86,7 @@ function load() {
   } catch {
     cache = { ...DEFAULT, settings: { ...DEFAULT.settings } }
   }
+  cache = migrateLegacyCarIds(cache)
   return cache
 }
 
