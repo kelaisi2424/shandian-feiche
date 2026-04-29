@@ -448,11 +448,69 @@ async function init() {
     setTimeout(() => {
       $("splash").classList.remove("active", "fade-out")
       setMode("menu")
-      maybeShowDailyBonus()
+      // demo / autopilot URL: ?demo=1 — for screen-recording the vertical
+      // slice. Skips dailies, swaps to NOVA GT, runs the lv1 race with
+      // automatic nitro pulses. Otherwise show the normal daily prompt.
+      if (new URLSearchParams(location.search).get("demo") === "1") {
+        runDemoSequence()
+      } else {
+        maybeShowDailyBonus()
+      }
     }, 600)
   }, 350)
 
   requestAnimationFrame(loop)
+}
+
+// Autopilot for the lv1 vertical slice (URL flag ?demo=1). Drives the
+// menu → garage → race → nitro → result flow on timers so a 30-40s screen
+// recording captures the full pitch. No UI changes — just sequenced clicks
+// and a couple of programmatic fireNitro() calls during the race.
+function runDemoSequence() {
+  const at = (ms, fn) => setTimeout(() => { try { fn() } catch (_) {} }, ms)
+  // Quietly dismiss any blocking modals (privacy / daily) if present
+  at(200, () => $("privacyAckBtn") && document.querySelector("#privacyScreen.active") && $("privacyAckBtn").click())
+  at(500, () => $("dailyClaimBtn") && document.querySelector("#dailyScreen.active") && $("dailyClaimBtn").click())
+  // 1) brief menu shot, then open the garage
+  at(2500, () => $("garageTile").click())
+  // 2) try to switch to NOVA GT (the second card). If locked, force-unlock
+  //    via Save so the demo can still showcase a car switch.
+  at(4200, () => {
+    Save.unlockCar("nova_gt")
+    Save.set({ selectedCar: "nova_gt" })
+    rebuildPlayerCar()
+    // re-render the garage so the highlight moves
+    if (typeof openGarage === "function") openGarage()
+  })
+  // 3) close garage
+  at(6000, () => $("garageCloseBtn").click())
+  // 4) start race
+  at(7200, () => $("startGame").click())
+  // 5) during race: fire nitro at the right moments and steer to dodge the
+  //    two cone clusters (lv1 places them at 32% and 68% of track length,
+  //    on lanes -2 and +2 respectively). This produces a clean run that
+  //    shows nitro FX, overtakes, and reaches the finish for the result.
+  let nitro1 = false
+  let nitro2 = false
+  const pulse = setInterval(() => {
+    if (state.mode === "result") { clearInterval(pulse); state.steer = 0; return }
+    if (state.mode !== "playing") return
+    if (state.countdown > 0) return
+    const t = (performance.now() - state.startedAt - state.pauseAcc) / 1000
+    if (!nitro1 && t >= 5 && state.nitroCharges > 0) { fireNitro(); nitro1 = true }
+    if (!nitro2 && t >= 20 && state.nitroCharges > 0) { fireNitro(); nitro2 = true }
+    // dodge the cone clusters by steering opposite to their lane.
+    // cluster1 at 32% (lane -2) → steer right; cluster2 at 68% (lane +2) → steer left.
+    const len = Track.length || 2400
+    const p = state.progress
+    const c1 = len * 0.32
+    const c2 = len * 0.68
+    if (Math.abs(p - c1) < 50) state.steer = 0.55
+    else if (Math.abs(p - c2) < 50) state.steer = -0.55
+    else state.steer = 0
+  }, 80)
+  // failsafe — stop the poller after 90s no matter what
+  setTimeout(() => clearInterval(pulse), 90000)
 }
 
 // ────────────────────────────────────────────────────────────────────
