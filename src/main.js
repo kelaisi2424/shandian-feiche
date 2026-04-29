@@ -1234,22 +1234,27 @@ function buildScenery() {
     sceneryAdd(board)
   }
 
-  // ─── distant city silhouettes (only on night track, lots of skyscraper bars) ───
-  if (isNight) {
-    for (let i = 0; i < 40; i++) {
-      const sd = i % 2 ? -1 : 1
-      const s = 30 + i * 60
-      if (s >= Track.length) break
-      const dist = 60 + (i % 5) * 16
-      const h = 18 + (i * 7) % 32
-      const w = 8 + (i % 4) * 3
-      const buildings = makeCityBlock(w, h, i)
-      const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + dist), 0)
-      buildings.position.copy(pos)
-      const tan = progressTangent(s).clone()
-      buildings.lookAt(pos.clone().add(tan))
-      sceneryAdd(buildings)
-    }
+  // ─── city silhouettes on BOTH sides of every track ──────────────────
+  // Cyberpunk-style buildings unify with the main-menu art direction.
+  // Night tracks get a denser skyline (skipping the offset turbines),
+  // daytime tracks still get a respectable line of glowing-window towers
+  // a little further from the road so the racing surface stays readable.
+  const cityCount = isNight ? 44 : 28
+  const baseDist = isNight ? 60 : 75
+  for (let i = 0; i < cityCount; i++) {
+    const sd = i % 2 ? -1 : 1
+    const s = 30 + i * (isNight ? 56 : 78)
+    if (s >= Track.length) break
+    // jitter distance + height so the skyline doesn't read as a rhythmic ladder
+    const dist = baseDist + (i % 5) * 18 + (sd > 0 ? 6 : 0)
+    const h = 18 + (i * 7) % 38
+    const w = 8 + (i % 4) * 3
+    const buildings = makeCityBlock(w, h, i)
+    const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + dist), 0)
+    buildings.position.copy(pos)
+    const tan = progressTangent(s).clone()
+    buildings.lookAt(pos.clone().add(tan))
+    sceneryAdd(buildings)
   }
 
   // turbines + trusses placed along the curve: every ~80m, alternating sides,
