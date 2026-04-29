@@ -181,9 +181,10 @@ body.gate-dismissed .rotate-gate {
   pointer-events: none !important;
   visibility: hidden !important;
 }
-/* In portrait we hide the game shell behind the gate — UNLESS the user has
- * tapped "我知道了". After that we render a rotated-shim landscape view so
- * WeChat iOS users (where orientation lock is a no-op) can still play. */
+/* In portrait, the gate covers the game until the user taps "我知道了".
+ * After dismissal the gate hides and the game renders into the actual
+ * portrait viewport at whatever scale fits — small but interactive, so
+ * users on browsers that won't rotate (WeChat iOS) are never stuck. */
 body.is-portrait:not(.gate-dismissed) #game,
 body.is-portrait:not(.gate-dismissed) #app.stage,
 body.is-portrait:not(.gate-dismissed) .screen-fx,
@@ -204,36 +205,6 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate {
   body:not(.is-landscape):not(.gate-dismissed) .rotate-gate {
     display: flex;
   }
-}
-
-/* ---- portrait rotated-shim ----
- * Triggered when the user dismisses the gate while the device is still
- * portrait (iOS WeChat in particular refuses to rotate the page). We
- * CSS-rotate the canvas + stage 90deg CW so a landscape design fills the
- * portrait viewport. resize()/setStageScale()/canvas swipe handler in
- * main.js read body.gate-dismissed.is-portrait and use swapped dims to
- * keep the WebGL aspect ratio and touch input consistent. */
-body.gate-dismissed.is-portrait #game {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 100vh;
-  height: 100vw;
-  transform: translate(-50%, -50%) rotate(90deg);
-  transform-origin: center center;
-}
-body.gate-dismissed.is-portrait #app.stage {
-  transform: translate(-50%, -50%) rotate(90deg) scale(var(--stage-scale));
-}
-body.gate-dismissed.is-portrait .screen-fx,
-body.gate-dismissed.is-portrait .speed-lines {
-  width: 100vh;
-  height: 100vw;
-  top: 50%;
-  left: 50%;
-  inset: auto;
-  transform: translate(-50%, -50%) rotate(90deg);
-  transform-origin: center center;
 }
 
 /* ---- title bar at top of screen (像截图里的窗口) ---- */

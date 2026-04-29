@@ -2302,13 +2302,9 @@ function bindCanvasGestures() {
   canvas.addEventListener("pointermove", (e) => {
     if (!active || state.mode !== "playing") return
     e.preventDefault()
-    // In the portrait rotated-shim mode the canvas is CSS-rotated 90deg CW,
-    // so the game's "right" appears at the bottom of the viewport. A
-    // downward viewport swipe must map to a rightward in-game steer.
-    const rot = isRotatedPortrait()
-    const drag = rot ? (e.clientY - startY) : (e.clientX - startX)
-    const span = rot ? innerHeight : innerWidth
-    const norm = clamp(drag / (span * 0.18), -1, 1)
+    const dx = e.clientX - startX
+    // map horizontal drag distance to steer amount, normalised by viewport width
+    const norm = clamp(dx / (innerWidth * 0.18), -1, 1)
     state.steer = norm
   })
 
@@ -3622,40 +3618,28 @@ function updateParticles(dt) {
   }
 }
 
-// `body.gate-dismissed.is-portrait` puts the page into a rotated-shim mode:
-// the canvas + stage are CSS-rotated 90deg so a landscape game can render
-// onto a portrait viewport (WeChat iOS in particular refuses to rotate).
-// In that mode the WebGL backbuffer + stage scale must use swapped
-// dimensions to fill the rotated box.
-function isRotatedPortrait() {
-  const b = document.body
-  return !!(b && b.classList.contains("gate-dismissed") && b.classList.contains("is-portrait"))
-}
-
 function resize() {
-  const rot = isRotatedPortrait()
-  const w = rot ? innerHeight : innerWidth
-  const h = rot ? innerWidth : innerHeight
-  camera.aspect = w / h
-  camera.fov = w > h ? 60 : 70
+  camera.aspect = innerWidth / innerHeight
+  camera.fov = innerWidth > innerHeight ? 60 : 70
   camera.updateProjectionMatrix()
-  renderer.setSize(w, h)
-  if (composer) composer.setSize(w, h)
-  if (bloomPass) bloomPass.setSize(w, h)
+  renderer.setSize(innerWidth, innerHeight)
+  if (composer) composer.setSize(innerWidth, innerHeight)
+  if (bloomPass) bloomPass.setSize(innerWidth, innerHeight)
 }
 
 // Compute the uniform scale that fits the 1920×1080 design stage into the
-// current landscape viewport. CSS pulls --stage-scale and applies it via
+// current viewport. CSS pulls --stage-scale and applies it via
 // transform: scale(...). Internal layout never reflows — only the wrapper
-// scales, so the same composition reads at every device size.
+// scales, so the same composition reads at every device size. In portrait
+// the scale is small (game is shown shrunken in the centre) — that's the
+// fallback path for users on browsers that won't rotate.
 function setStageScale() {
   const stage = document.getElementById("app")
   if (!stage) return
   const designW = 1920
   const designH = 1080
-  const rot = isRotatedPortrait()
-  const vw = rot ? window.innerHeight : window.innerWidth
-  const vh = rot ? window.innerWidth : window.innerHeight
+  const vw = window.innerWidth
+  const vh = window.innerHeight
   const scale = Math.min(vw / designW, vh / designH)
   // round to 4 decimals to keep CSS tidy and avoid sub-pixel jitter
   document.documentElement.style.setProperty("--stage-scale", scale.toFixed(4))
