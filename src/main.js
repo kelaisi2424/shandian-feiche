@@ -435,7 +435,10 @@ async function init() {
   bindAudioUnlock()
   refreshCurrencyHud()
   applyQuality()
-  addEventListener("resize", resize)
+  setStageScale()
+  bindRotateGate()
+  addEventListener("resize", () => { resize(); setStageScale() })
+  addEventListener("orientationchange", () => { setStageScale(); setTimeout(setStageScale, 250) })
   // expose for debugging
   window.__state = state
   window.__Track = Track
@@ -3596,6 +3599,45 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight)
   if (composer) composer.setSize(innerWidth, innerHeight)
   if (bloomPass) bloomPass.setSize(innerWidth, innerHeight)
+}
+
+// Compute the uniform scale that fits the 1920×1080 design stage into the
+// current landscape viewport. CSS pulls --stage-scale and applies it via
+// transform: scale(...). Internal layout never reflows — only the wrapper
+// scales, so the same composition reads at every device size.
+function setStageScale() {
+  const stage = document.getElementById("app")
+  if (!stage) return
+  const designW = 1920
+  const designH = 1080
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const scale = Math.min(vw / designW, vh / designH)
+  // round to 4 decimals to keep CSS tidy and avoid sub-pixel jitter
+  document.documentElement.style.setProperty("--stage-scale", scale.toFixed(4))
+}
+
+// Wire the rotate-gate's "我知道了" button. Clicking it tries the modern
+// orientation-lock API (Android Chrome supports this in fullscreen); on
+// other browsers it just toasts a friendly "rotate the device" hint, since
+// the CSS media query auto-switches once the user actually rotates.
+function bindRotateGate() {
+  const btn = document.getElementById("rotateAck")
+  if (!btn) return
+  btn.addEventListener("click", async () => {
+    btn.blur()
+    try {
+      // Some browsers require fullscreen first
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen().catch(() => {})
+      }
+      if (screen.orientation && typeof screen.orientation.lock === "function") {
+        await screen.orientation.lock("landscape").catch(() => {})
+      }
+    } catch (_) {
+      // ignore — user just needs to rotate the device manually
+    }
+  })
 }
 
 // register service worker (PWA offline cache)

@@ -12,9 +12,14 @@
     <title>闪电飞车 Lightning Racer</title>
   </head>
   <body>
-    <div id="app">
-      <canvas id="game"></canvas>
+    <!-- 3D scene canvas: lives at viewport pixels, never transformed.
+         Hidden when the device is in portrait (rotate-gate takes over). -->
+    <canvas id="game"></canvas>
 
+    <!-- Game shell: fixed 1920x1080 design stage that scales as one unit
+         to fit the landscape viewport. No internal layout responds to the
+         device — only the stage itself scales. -->
+    <div id="app" class="stage">
       <header class="window-frame">
         <span class="frame-corner">▮</span>
         <h1 class="frame-title">闪电飞车</h1>
@@ -25,11 +30,6 @@
           <span title="record">⊙</span>
         </nav>
       </header>
-
-      <div class="rotate-tip">
-        <strong>请横屏试玩</strong>
-        <span>横屏后画面和按钮会更接近原游戏。</span>
-      </div>
 
       <section id="splash" class="screen splash-screen active">
         <div class="splash-logo">
@@ -255,9 +255,6 @@
           <span class="mini-finish"></span>
           <span class="mini-dot mini-player" id="miniPlayer"></span>
         </div>
-
-        <div class="screen-fx" id="screenFx" aria-hidden="true"></div>
-        <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
       </section>
 
       <section id="pauseScreen" class="screen overlay-screen">
@@ -395,6 +392,27 @@
           <button id="privacyAckBtn" class="primary">我同意</button>
         </div>
       </section>
+    </div>
+
+    <!-- Visual FX overlays live OUTSIDE the stage so their position:fixed
+         actually covers the viewport (not the scaled stage's local box).
+         They sit between the 3D canvas and the stage UI in z-order. -->
+    <div class="screen-fx" id="screenFx" aria-hidden="true"></div>
+    <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
+
+    <!-- Portrait gate: in portrait the entire #app stage + 3D canvas are
+         hidden, and ONLY this card is rendered. Hard-toggled by the
+         orientation media query in styles.css — never coexists with
+         the game shell in the same render. -->
+    <div id="rotateGate" class="rotate-gate" aria-hidden="true">
+      <div class="rotate-bg" aria-hidden="true"></div>
+      <div class="rotate-card">
+        <span class="rotate-bolt">⚡</span>
+        <h1>闪电飞车</h1>
+        <p class="rotate-tagline">LIGHTNING RACER</p>
+        <p class="rotate-hint">请横屏试玩<br/>横屏后画面和按钮会更接近原游戏</p>
+        <button id="rotateAck" class="primary">我知道了</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
