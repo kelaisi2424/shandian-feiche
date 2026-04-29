@@ -850,7 +850,9 @@ function tintAsset(asset, color, accent) {
 // sky / scenery
 // ────────────────────────────────────────────────────────────────────
 function buildSky() {
-  // gradient backdrop dome
+  // Sunset gradient backdrop dome — deep blue zenith fades through orange
+  // and amber to a pale yellow horizon. Same dome is reused across all
+  // tracks; per-track moods come from scene fog/lighting in applyTrack.
   const geo = new THREE.SphereGeometry(900, 32, 16)
   const tex = (() => {
     const c = document.createElement("canvas")
@@ -858,10 +860,11 @@ function buildSky() {
     c.height = 256
     const g = c.getContext("2d")
     const grd = g.createLinearGradient(0, 0, 0, 256)
-    grd.addColorStop(0, "#9ed3f6")
-    grd.addColorStop(0.55, "#cce8fc")
-    grd.addColorStop(0.9, "#e0f1ff")
-    grd.addColorStop(1, "#f3f9ff")
+    grd.addColorStop(0.00, "#0f1846")  // deep night-blue zenith
+    grd.addColorStop(0.30, "#3a2f8a")  // dusty violet
+    grd.addColorStop(0.55, "#ff6b3d")  // hot orange band
+    grd.addColorStop(0.78, "#ffb04a")  // amber
+    grd.addColorStop(1.00, "#ffe17a")  // pale yellow at horizon
     g.fillStyle = grd
     g.fillRect(0, 0, 16, 256)
     const t = new THREE.CanvasTexture(c)
@@ -871,7 +874,7 @@ function buildSky() {
   const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false }))
   scene.add(dome)
 
-  // a few drifting clouds
+  // a few drifting clouds — warm-tinted to read against the sunset sky
   for (let i = 0; i < 24; i++) {
     const cl = makeCloud()
     cl.position.set(rand(-260, 260), rand(40, 90), rand(-1200, 200))
@@ -882,7 +885,8 @@ function buildSky() {
 
 function makeCloud() {
   const g = new THREE.Group()
-  const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false })
+  // warm peach tint picks up sunset lighting from the dome behind
+  const m = new THREE.MeshBasicMaterial({ color: 0xffd8b0, transparent: true, opacity: 0.78, fog: false })
   for (const [x, y, s] of [[-1.4, 0, 1.1], [-0.3, 0.3, 1.4], [0.9, 0.05, 1], [1.7, -0.05, 0.75]]) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(s, 14, 10), m)
     b.position.set(x, y, 0)
