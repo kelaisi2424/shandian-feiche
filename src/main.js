@@ -2821,6 +2821,48 @@ function checkAchievements(run = {}) {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────
+// first-play tutorial hints
+// ────────────────────────────────────────────────────────────────────
+let _tutorialHideTimer = null
+// Show a tutorial hint overlay once per save (keyed by `key`). Auto-fades
+// after `duration` ms. The overlay lives at index.html / styles.css —
+// this helper just toggles `.visible` and swaps text.
+function showTutorialHint(key, text, duration = 2200) {
+  if (Save.hasSeenTutorial(key)) return
+  const el = $("tutorialHint")
+  const txt = $("tutorialHintText")
+  if (!el || !txt) return
+  txt.textContent = text
+  el.classList.add("visible")
+  Save.markTutorialSeen(key)
+  clearTimeout(_tutorialHideTimer)
+  _tutorialHideTimer = setTimeout(() => el.classList.remove("visible"), duration)
+}
+
+// Coarse phone vs desktop split — drives the wording of the steering
+// hint (arrows on PC, swipe on phone).
+function isTouchDevice() {
+  return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0)
+}
+
+// First-play race intro: shown on the first launch of lv1. Three staged
+// hints at start / first coin / first nitro pickup.
+function maybeShowRaceIntroHints() {
+  const lvl = state.level
+  if (!lvl || lvl.id !== "lv1") return
+  if (Save.hasSeenTutorial("intro_steer")) return
+  // Steering hint 600ms after countdown shows so the player can read it
+  // before the green light hits.
+  setTimeout(() => {
+    showTutorialHint(
+      "intro_steer",
+      isTouchDevice() ? "左右滑动转向，避开障碍" : "← → 左右转向避开障碍",
+      3000
+    )
+  }, 600)
+}
+
 function openMissions() {
   // Refresh — accomplishments may have unlocked between visits
   checkAchievements()
@@ -3132,6 +3174,7 @@ function startRace() {
   setMode("playing")
   runCountdown()
   maybeShowTutorial()
+  maybeShowRaceIntroHints()
 }
 
 // 3-2-1-GO! sequence: red lights tick down, green flashes, controls unlock.
@@ -3678,6 +3721,7 @@ function updatePickups(dt, now) {
         state.coins++
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffd23a, 10)
         sfxCoin()
+        showTutorialHint("intro_coin", "收集金币解锁新赛车 🪙", 1800)
       } else if (p.type === "nitro") {
         p.taken = true
         p.mesh.visible = false
@@ -3685,6 +3729,9 @@ function updatePickups(dt, now) {
         toast("氮气 +1", 800)
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffe45a, 18)
         sfxCoin()
+        showTutorialHint("intro_nitro",
+          isTouchDevice() ? "双击屏幕或点击 ⚡ 使用氮气加速" : "按空格使用氮气加速 ⚡",
+          2200)
       } else if (p.type === "hazard" && state.nitroTime <= 0) {
         p.taken = true
         p.mesh.visible = false
