@@ -1272,13 +1272,18 @@ function buildTrack() {
     }
   }
 
-  // big start-line zebra stripe + periodic narrower stripes
+  // big start-line zebra stripe + periodic narrower stripes.
+  // Periodic stripes used to be #1392ff bright sky-blue plates 9.6m
+  // wide × 1.2m deep every 64m — at low view angle they tiled across
+  // the camera and made the entire road LOOK pale blue. Now subtle
+  // dark accents that blend with the asphalt; the start line stays
+  // bright cyan so it reads as a finishable / ceremonial marker.
   for (let s = 6; s < Track.length; s += 64) {
     const isStart = s === 6
     const wide = isStart ? 3.4 : 1.2
     const stripeMat = isStart
-      ? new THREE.MeshStandardMaterial({ color: 0x1392ff, emissive: 0x0a4a8a, emissiveIntensity: 0.18, roughness: 0.35 })
-      : new THREE.MeshStandardMaterial({ color: 0x1392ff, roughness: 0.4 })
+      ? new THREE.MeshStandardMaterial({ color: 0x26d6ff, emissive: 0x0a4a8a, emissiveIntensity: 0.35, roughness: 0.35 })
+      : new THREE.MeshStandardMaterial({ color: 0x2a3a52, roughness: 0.85 })
     const center = progressToWorld(s, 0, 0.21)
     const tan = progressTangent(s).clone()
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(laneHalf * 2 - 0.4, 0.06, wide), stripeMat)
@@ -1475,9 +1480,13 @@ function buildScenery() {
   }
   const sceneryAdd = (obj) => { obj.userData.isScenery = true; world.add(obj) }
   // ground far below the road (so the track feels suspended in the sky)
+  // Ground plane 60u below the track. Was sky-blue #4d8bc4 — when the
+  // camera looked at the horizon it produced a pale blue band that
+  // overlapped the road silhouette and bled a "light blue road" feel.
+  // Now dark slate so it disappears into the dusk fog.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(4400, 4400),
-    new THREE.MeshStandardMaterial({ color: 0x4d8bc4, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0x121828, roughness: 0.95 })
   )
   ground.rotation.x = -Math.PI / 2
   ground.position.set(0, -60, -Track ? -Track.length / 2 : -700)
