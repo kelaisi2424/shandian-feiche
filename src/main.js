@@ -3611,9 +3611,17 @@ function updateCamera(dt) {
   state._gasPull = lerp(state._gasPull ?? 0, state.gas ? 1 : 0, dt * 3)
   const accelPull = state._gasPull * 1.4
   const baseBack = wide ? 11 : 13
-  const back = baseBack + speedRatio * 2.5 + accelPull + (state.nitroTime > 0 ? 2.4 : 0)
-  const high = (wide ? 4.6 : 5.4) + speedRatio * 0.4
-  const camProgress = clamp(state.progress - back, 0, Track.length)
+  // Nitro snap: short-lived punch-IN (close camera) + recoil-out as it ends.
+  // state.nitroTime starts at CFG.nitroDuration and decays to 0; convert to
+  // a 0..1 phase that's 1 at the very start of nitro and decays to 0.
+  const nitroPhase = state.nitroTime > 0 ? state.nitroTime / Math.max(0.01, CFG.nitroDuration ?? 2.4) : 0
+  const nitroPunch = nitroPhase > 0.7 ? (nitroPhase - 0.7) / 0.3 : 0   // 0..1 in first ~30%
+  const back = baseBack + speedRatio * 2.5 + accelPull + (state.nitroTime > 0 ? 2.4 : 0) - nitroPunch * 2.6
+  // High speed → camera lowers slightly (more pressure / hood-cam vibe).
+  // Airborne → camera pulls a bit higher + further back for the cinematic.
+  const airBoost = state.airborne ? 1.6 : 0
+  const high = (wide ? 4.6 : 5.4) + speedRatio * 0.4 - speedRatio * 0.5 + airBoost
+  const camProgress = clamp(state.progress - back - airBoost * 1.4, 0, Track.length)
   const lookProgress = clamp(state.progress + 22 + speedRatio * 8, 0, Track.length)
   const camWorld = progressToWorld(camProgress, state.lateral * 0.55 - state.steerVisual * 0.6, state.y + high)
   const lookWorld = progressToWorld(lookProgress, state.lateral * 0.4, state.y + 1.1)
@@ -3632,6 +3640,10 @@ function updateCamera(dt) {
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
+  // Subtle roll on turns: tilts the camera 0.5–1° into the direction the
+  // car is steering. Smoothed via state._cameraRoll so it doesn't snap.
+  state._cameraRoll = lerp(state._cameraRoll ?? 0, -state.steerVisual * 0.018, dt * 4)
+  camera.rotateZ(state._cameraRoll)
 
   // FOV bands by spec: <200 km/h → 60, 200–280 → 60→72 lerp, nitro → 80.
   // Portrait gets +10 across the board so the same scene reads correctly
