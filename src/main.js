@@ -192,7 +192,8 @@ const track = new THREE.Group()
 const world = new THREE.Group()
 const dynamic = new THREE.Group()
 const particles = new THREE.Group()
-let player, playerBody, nitroPlume, headlight
+let player, playerBody, nitroPlume, headlight, skyDome
+let rainGroup = null            // per-level rain effect, only used by lv5
 let rivals = []
 let pickups = []
 let ramps = []
@@ -951,30 +952,66 @@ function tintAsset(asset, color, accent) {
 // ────────────────────────────────────────────────────────────────────
 // sky / scenery
 // ────────────────────────────────────────────────────────────────────
+// Make a sky-dome texture from a list of [stop, hex] pairs. Used once at
+// init for the default mood and again when applyTrack swaps the palette
+// per level (sunset / noon / overcast / neon / midnight rain).
+function makeSkyTexture(stops) {
+  const c = document.createElement("canvas")
+  c.width = 16
+  c.height = 256
+  const g = c.getContext("2d")
+  const grd = g.createLinearGradient(0, 0, 0, 256)
+  for (const [stop, hex] of stops) grd.addColorStop(stop, hex)
+  g.fillStyle = grd
+  g.fillRect(0, 0, 16, 256)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+// Per-level palette: gradient stops for the sky dome, fog colour, fog
+// near/far. applyTrack reads this and re-paints the dome on level change.
+const LEVEL_SKY = {
+  lv1: {
+    label: "sunset",
+    stops: [[0.00, "#0f1846"], [0.30, "#3a2f8a"], [0.55, "#ff6b3d"], [0.78, "#ffb04a"], [1.00, "#ffe17a"]],
+    fog: [0xff8a55, 220, 760],
+    cloud: 0xffd8b0
+  },
+  lv2: {
+    label: "noon",
+    stops: [[0.00, "#3b8de8"], [0.45, "#7fc1f4"], [0.85, "#cdeafd"], [1.00, "#f4faff"]],
+    fog: [0xb6dcfc, 280, 880],
+    cloud: 0xffffff
+  },
+  lv3: {
+    label: "overcast",
+    stops: [[0.00, "#3a4458"], [0.45, "#5a6478"], [0.85, "#8a94a8"], [1.00, "#b0bac8"]],
+    fog: [0x8a94a8, 180, 620],
+    cloud: 0xc8d0d8
+  },
+  lv4: {
+    label: "neon-purple",
+    stops: [[0.00, "#1a0a3a"], [0.45, "#5e1ea2"], [0.75, "#b24aff"], [1.00, "#ff7adf"]],
+    fog: [0x5e1ea2, 160, 560],
+    cloud: 0xc8a4ff
+  },
+  lv5: {
+    label: "midnight-rain",
+    stops: [[0.00, "#020410"], [0.55, "#08142a"], [1.00, "#1a2540"]],
+    fog: [0x040814, 90, 380],
+    cloud: 0x3a4860
+  }
+}
+
 function buildSky() {
-  // Sunset gradient backdrop dome — deep blue zenith fades through orange
-  // and amber to a pale yellow horizon. Same dome is reused across all
-  // tracks; per-track moods come from scene fog/lighting in applyTrack.
+  // Default backdrop is the lv1 sunset palette — applyTrack swaps it once
+  // a level loads. Reused across the 5 tracks via texture replacement.
   const geo = new THREE.SphereGeometry(900, 32, 16)
-  const tex = (() => {
-    const c = document.createElement("canvas")
-    c.width = 16
-    c.height = 256
-    const g = c.getContext("2d")
-    const grd = g.createLinearGradient(0, 0, 0, 256)
-    grd.addColorStop(0.00, "#0f1846")  // deep night-blue zenith
-    grd.addColorStop(0.30, "#3a2f8a")  // dusty violet
-    grd.addColorStop(0.55, "#ff6b3d")  // hot orange band
-    grd.addColorStop(0.78, "#ffb04a")  // amber
-    grd.addColorStop(1.00, "#ffe17a")  // pale yellow at horizon
-    g.fillStyle = grd
-    g.fillRect(0, 0, 16, 256)
-    const t = new THREE.CanvasTexture(c)
-    t.colorSpace = THREE.SRGBColorSpace
-    return t
-  })()
+  const tex = makeSkyTexture(LEVEL_SKY.lv1.stops)
   const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false }))
   scene.add(dome)
+  skyDome = dome
 
   // a few drifting clouds — warm-tinted to read against the sunset sky
   for (let i = 0; i < 24; i++) {
@@ -1872,11 +1909,77 @@ function applyTrack() {
   const t = TRACKS[trackId] ?? TRACKS.sky
   scene.background = new THREE.Color(t.sky)
   scene.fog = new THREE.Fog(t.fog[0], t.fog[1], t.fog[2])
+
+  // Per-level sky theme override — repaints the dome and fog so each
+  // level feels distinct. Falls through to TRACKS data if the level
+  // isn't in LEVEL_SKY.
+  const palette = LEVEL_SKY[lvl?.id]
+  if (palette && skyDome) {
+    const oldMap = skyDome.material.map
+    skyDome.material.map = makeSkyTexture(palette.stops)
+    skyDome.material.needsUpdate = true
+    if (oldMap?.dispose) oldMap.dispose()
+    scene.fog = new THREE.Fog(palette.fog[0], palette.fog[1], palette.fog[2])
+    scene.background = new THREE.Color(palette.fog[0])
+  }
+
   // wet-night look for level 5: tint the fog darker + hint of teal so the
   // road's specular highlights read as water reflection.
   if (lvl?.rainShader) {
     scene.fog = new THREE.Fog(0x0a1428, 90, 380)
     scene.background = new THREE.Color(0x040814)
+  }
+
+  // Rain particles only exist on lv5 — clear them otherwise so leaving
+  // the wet-chase track returns to a dry race.
+  setRainEnabled(!!lvl?.rainShader)
+}
+
+// Build (or tear down) the falling-rain particle system. 320 short
+// streaks looping vertically near the camera, depth-limited so the
+// effect doesn't try to fill the whole 2000m+ track.
+function setRainEnabled(on) {
+  if (on && !rainGroup) {
+    rainGroup = new THREE.Group()
+    const mat = new THREE.LineBasicMaterial({ color: 0xa8c8ff, transparent: true, opacity: 0.55 })
+    for (let i = 0; i < 320; i++) {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, -1.4, 0)
+      ])
+      const drop = new THREE.Line(geo, mat)
+      drop.userData.fall = 60 + Math.random() * 40
+      drop.position.set(
+        (Math.random() - 0.5) * 200,
+        Math.random() * 60 + 8,
+        (Math.random() - 0.5) * 200
+      )
+      rainGroup.add(drop)
+    }
+    scene.add(rainGroup)
+  } else if (!on && rainGroup) {
+    scene.remove(rainGroup)
+    rainGroup.traverse((o) => {
+      if (o.geometry) o.geometry.dispose()
+      if (o.material) o.material.dispose()
+    })
+    rainGroup = null
+  }
+}
+
+// Animate rain (called from animateScenery in real-time so slow-mo doesn't
+// freeze the storm). Drops fall at userData.fall units/sec; reset above
+// the camera when they hit the ground.
+function updateRain(dt) {
+  if (!rainGroup) return
+  const camY = camera?.position?.y ?? 4
+  for (const drop of rainGroup.children) {
+    drop.position.y -= drop.userData.fall * dt
+    if (drop.position.y < camY - 6) {
+      drop.position.y = camY + 30 + Math.random() * 20
+      drop.position.x = (camera?.position?.x ?? 0) + (Math.random() - 0.5) * 200
+      drop.position.z = (camera?.position?.z ?? 0) + (Math.random() - 0.5) * 200
+    }
   }
 }
 
@@ -3124,7 +3227,10 @@ function resumeRace() {
 function fireNitro() {
   if (state.mode !== "playing" || state.nitroCharges <= 0 || state.nitroTime > 0) return
   state.nitroCharges--
-  state.nitroTime = CFG.nitroDuration
+  // Lv4 (氮气挑战) extends nitro by 60% — fits the level fantasy of
+  // dragging long boost windows between checkpoints.
+  const dur = CFG.nitroDuration * (state.level?.id === "lv4" ? 1.6 : 1)
+  state.nitroTime = dur
   state.shake = 0.3
   // Saturation pop for ~600ms when nitro fires — colours pop brighter,
   // sells the throttle-mash. updateNitroSaturation eases this back out.
@@ -3931,6 +4037,7 @@ function animateScenery(dt, now) {
       obj.rotation.y += dt * 0.4
     }
   }
+  updateRain(dt)
 }
 
 // One streamy puff that drifts BACKWARD (positive z = away from player) and
