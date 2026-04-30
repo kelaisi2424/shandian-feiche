@@ -2456,6 +2456,12 @@ function addRival(cfg) {
   })
 }
 
+// Three discrete lanes the player must steer between. Coins, nitros,
+// and hazards all snap to one of these so the racing surface reads as
+// a 3-lane road and every pickup / obstacle requires a deliberate
+// lane change.
+const LANE_X = [-3.6, 0, 3.6]
+
 function spawnPickups() {
   pickups.forEach((p) => dynamic.remove(p.mesh))
   pickups = []
@@ -2465,43 +2471,44 @@ function spawnPickups() {
     spawnHeroPickups()
     return
   }
-  // pattern table: index of `pattern` mod 4 → coin row / nitro / coin / skip.
-  // For "nitroRich" levels (lv4) we flip the table so half the slots are
-  // nitro pickups instead of coin trios.
+  // Pattern: walk down the track at pickupGap steps, alternating which
+  // lane the pickup sits on. This forces the player to weave between
+  // -3.6 / 0 / +3.6 to chase coins instead of holding centre.
   const nitroRich = !!CFG.nitroRich
+  let laneIdx = 0
   for (let s = 40; s < Track.length - 40; s += CFG.pickupGap) {
-    const lane = Math.sin(s * 0.012) * 3.6
     const pattern = Math.floor(s / 100) % 4
     if (pattern === 3) continue
     const isNitroSlot = nitroRich ? pattern % 2 === 0 : pattern === 2
+    const lane = LANE_X[laneIdx % LANE_X.length]
+    laneIdx++
     if (isNitroSlot) {
       const m = makeNitroPickup()
       placeAlongTrack(m, s, lane, 1.9 - 0.22)
       dynamic.add(m)
       pickups.push({ mesh: m, progress: s, lateral: lane, type: "nitro", taken: false })
     } else {
-      for (const off of [-1.3, 0, 1.3]) {
-        const m = makeCoin()
-        const lat = clamp(lane + off, -CFG.playerHalfWidth, CFG.playerHalfWidth)
-        const prog = s + off * 1.2
-        placeAlongTrack(m, prog, lat, 2.0 - 0.22)
-        dynamic.add(m)
-        pickups.push({ mesh: m, progress: prog, lateral: lat, type: "coin", taken: false })
-      }
+      // Single coin on the chosen lane (was a 3-coin row spanning lanes,
+      // which made the centre lane cover everything by accident).
+      const m = makeCoin()
+      placeAlongTrack(m, s, lane, 2.0 - 0.22)
+      dynamic.add(m)
+      pickups.push({ mesh: m, progress: s, lateral: lane, type: "coin", taken: false })
     }
   }
-  // hazards: cones + barriers, spread evenly across the level.
-  // hazardCount=0 (tutorial / time-trial) skips this pass entirely.
+  // Hazards: snap to the lane that's NOT the upcoming pickup lane, so
+  // staying on a coin path naturally guides into a barrier cluster the
+  // player has to swerve out of.
   const hazardCount = CFG.hazardCount ?? 0
   if (hazardCount > 0) {
     const span = Track.length - 360
     for (let i = 0; i < hazardCount; i++) {
       const s = 240 + (span * i) / Math.max(1, hazardCount - 1)
       const m = makeHazard()
-      const lat = (Math.sin(s * 0.03) > 0 ? 1 : -1) * rand(2.4, 4.4)
-      placeAlongTrack(m, s, lat, 0.6 - 0.22)
+      const lane = LANE_X[(i + 1) % LANE_X.length]   // staggered vs coins
+      placeAlongTrack(m, s, lane, 0.6 - 0.22)
       dynamic.add(m)
-      pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
+      pickups.push({ mesh: m, progress: s, lateral: lane, type: "hazard", taken: false })
     }
   }
 }
@@ -2512,24 +2519,16 @@ function spawnPickups() {
 function spawnHeroPickups() {
   const lvl = state.level
   const len = Track.length
-  // ── coin trail (skip the immediate area around each hazard cluster
-  // so cones aren't sitting on top of coins) ──
-  const skipZones = (lvl.hazardClusters ?? []).map((c) => ({
-    from: len * c.at - 18,
-    to: len * c.at + 18
-  }))
-  const inSkip = (s) => skipZones.some((z) => s >= z.from && s <= z.to)
+  // ── coin trail: one coin per row, alternating across the 3 lanes so
+  // the player has to weave between -3.6 / 0 / +3.6 to chase them.
+  let laneIdx = 0
   for (let s = 40; s < len - 40; s += CFG.pickupGap) {
-    if (inSkip(s)) continue
-    const lane = Math.sin(s * 0.012) * 3.6
-    for (const off of [-1.3, 0, 1.3]) {
-      const m = makeCoin()
-      const lat = clamp(lane + off, -CFG.playerHalfWidth, CFG.playerHalfWidth)
-      const prog = s + off * 1.2
-      placeAlongTrack(m, prog, lat, 2.0 - 0.22)
-      dynamic.add(m)
-      pickups.push({ mesh: m, progress: prog, lateral: lat, type: "coin", taken: false })
-    }
+    const lane = LANE_X[laneIdx % LANE_X.length]
+    laneIdx++
+    const m = makeCoin()
+    placeAlongTrack(m, s, lane, 2.0 - 0.22)
+    dynamic.add(m)
+    pickups.push({ mesh: m, progress: s, lateral: lane, type: "coin", taken: false })
   }
   // ── nitro pickup(s) at the level's preferred fractions ──
   for (const at of (lvl.nitroAt ?? [0.5])) {
@@ -2539,18 +2538,17 @@ function spawnHeroPickups() {
     dynamic.add(m)
     pickups.push({ mesh: m, progress: s, lateral: 0, type: "nitro", taken: false })
   }
-  // ── cone clusters: each cluster = N cones in a short staggered line ──
-  for (const cluster of (lvl.hazardClusters ?? [])) {
-    const baseS = len * cluster.at
-    const baseLane = cluster.lane ?? 0
-    for (let i = 0; i < cluster.count; i++) {
-      const s = baseS + (i - (cluster.count - 1) / 2) * 6
-      const lat = baseLane + (i % 2 === 0 ? 0 : 0.8)
-      const m = makeHazard()
-      placeAlongTrack(m, s, lat, 0.6 - 0.22)
-      dynamic.add(m)
-      pickups.push({ mesh: m, progress: s, lateral: lat, type: "hazard", taken: false })
-    }
+  // ── hazards: every ~80m, cycling through a 5-lane pattern so the
+  // player can't hold any single line for long. Force-swerve gameplay.
+  const HAZ_PATTERN = [LANE_X[0], LANE_X[2], LANE_X[1], LANE_X[2], LANE_X[0]]
+  let h = 0
+  for (let s = 220; s < len - 80; s += 80) {
+    const lane = HAZ_PATTERN[h % HAZ_PATTERN.length]
+    h++
+    const m = makeHazard()
+    placeAlongTrack(m, s, lane, 0.6 - 0.22)
+    dynamic.add(m)
+    pickups.push({ mesh: m, progress: s, lateral: lane, type: "hazard", taken: false })
   }
 }
 
@@ -3948,9 +3946,12 @@ function updateRivals(dt, now) {
         toast("撞开对手！", 800)
       } else {
         state.hits++
-        state.speed *= 0.7              // -30% speed on collision
-        state.shake = 0.3               // 0.3s camera shake
-        state.flashUntil = now + 200    // 0.2s white car-flash
+        // Hard brake to 100 km/h then re-accel — the user actually
+        // FEELS the rival contact instead of a soft 30% nick.
+        state.speed = Math.min(state.speed, 100)
+        state.vy = Math.max(state.vy, 4)
+        state.shake = 0.5               // 0.5s shake
+        state.flashUntil = now + 250    // 0.25s white car-flash
         toast("被撞了！稳住", 900)
         flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -3974,7 +3975,11 @@ function updatePickups(dt, now) {
     }
     const dProg = Math.abs(p.progress - state.progress)
     const dLat = Math.abs(p.lateral - state.lateral)
-    if (dProg < 3.6 && dLat < 2.0) {
+    // Hazard hitbox is wider (visual car is ~5.5m wide post-scale-up); coins
+    // and nitros stay generous so they're easy to grab when you swerve.
+    const latHit = p.type === "hazard" ? 2.6 : 2.2
+    const progHit = p.type === "hazard" ? 4.4 : 3.6
+    if (dProg < progHit && dLat < latHit) {
       if (p.type === "coin") {
         p.taken = true
         p.mesh.visible = false
@@ -3996,12 +4001,15 @@ function updatePickups(dt, now) {
         p.taken = true
         p.mesh.visible = false
         state.hits++
-        state.speed *= 0.7              // -30% speed on hazard hit
-        state.shake = 0.3               // 0.3s camera shake
-        state.flashUntil = now + 200    // 0.2s white car-flash
+        // Bigger physical reaction: speed crashes to ~100 km/h regardless
+        // of current speed, then accelerates back up. Car bounces (vy kick).
+        state.speed = Math.min(state.speed, 100)
+        state.vy = Math.max(state.vy, 4)
+        state.shake = 0.5               // 0.5s camera shake
+        state.flashUntil = now + 250    // 0.25s white car-flash
         toast("撞到障碍！", 900)
         flashFx("impact")
-        sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 24)
+        sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 32)
         sfxImpact()
         if (state.hits >= CFG.hitLimit) finishRace(false)
       }
