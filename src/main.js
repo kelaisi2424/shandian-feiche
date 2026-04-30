@@ -2148,11 +2148,17 @@ function rebuildPlayerCar() {
   }
   const car = glbCar
     ?? makeProperCar({ body: cfg.body ?? 0x1872ff, accent: cfg.accent ?? 0x081530 })
-  // GLB nose points -Z natively → after lookAt(target+tan) the local -Z
-  // points toward the tangent target → we need the 180° flip to put the
-  // nose forward. makeProperCar already bakes this rotation in, so the
-  // flip is a harmless no-op there.
-  car.rotation.y = Math.PI
+  // V1.8.2: yaw offset comes from the car catalogue (cars.js modelYawOffset,
+  // default 0 = "use GLB natural facing"). The previous hard-coded
+  // `Math.PI` was applied here AND again per-frame at updateDriving's
+  // `playerBody.rotation.y = Math.PI - …`, stacking two 180° flips on top
+  // of player.lookAt(). Result was a car visually pointing backwards
+  // (body-forward · player-forward = −1.000 measured at runtime). Now
+  // the offset is applied once here, the per-frame line uses the cached
+  // value, and the GLB's actual nose direction sets the convention.
+  const _yaw = cfg.modelYawOffset ?? 0
+  car.rotation.y = _yaw
+  car.userData.modelYawOffset = _yaw
   if (cfg.body !== undefined) {
     recolorCar(car, { body: cfg.body, accent: cfg.accent })
   }
@@ -4323,7 +4329,13 @@ function updateDriving(dt, now) {
   player.rotation.x += -state.vy * 0.012 + (state.airborne ? 0.05 : 0)
   player.rotation.z += -state.steerVisual * 0.18
   if (playerBody) {
-    playerBody.rotation.y = Math.PI - state.steerVisual * 0.05
+    // V1.8.2: was `Math.PI - state.steerVisual * 0.05` — the hard-coded
+    // π was the second (per-frame) source of the visual-reversed-180°
+    // bug. The yaw offset now comes from the car catalogue, applied once
+    // at GLB load (rebuildPlayerCar) and stamped onto userData; this line
+    // just reads it back so the steering tilt still rides on top.
+    const yawBase = playerBody.userData.modelYawOffset ?? 0
+    playerBody.rotation.y = yawBase - state.steerVisual * 0.05
     const steerAngle = state.steerVisual * 0.45
     playerBody.userData.steeringPivots?.forEach((p) => { p.rotation.y = steerAngle })
     const wheelRadius = playerBody.userData.wheelRadius || 0.46

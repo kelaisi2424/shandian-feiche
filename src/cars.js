@@ -25,6 +25,11 @@ export const PLAYER_CARS = [
     // hero scale.
     asset: "race-future",
     modelScale: 1.0,
+    // V1.8.2: applied once when the GLB is loaded; no per-frame
+    // override. Default 0 = use the GLB's natural facing. Bump to
+    // Math.PI ONLY if a specific car ships with its nose pointing
+    // along +Z instead of the Three.js -Z convention.
+    modelYawOffset: 0,
     topSpeed: 248,
     accel0to100: 4.6,
     handling: 8.1,
@@ -41,6 +46,7 @@ export const PLAYER_CARS = [
     // mid-tier B-class fantasy.
     asset: "sedan-sports",
     modelScale: 1.0,
+    modelYawOffset: 0,
     topSpeed: 269,
     accel0to100: 3.9,
     handling: 8.4,
@@ -56,6 +62,7 @@ export const PLAYER_CARS = [
     // Kenney Car Kit "race" — classic supercar silhouette, A-tier hero.
     asset: "race",
     modelScale: 1.0,
+    modelYawOffset: 0,
     topSpeed: 292,
     accel0to100: 3.4,
     handling: 8.9,

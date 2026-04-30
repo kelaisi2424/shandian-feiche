@@ -49,6 +49,23 @@ export function runAudit(player, scene, camera) {
     issues.push(`OBSTACLE_FALLBACK_USED: ${fallbackCount} placeholders in scene (GLB load failed)`)
   }
 
+  // V1.8.2: visual facing sanity check. If the player car body's world
+  // -Z forward and the player Group's world -Z forward point in opposite
+  // directions, the GLB is rendering backwards. Catches the bug where
+  // two stacked 180° rotations leave the visual reversed.
+  if (player) {
+    let body = null
+    player.traverse((c) => { if (c.isMesh && c.name === "body") body = c })
+    if (body) {
+      const m = body.matrixWorld.elements
+      const pm = player.matrixWorld.elements
+      const blen = Math.sqrt(m[8] ** 2 + m[9] ** 2 + m[10] ** 2) || 1
+      const plen = Math.sqrt(pm[8] ** 2 + pm[9] ** 2 + pm[10] ** 2) || 1
+      const dot = ((-m[8]) * (-pm[8]) + (-m[9]) * (-pm[9]) + (-m[10]) * (-pm[10])) / (blen * plen)
+      if (dot < 0.9) issues.push(`VISUAL_FACING_REVERSED: dot=${dot.toFixed(3)}`)
+    }
+  }
+
   return issues
 }
 
@@ -101,4 +118,26 @@ if (typeof window !== "undefined") {
     }
     if (++_swapTries > 30) clearInterval(_swapTimer)
   }, 1000)
+
+  // V1.8.2: visual facing check (catches "car renders backwards" bugs).
+  // Body's world -Z vs player Group's world -Z. Dot ≈ +1 means aligned;
+  // dot ≈ -1 means the car is reversed 180°.
+  window.__facingCheck = () => {
+    const player = window.__player
+    if (!player) return "NO_PLAYER"
+    let body = null
+    player.traverse((c) => { if (c.isMesh && c.name === "body") body = c })
+    if (!body) return "NO_BODY_MESH"
+    const m = body.matrixWorld.elements
+    const pm = player.matrixWorld.elements
+    const blen = Math.sqrt(m[8] ** 2 + m[9] ** 2 + m[10] ** 2) || 1
+    const plen = Math.sqrt(pm[8] ** 2 + pm[9] ** 2 + pm[10] ** 2) || 1
+    const dot = ((-m[8]) * (-pm[8]) + (-m[9]) * (-pm[9]) + (-m[10]) * (-pm[10])) / (blen * plen)
+    const verdict = dot > 0.9 ? "✅ aligned" : dot < -0.9 ? "❌ REVERSED 180°" : "⚠️ misaligned"
+    console.log(
+      `%c[facingCheck] dot=${dot.toFixed(3)} ${verdict}`,
+      dot > 0.9 ? "color:#4ade80;font-weight:bold" : "color:#ef4444;font-weight:bold"
+    )
+    return { dot, verdict }
+  }
 }
