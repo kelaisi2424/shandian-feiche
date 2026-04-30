@@ -38,7 +38,7 @@ export const PLAYER_CARS = [
     accel0to100: 3.9,
     handling: 8.4,
     nitro: 7.2,
-    price: 80000,
+    price: 2000,
     body: 0x2a78ff,
     accent: 0x081e4a
   },
@@ -51,7 +51,7 @@ export const PLAYER_CARS = [
     accel0to100: 3.4,
     handling: 8.9,
     nitro: 8.0,
-    price: 150000,
+    price: 8000,
     body: 0xd0202a,
     accent: 0x340606
   }

@@ -2617,12 +2617,26 @@ function bindMetaControls() {
   // levels tile (formerly "tracks" — repurposed as the 5-level campaign picker)
   $("tracksTile").addEventListener("click", openLevels)
   $("trackCloseBtn").addEventListener("click", () => hideOverlay("trackScreen"))
-  // daily tile
-  $("dailyTile").addEventListener("click", () => maybeShowDailyBonus(true))
+  // missions tile (the "任务 / MISSIONS" tile) → achievements board
+  $("dailyTile").addEventListener("click", openMissions)
+  if ($("missionsCloseBtn")) {
+    $("missionsCloseBtn").addEventListener("click", () => hideOverlay("missionsScreen"))
+  }
+  // daily bonus claim still wires the daily screen
   $("dailyClaimBtn").addEventListener("click", () => {
     hideOverlay("dailyScreen")
     refreshCurrencyHud()
   })
+  // leaderboard close button
+  if ($("leaderboardCloseBtn")) {
+    $("leaderboardCloseBtn").addEventListener("click", () => hideOverlay("leaderboardScreen"))
+  }
+  // challenge banner close
+  if ($("challengeBannerClose")) {
+    $("challengeBannerClose").addEventListener("click", () => {
+      $("challengeBanner").classList.remove("visible")
+    })
+  }
   // privacy
   $("privacyAckBtn").addEventListener("click", () => {
     Save.setSettings({ privacyAck: true })
@@ -2643,41 +2657,86 @@ function bindMetaControls() {
   if (navShare) navShare.addEventListener("click", shareCurrentBest)
 }
 
-// Show top-5 leaderboard via the result modal in read-only mode
+// Show the per-level leaderboard: each level row carries its grade + best
+// time + best top-speed pulled from Save.bestPerLevel. Lives in its own
+// dedicated overlay (#leaderboardScreen) instead of hijacking the result
+// modal — much cleaner when the player just wants to inspect progress.
 function showLeaderboard() {
   const fresh = Save.get()
-  $("resultTitle").textContent = "排行榜"
-  $("resultCopy").textContent = "本地最佳记录（按用时排序）"
-  const best = fresh.bestTimePerTrack[fresh.selectedTrack]
-  $("resBestTime").textContent = best ? mmss(best.ms) : "--"
-  $("resStatTime").textContent = "--"
-  $("resStatCoins").textContent = String(fresh.coins)
-  $("resStatHits").textContent = String(fresh.totalRaces)
-  const rankEl = $("resFinalRank")
-  if (rankEl) rankEl.style.display = "none"
-  const gradeEl = $("resGrade")
-  if (gradeEl) gradeEl.style.display = "none"
-  const unlockEl = $("resUnlock")
-  if (unlockEl) unlockEl.style.display = "none"
-  const rewardEl = $("resReward")
-  if (rewardEl) rewardEl.style.display = "none"
-  const board = $("resLeaderboard")
-  board.innerHTML = ""
-  const entries = fresh.leaderboard
-    .filter((x) => x.trackId === fresh.selectedTrack)
-    .slice(0, 10)
-  if (entries.length === 0) {
+  const list = $("leaderboardList")
+  if (!list) return
+  list.innerHTML = ""
+  for (const lvl of LEVELS) {
+    const best = fresh.bestPerLevel[lvl.id]
     const li = document.createElement("li")
-    li.innerHTML = `<span style="opacity:0.6">暂无记录，去比一局！</span>`
-    board.appendChild(li)
-  } else {
-    entries.forEach((row, i) => {
-      const li = document.createElement("li")
-      li.innerHTML = `<span>#${i + 1} · ${CAR_BY_ID[row.carId]?.name ?? row.carId}</span><b>${mmss(row.ms)}</b>`
-      board.appendChild(li)
-    })
+    const gradeClass = best?.grade ? "" : "no-grade"
+    li.innerHTML = `
+      <span class="lb-grade ${gradeClass}">${best?.grade ?? "—"}</span>
+      <span class="lb-name"><b>第 ${lvl.num} 关 · ${lvl.name}</b><span>${lvl.sub}</span></span>
+      <span class="lb-time">${best ? mmss(best.ms) : "--"}</span>
+      <span class="lb-speed">${best?.topSpeed ? `${best.topSpeed} KM/H` : ""}</span>
+    `
+    list.appendChild(li)
   }
-  showOverlay("resultScreen")
+  showOverlay("leaderboardScreen")
+}
+
+// ────────────────────────────────────────────────────────────────────
+// achievements
+// ────────────────────────────────────────────────────────────────────
+const ACHIEVEMENTS = [
+  { id: "first_race",   icon: "🏁", name: "起步",       desc: "完成你的第一场比赛",         reward: 100 },
+  { id: "no_hit_clear", icon: "💎", name: "完美车技",   desc: "任意关卡零碰撞通关",         reward: 200 },
+  { id: "speed_demon",  icon: "⚡", name: "速度狂魔",   desc: "最高速度突破 300 KM/H",      reward: 150 },
+  { id: "coin_baron",   icon: "🪙", name: "金币大亨",   desc: "累计获得 1000 金币",         reward: 300 },
+  { id: "all_S",        icon: "🏆", name: "全 S 通关", desc: "所有关卡评级都达到 S",        reward: 500 },
+  { id: "collector",    icon: "🚗", name: "收藏家",     desc: "解锁所有 3 辆车",           reward: 200 }
+]
+
+// Evaluate every achievement against current state (and optionally a fresh
+// run summary). Each newly-cleared one fires a toast and credits the
+// reward. Idempotent — cleared ids are flagged in Save.achievements.
+function checkAchievements(run = {}) {
+  const sv = Save.get()
+  const carCount = PLAYER_CARS.length
+  const allLevelsS = LEVELS.every((l) => sv.bestPerLevel?.[l.id]?.grade === "S")
+  for (const a of ACHIEVEMENTS) {
+    if (sv.achievements?.[a.id]) continue
+    let unlocked = false
+    switch (a.id) {
+      case "first_race":   unlocked = sv.totalRaces >= 1 || (run.win === true); break
+      case "no_hit_clear": unlocked = run.win === true && run.hits === 0; break
+      case "speed_demon":  unlocked = (run.topSpeed ?? 0) >= 300 || (sv.bestTopSpeed ?? 0) >= 300; break
+      case "coin_baron":   unlocked = (sv.totalCoinsEarned ?? 0) >= 1000; break
+      case "all_S":        unlocked = allLevelsS; break
+      case "collector":    unlocked = (sv.unlockedCars?.length ?? 0) >= carCount; break
+    }
+    if (unlocked && Save.markAchievement(a.id)) {
+      Save.addCoins(a.reward)
+      toast(`${a.icon} ${a.name} +${a.reward}`, 1600)
+    }
+  }
+}
+
+function openMissions() {
+  // Refresh — accomplishments may have unlocked between visits
+  checkAchievements()
+  const sv = Save.get()
+  const list = $("missionsList")
+  if (!list) return
+  list.innerHTML = ""
+  for (const a of ACHIEVEMENTS) {
+    const done = !!sv.achievements?.[a.id]
+    const li = document.createElement("li")
+    if (done) li.classList.add("done")
+    li.innerHTML = `
+      <div class="ach-icon">${a.icon}</div>
+      <div class="ach-meta"><b>${a.name}</b><span>${a.desc}</span></div>
+      <div class="ach-status">${done ? "已完成" : `+${a.reward} 🪙`}</div>
+    `
+    list.appendChild(li)
+  }
+  showOverlay("missionsScreen")
 }
 
 // Share current local best stats as PNG
@@ -3091,7 +3150,8 @@ function finishRace(success = true) {
       ms,
       coins: state.coins,
       hits: state.hits,
-      success: win
+      success: win,
+      topSpeed: state.topSpeed
     })
     // ── grade for the level (S/A/B/C) ──
     let grade = null
@@ -3119,12 +3179,24 @@ function finishRace(success = true) {
           Save.unlockLevel(next)
           unlocked = next
         }
-        gradeBonus = grade === "S" ? 80
-                  : grade === "A" ? 50
-                  : grade === "B" ? 25
-                  : 10
+        // Per spec: S = +50% of run coins on top of the flat bonus,
+        // A = +25%. B/C just get the small flat amount. Plus a flat
+        // perfect-bonus +50 if the run ended with zero hits.
+        const flat = grade === "S" ? 40
+                  : grade === "A" ? 25
+                  : grade === "B" ? 15
+                  : 5
+        const pct = grade === "S" ? 0.5 : grade === "A" ? 0.25 : 0
+        const perfect = state.hits === 0 ? 50 : 0
+        gradeBonus = flat + Math.floor(state.coins * pct) + perfect
         Save.addCoins(gradeBonus)
+        // Side-effect: lifetime coin total used by the "coin baron" achievement
+        const sv = Save.get()
+        sv.totalCoinsEarned = (sv.totalCoinsEarned || 0) + gradeBonus
+        Save.set({ totalCoinsEarned: sv.totalCoinsEarned })
       }
+      // Check + claim any newly-unlocked achievements based on this run.
+      checkAchievements({ win, hits: state.hits, topSpeed: state.topSpeed, grade })
     }
     // determine "new record" BEFORE the new ms is recorded
     const prevBest = save.bestTimePerTrack[save.selectedTrack]

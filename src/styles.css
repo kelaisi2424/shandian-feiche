@@ -2314,6 +2314,153 @@ body.gate-dismissed.is-portrait .speed-lines {
   color: #cfe0ff;
 }
 
+/* ============== achievements / missions list ============== */
+.missions-list {
+  list-style: none;
+  margin: 12px 0 16px;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.missions-list li {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 211, 26, 0.18);
+  border-radius: 10px;
+}
+.missions-list li.done {
+  background: rgba(255, 211, 26, 0.10);
+  border-color: rgba(255, 211, 26, 0.55);
+}
+.missions-list .ach-icon {
+  font-size: 28px;
+  text-align: center;
+}
+.missions-list .ach-meta b {
+  display: block;
+  color: #ffe35a;
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+.missions-list .ach-meta span {
+  color: #cfe0ff;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.missions-list .ach-status {
+  font-size: 13px;
+  font-weight: 800;
+  color: #93a8c8;
+  text-align: right;
+}
+.missions-list li.done .ach-status { color: #ffd31a; }
+
+/* ============== leaderboard list ============== */
+.leaderboard-list {
+  list-style: none;
+  margin: 12px 0 16px;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 50px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.leaderboard-list .lb-grade {
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+  color: #ffd31a;
+  text-shadow: 0 0 12px rgba(255, 211, 26, 0.6);
+}
+.leaderboard-list .lb-grade.no-grade { color: #586a86; text-shadow: none; }
+.leaderboard-list .lb-name b {
+  display: block;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.leaderboard-list .lb-name span {
+  color: #93a8c8;
+  font-size: 11.5px;
+}
+.leaderboard-list .lb-time { color: #ffe35a; font-weight: 800; }
+.leaderboard-list .lb-speed {
+  color: #26d6ff;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* ============== first-play tutorial hint overlay ============== */
+.tutorial-hint {
+  position: fixed;
+  left: 50%;
+  top: 28%;
+  transform: translate(-50%, -50%);
+  z-index: 80;
+  padding: 16px 26px;
+  background: rgba(8, 14, 28, 0.82);
+  border: 1px solid rgba(255, 211, 26, 0.48);
+  border-radius: 14px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  max-width: 86vw;
+}
+.tutorial-hint.visible {
+  opacity: 1;
+  transform: translate(-50%, -42%);
+}
+
+/* ============== challenge banner (shows above HUD) ============== */
+.challenge-banner {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, rgba(255, 138, 22, 0.95), rgba(255, 90, 22, 0.95));
+  border-radius: 999px;
+  color: #2a1500;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 10px 28px rgba(255, 90, 22, 0.45);
+  max-width: 92vw;
+}
+.challenge-banner.visible { display: inline-flex; }
+.challenge-banner button {
+  background: transparent;
+  border: 0;
+  color: #2a1500;
+  font-size: 22px;
+  font-weight: 900;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 /* No more device-specific responsive overrides for the game shell:
  * the .stage transform handles every aspect ratio uniformly. The only
  * orientation-aware rule lives at the top of this file (portrait gate

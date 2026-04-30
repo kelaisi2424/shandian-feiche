@@ -20,6 +20,8 @@ const DEFAULT = {
   // economy
   coins: 0,
   gems: 0,
+  totalCoinsEarned: 0,      // lifetime — drives the "coin baron" achievement
+  bestTopSpeed: 0,          // lifetime peak speed across all races (km/h)
   // progression
   totalRaces: 0,
   bestTimeMs: null,         // best lap on track #0 by car #0
@@ -33,6 +35,9 @@ const DEFAULT = {
   currentLevel: "lv1",
   bestPerLevel: {},                   // { [levelId]: { grade, ms, coins, topSpeed, beatGhost } }
   leaderboard: [],          // [{trackId, carId, ms, coins, hits, at}], top 10 by ms
+  achievements: {},         // { [id]: true } — claimed achievement ids
+  // first-play guidance state — drives the one-shot tutorial overlays
+  seenTutorial: {},
   // engagement
   lastDaily: null,          // YYYY-MM-DD
   consecutiveDays: 0,
@@ -128,7 +133,7 @@ export const Save = {
     if (!s.unlockedTracks.includes(id)) s.unlockedTracks.push(id)
     save()
   },
-  recordRace({ trackId, carId, ms, coins, hits, success }) {
+  recordRace({ trackId, carId, ms, coins, hits, success, topSpeed }) {
     const s = load()
     s.totalRaces++
     if (success) {
@@ -140,8 +145,24 @@ export const Save = {
       s.leaderboard = s.leaderboard.slice(0, 10)
     }
     s.coins += coins
+    s.totalCoinsEarned = (s.totalCoinsEarned || 0) + coins
+    if (topSpeed && topSpeed > (s.bestTopSpeed || 0)) s.bestTopSpeed = Math.round(topSpeed)
     save()
   },
+  markAchievement(id) {
+    const s = load()
+    if (s.achievements[id]) return false
+    s.achievements[id] = { at: Date.now() }
+    save()
+    return true
+  },
+  hasAchievement(id) { return !!load().achievements[id] },
+  markTutorialSeen(key) {
+    const s = load()
+    s.seenTutorial[key] = true
+    save()
+  },
+  hasSeenTutorial(key) { return !!load().seenTutorial[key] },
   // returns { granted: bool, amount: number, day: number }
   claimDaily() {
     const s = load()

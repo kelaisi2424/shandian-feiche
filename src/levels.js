@@ -35,9 +35,9 @@ export const LEVELS = [
     tutorial: true,
     rainShader: false,
     grades: {
-      S: { time: 50, coins: 28, hits: 0 },
-      A: { time: 60, coins: 22, hits: 2 },
-      B: { time: 70, coins: 14, hits: 5 }
+      S: { time: 58, coins: 24, hits: 1 },
+      A: { time: 68, coins: 18, hits: 3 },
+      B: { time: 80, coins: 12, hits: 6 }
     }
   },
   {
@@ -61,9 +61,9 @@ export const LEVELS = [
     tutorial: false,
     rainShader: false,
     grades: {
-      S: { time: 42, coins: 12, hits: 2 },
-      A: { time: 52, coins: 8, hits: 4 },
-      B: { time: 60, coins: 4, hits: 8 }
+      S: { time: 48, coins: 10, hits: 3 },
+      A: { time: 58, coins: 6, hits: 5 },
+      B: { time: 70, coins: 3, hits: 9 }
     }
   },
   {
@@ -85,9 +85,9 @@ export const LEVELS = [
     tutorial: false,
     rainShader: false,
     grades: {
-      S: { time: 40, coins: 18, hits: 1 },
-      A: { time: 50, coins: 12, hits: 3 },
-      B: { time: 65, coins: 8, hits: 6 }
+      S: { time: 46, coins: 15, hits: 2 },
+      A: { time: 58, coins: 10, hits: 4 },
+      B: { time: 75, coins: 6, hits: 7 }
     }
   },
   {
@@ -110,9 +110,9 @@ export const LEVELS = [
     tutorial: false,
     rainShader: false,
     grades: {
-      S: { time: 44, coins: 12, hits: 1 },
-      A: { time: 56, coins: 8, hits: 3 },
-      B: { time: 75, coins: 5, hits: 6 }
+      S: { time: 50, coins: 10, hits: 2 },
+      A: { time: 62, coins: 6, hits: 4 },
+      B: { time: 85, coins: 4, hits: 7 }
     }
   },
   {
@@ -141,9 +141,9 @@ export const LEVELS = [
     grades: {
       // beatGhost is checked alongside time/coins/hits — if you don't catch
       // the ghost you can't get S even with perfect lap.
-      S: { time: 55, coins: 12, hits: 2, beatGhost: true },
-      A: { time: 65, coins: 8, hits: 4, beatGhost: true },
-      B: { time: 75, coins: 4, hits: 7, beatGhost: false }
+      S: { time: 62, coins: 10, hits: 3, beatGhost: true },
+      A: { time: 72, coins: 6, hits: 5, beatGhost: true },
+      B: { time: 85, coins: 3, hits: 8, beatGhost: false }
     }
   }
 ]

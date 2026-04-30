@@ -310,6 +310,24 @@
         </div>
       </section>
 
+      <section id="missionsScreen" class="screen overlay-screen">
+        <div class="modal modal-wide">
+          <h2>任务 / 成就</h2>
+          <p class="modal-sub">完成挑战领取金币奖励</p>
+          <ul id="missionsList" class="missions-list"></ul>
+          <button id="missionsCloseBtn" class="primary">关闭</button>
+        </div>
+      </section>
+
+      <section id="leaderboardScreen" class="screen overlay-screen">
+        <div class="modal modal-wide">
+          <h2>排行榜</h2>
+          <p class="modal-sub">每关本地最佳记录</p>
+          <ul id="leaderboardList" class="leaderboard-list"></ul>
+          <button id="leaderboardCloseBtn" class="primary">关闭</button>
+        </div>
+      </section>
+
       <section id="dailyScreen" class="screen overlay-screen">
         <div class="modal">
           <h2>每日登录</h2>
@@ -387,6 +405,21 @@
          They sit between the 3D canvas and the stage UI in z-order. -->
     <div class="screen-fx" id="screenFx" aria-hidden="true"></div>
     <div class="speed-lines" id="speedLines" aria-hidden="true"></div>
+
+    <!-- One-shot tutorial overlay shown to first-time players. JS toggles
+         visibility and swaps text via setTutorialHint(); auto-fades after
+         a few seconds. Lives outside the stage so position:fixed targets
+         the actual viewport. -->
+    <div class="tutorial-hint" id="tutorialHint" aria-hidden="true">
+      <span id="tutorialHintText"></span>
+    </div>
+
+    <!-- Challenge banner shown when ?challenge=... URL param is present:
+         "你的朋友用 38 秒 S 级通关了第 1 关" — encourages a duel. -->
+    <div class="challenge-banner" id="challengeBanner" aria-hidden="true">
+      <span id="challengeBannerText"></span>
+      <button id="challengeBannerClose" aria-label="close">×</button>
+    </div>
 
     <!-- Portrait gate: in portrait the entire #app stage + 3D canvas are
          hidden, and ONLY this card is rendered. Hard-toggled by the
