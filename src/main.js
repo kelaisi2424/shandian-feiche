@@ -728,31 +728,15 @@ function roadCenterTexture() {
   const c = document.createElement("canvas")
   c.width = c.height = 512
   const g = c.getContext("2d")
-  // base yellow
-  g.fillStyle = "#ffd31a"
+  // dark asphalt base — was bright yellow which made the road read as
+  // a frozen surface and gave no contrast for the player car.
+  g.fillStyle = "#1a1a2e"
   g.fillRect(0, 0, 512, 512)
-  // diamond-plate raised dots — the small bumps you see on the screenshot road.
-  // Two-pass: dark shadow disk + bright highlight disk offset by 1px → 3D feel.
-  const cell = 22
-  for (let y = -cell; y < 512 + cell; y += cell) {
-    for (let x = (y / cell) % 2 === 0 ? 0 : cell / 2; x < 512 + cell; x += cell) {
-      g.fillStyle = "rgba(150, 100, 0, 0.45)"
-      g.beginPath()
-      g.arc(x + 1, y + 1, 4.5, 0, Math.PI * 2)
-      g.fill()
-      const grd = g.createRadialGradient(x - 0.5, y - 0.5, 0, x, y, 4.6)
-      grd.addColorStop(0, "rgba(255, 250, 200, 0.95)")
-      grd.addColorStop(0.6, "rgba(255, 220, 90, 0.7)")
-      grd.addColorStop(1, "rgba(255, 200, 40, 0)")
-      g.fillStyle = grd
-      g.beginPath()
-      g.arc(x, y, 4.6, 0, Math.PI * 2)
-      g.fill()
-    }
+  // subtle aggregate speckle so the asphalt isn't flat
+  for (let i = 0; i < 1400; i++) {
+    g.fillStyle = `rgba(${100 + Math.random() * 70}, ${100 + Math.random() * 70}, ${120 + Math.random() * 60}, ${0.05 + Math.random() * 0.12})`
+    g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2)
   }
-  // centre dashed white lane stripes (strong)
-  g.fillStyle = "rgba(255, 255, 255, 0.85)"
-  for (let i = 0; i < 512; i += 96) g.fillRect(244, i + 12, 24, 64)
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.colorSpace = THREE.SRGBColorSpace
@@ -3916,6 +3900,16 @@ function updateRivals(dt, now) {
   for (const r of rivals) {
     // gap to player along the track (positive = rival ahead)
     const dProgress = r.progress - state.progress
+    // Periodic random lane-change: every 3-5s a rival picks a new target
+    // lane, then the existing lane-target lerp slides them over. Without
+    // this rivals just hold their assigned lane and the field reads as
+    // a static convoy. Skip if the rival is already mid-dodge from a
+    // close-behind player.
+    if (now > (r.nextLaneChangeAt ?? 0)) {
+      const choices = LANE_X.filter((x) => Math.abs(x - r.laneTarget) > 0.5)
+      r.laneTarget = choices[Math.floor(Math.random() * choices.length)] ?? 0
+      r.nextLaneChangeAt = now + 3000 + Math.random() * 2000
+    }
     // soft rubber-band so the field stays close to the player without feeling
     // scripted: rivals far behind catch up modestly, rivals far ahead coast.
     // Caps at ±18% of base speed and only kicks in past 60m of separation,

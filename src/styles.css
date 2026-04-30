@@ -35,8 +35,6 @@ body {
   background: #050a18;
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
   color: #fff;
-  /* respect notches / home-indicators */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 /* dvh tracks the actually-visible viewport on iOS Safari (excludes the
  * collapsing toolbar). Falls back to % above on older browsers. */
