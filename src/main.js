@@ -977,20 +977,19 @@ function recolorCar(asset, opts = {}) {
       }
       mat.metalness = Math.max(mat.metalness ?? 0.2, 0.6)
       mat.roughness = Math.min(mat.roughness ?? 0.5, 0.28)
-      // Apply emissive glow to body panels so the player car reads as a
-      // luminous hero from any track distance. Skip glass/wheels/lights —
-      // they already have their own emissive in the source GLBs.
+      // Apply emissive glow to body panels (off by default — the player
+      // path now passes emissiveIntensity 0 so the GLB silhouette isn't
+      // hidden under a halo).
       if (emi && isBodyPanel && mat.emissive) {
         mat.emissive.copy(emi)
         mat.emissiveIntensity = emiI
       }
-      // cache original emissive so the white-flash collision effect can
-      // restore values cleanly after the flash window closes.
-      if (mat.emissive) {
-        mat.userData = mat.userData || {}
-        mat.userData._origEmiH = mat.emissive.getHex()
-        mat.userData._origEmiI = mat.emissiveIntensity ?? 0
-      }
+      // Force opaque body materials. The collision invincibility used
+      // to flicker `mat.opacity` and leave `transparent: true` set when
+      // the window closed; the tinted alpha then made the chassis read
+      // as ghostly. Both flags reset here on every rebuild.
+      mat.transparent = false
+      mat.opacity = 1
       mats[i] = mat
     }
     m.material = Array.isArray(m.material) ? mats : mats[0]
@@ -2039,7 +2038,10 @@ function rebuildPlayerCar() {
   // Upgrade body materials: clearcoat lacquer + metalness + cyan emissive
   // glow so the player vehicle reads as a luminous hero.
   if (cfg.body !== undefined) {
-    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x00ffff, emissiveIntensity: 0.18 })
+    // No emissive on the body — the cyan glow was producing a halo that
+    // hid the GLB's actual surface detail and made the car read as a
+    // luminous blob. Body colour comes purely from the paint.
+    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x000000, emissiveIntensity: 0 })
   }
   upgradeCarMaterials(car, { clearcoat: 0.85, metalness: 0.6, roughness: 0.25 })
   // ── DIAG: dump the player car's actual rendered geometry + materials.
@@ -3950,24 +3952,16 @@ function loop(now) {
 // Flash the player car's body materials bright white briefly after a
 // collision. Cached _origEmiH/_origEmiI on each material (set in
 // recolorCar) lets us restore values cleanly when the window closes.
-function updatePlayerFlash(now) {
-  if (!playerBody) return
-  const remaining = state.flashUntil - now
-  const t = remaining > 0 ? Math.min(1, remaining / 200) : 0  // 0.2s window
-  playerBody.traverse((m) => {
-    if (!m.isMesh || !m.material) return
-    const mats = Array.isArray(m.material) ? m.material : [m.material]
-    for (const mat of mats) {
-      if (!mat.emissive || !mat.userData?._origEmiH == null) continue
-      if (t > 0) {
-        mat.emissive.setHex(0xffffff)
-        mat.emissiveIntensity = (mat.userData._origEmiI ?? 0) + t * 1.6
-      } else if (mat.userData._origEmiH != null) {
-        mat.emissive.setHex(mat.userData._origEmiH)
-        mat.emissiveIntensity = mat.userData._origEmiI ?? 0
-      }
-    }
-  })
+// Collision flash: was poking every material's emissive to white +
+// emissiveIntensity to ~1.6. The buggy guard `!mat.userData?._origEmiH
+// == null` was always false, so wheels (whose shared TIRE_MAT had no
+// _origEmiH cache) ended up stuck at white #ffffff @ 0.27 and looked
+// like glowing rims. Now: flash is handled by the visible-toggle in
+// updateInvincibility — same window, same blink feel, never touches a
+// material so wheels stay matte black and body keeps its paint.
+function updatePlayerFlash(/* now */) {
+  // intentionally empty: kept as a stub so the call site in loop()
+  // still resolves until that line is cleaned up.
 }
 
 // Tail flame ribbons — opacity grows past 230 km/h, length stretches
@@ -3996,33 +3990,19 @@ function updateSpeedRibbons(now) {
   }
 }
 
-// Brief post-collision invincibility window: the player flashes
-// transparent and ignores hazard/rival hits for 500ms. Avoids the
-// "I just got hit and got hit again on the next frame" feel.
+// Brief post-collision invincibility window: the player blinks for
+// 500ms and ignores hazard/rival hits during that time. Implementation
+// is a simple `playerBody.visible` toggle — no material mutations, so
+// wheels stay matte black and body keeps its paint detail.
 function updateInvincibility(now) {
   if (!playerBody) return
   const remaining = (state.invincibleUntil ?? 0) - now
   if (remaining > 0) {
-    const strobe = (Math.floor(now / 80) % 2) === 0 ? 0.4 : 0.95
-    playerBody.traverse((m) => {
-      if (!m.isMesh || !m.material) return
-      const mats = Array.isArray(m.material) ? m.material : [m.material]
-      for (const mat of mats) {
-        mat.transparent = true
-        mat.opacity = strobe
-      }
-    })
-  } else if (state._wasInvincible) {
-    state._wasInvincible = false
-    playerBody.traverse((m) => {
-      if (!m.isMesh || !m.material) return
-      const mats = Array.isArray(m.material) ? m.material : [m.material]
-      for (const mat of mats) {
-        mat.opacity = 1
-      }
-    })
+    // 80ms half-cycle — blink ~6 times per second
+    playerBody.visible = (Math.floor(now / 80) % 2) === 0
+  } else if (!playerBody.visible) {
+    playerBody.visible = true
   }
-  state._wasInvincible = remaining > 0
 }
 
 // CSS filter on the canvas — combines a saturation boost (when nitro
