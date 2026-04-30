@@ -29,8 +29,8 @@ export const PLAYER_CARS = [
     handling: 8.1,
     nitro: 6.7,
     price: 0,
-    body: 0x8a93a0,
-    accent: 0x1a1f28
+    body: 0x16a8ff,
+    accent: 0x081e4a
   },
   {
     id: "nova_gt",

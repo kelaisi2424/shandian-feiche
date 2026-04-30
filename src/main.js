@@ -913,6 +913,20 @@ function cloneAsset(name, targetSize, axis = "x") {
 // roughly grey/neutral or saturated). Tires / windows / chrome are left intact. Optional
 // `emissive` (hex) + `emissiveIntensity` apply a glow to the body panels — used to give the
 // player vehicle a hero-card neon halo, baked into the material instead of an outline mesh.
+// Pre-built dark-rubber tire material reused for every wheel mesh.
+// MeshStandardMaterial intentionally — no clearcoat, high roughness so
+// they read as matte rubber instead of lacquered chassis panels.
+const TIRE_MAT = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a,
+  roughness: 0.9,
+  metalness: 0.1
+})
+
+// Mesh-name pattern that flags a wheel/tire/rim — the Kenney Car Kit GLBs
+// export them as "wheel-back-left" / "wheel-front-right" / etc., so a
+// simple substring match keeps them out of the body-panel pipeline.
+const WHEEL_RE = /wheel|tire|tyre|rim/i
+
 function recolorCar(asset, opts = {}) {
   const body = new THREE.Color(opts.body ?? 0x18b6ff)
   const accent = new THREE.Color(opts.accent ?? 0x081a36)
@@ -920,6 +934,15 @@ function recolorCar(asset, opts = {}) {
   const emiI = opts.emissiveIntensity ?? 0.3
   asset.traverse((m) => {
     if (!m.isMesh || !m.material) return
+    // Wheels: replace with the shared dark-rubber tire material and skip
+    // the body-paint pipeline. Without this every wheel mesh got the
+    // body colour + clearcoat (Kenney exports them as pure white) — the
+    // car came out as a single-toned blob with no chassis/wheel contrast.
+    if (m.name && WHEEL_RE.test(m.name)) {
+      m.material = TIRE_MAT
+      m.castShadow = true
+      return
+    }
     const mats = Array.isArray(m.material) ? m.material : [m.material]
     for (let i = 0; i < mats.length; i++) {
       const mat = mats[i].clone()
@@ -976,6 +999,11 @@ function upgradeCarMaterials(asset, opts = {}) {
   const roughness = opts.roughness ?? 0.25
   asset.traverse((m) => {
     if (!m.isMesh || !m.material) return
+    // Wheels keep the matte rubber material set in recolorCar — no
+    // clearcoat, no metalness boost. Without this guard the lacquer
+    // pass would override TIRE_MAT and the wheels would shine like
+    // body panels again.
+    if (m.name && WHEEL_RE.test(m.name)) return
     const mats = Array.isArray(m.material) ? m.material : [m.material]
     for (let i = 0; i < mats.length; i++) {
       const src = mats[i]
