@@ -433,6 +433,29 @@ function scheduleMusic() {
   musicTimer = setTimeout(scheduleMusic, noteCount * tempo * 1000)
 }
 
+// Checkpoint / finish chord — three rising triangle pings staggered 80ms
+// apart (C5 → E5 → G5, ascending major triad). Reads as a victory cue
+// without stomping on the underlying engine drone.
+function sfxCheckpoint() {
+  if (!audio.ctx) return
+  const now = audio.ctx.currentTime
+  const ping = (delay, freq, dur) => {
+    const startAt = now + delay
+    const osc = audio.ctx.createOscillator()
+    osc.type = "triangle"
+    osc.frequency.setValueAtTime(freq, startAt)
+    const g = audio.ctx.createGain()
+    g.gain.setValueAtTime(0, startAt)
+    g.gain.linearRampToValueAtTime(0.18, startAt + 0.005)
+    g.gain.exponentialRampToValueAtTime(0.001, startAt + dur)
+    osc.connect(g); g.connect(audio.master)
+    osc.start(startAt); osc.stop(startAt + dur + 0.05)
+  }
+  ping(0,    523.25, 0.20)   // C5
+  ping(0.08, 659.25, 0.22)   // E5
+  ping(0.16, 783.99, 0.30)   // G5 — slightly longer tail
+}
+
 function sfxCoin() {
   if (!audio.ctx) return
   const now = audio.ctx.currentTime
@@ -3288,6 +3311,7 @@ function finishRace(success = true) {
   state.finished = true
   state.finishedAt = performance.now()
   state._finalRank = computeRank()
+  if (success) sfxCheckpoint()
   setTimeout(() => {
     const ms = state.finishedAt - state.startedAt - state.pauseAcc
     const win = success && state.hits < CFG.hitLimit && !state.timedOut
@@ -3817,6 +3841,7 @@ function updateCheckpoints(now) {
       sparks(pos.x, pos.y, pos.z, 0x36e0ff, 28)
       toast("通过检查点！", 800)
       flashFx("checkpoint")
+      sfxCheckpoint()
       state.nitroCharges = Math.min(3, state.nitroCharges + 1)
     }
   }
