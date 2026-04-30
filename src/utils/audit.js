@@ -49,10 +49,13 @@ export function runAudit(player, scene, camera) {
     issues.push(`OBSTACLE_FALLBACK_USED: ${fallbackCount} placeholders in scene (GLB load failed)`)
   }
 
-  // V1.8.2: visual facing sanity check. If the player car body's world
-  // -Z forward and the player Group's world -Z forward point in opposite
-  // directions, the GLB is rendering backwards. Catches the bug where
-  // two stacked 180° rotations leave the visual reversed.
+  // V1.8.3a: visual facing sanity check.
+  // Project forward convention = local +Z (NOT Three.js default -Z).
+  // Verified by continuous 6-sample movement test on V1.8.2c:
+  //   actualMovement = (0.243, 0, -0.970)
+  //   player.local +Z in world = (0.24, 0, -0.97)  → dot = +1.000
+  //   player.local -Z in world                     → dot = -1.000
+  // Forward axis is the matrix's third column (m[8], m[9], m[10]).
   if (player) {
     let body = null
     player.traverse((c) => { if (c.isMesh && c.name === "body") body = c })
@@ -61,7 +64,7 @@ export function runAudit(player, scene, camera) {
       const pm = player.matrixWorld.elements
       const blen = Math.sqrt(m[8] ** 2 + m[9] ** 2 + m[10] ** 2) || 1
       const plen = Math.sqrt(pm[8] ** 2 + pm[9] ** 2 + pm[10] ** 2) || 1
-      const dot = ((-m[8]) * (-pm[8]) + (-m[9]) * (-pm[9]) + (-m[10]) * (-pm[10])) / (blen * plen)
+      const dot = (m[8] * pm[8] + m[9] * pm[9] + m[10] * pm[10]) / (blen * plen)
       if (dot < 0.9) issues.push(`VISUAL_FACING_REVERSED: dot=${dot.toFixed(3)}`)
     }
   }
@@ -119,7 +122,13 @@ if (typeof window !== "undefined") {
     if (++_swapTries > 30) clearInterval(_swapTimer)
   }, 1000)
 
-  // V1.8.2c: world scroll-direction sanity check.
+  // V1.8.2c / V1.8.3a: world scroll-direction sanity check.
+  //
+  // Project forward convention = local +Z (NOT Three.js default -Z).
+  // This function doesn't compute forward vectors directly — it tracks
+  // state.progress delta + nearest-obstacle distSq to the camera —
+  // so the +Z convention doesn't change any sign here. Header kept
+  // for cross-reference.
   //
   // Architecture note (verified with matrixWorld sampling on 2026-05-01):
   // this game is NOT a runner architecture. updateDriving in main.js
@@ -196,9 +205,14 @@ if (typeof window !== "undefined") {
     return { dt, progressDelta, dDistSq, verdict, nearestKind: nearest.kind, obstacleCount: obstacles.length }
   }
 
-  // V1.8.2: visual facing check (catches "car renders backwards" bugs).
-  // Body's world -Z vs player Group's world -Z. Dot ≈ +1 means aligned;
-  // dot ≈ -1 means the car is reversed 180°.
+  // V1.8.3a: visual facing check (catches "car renders backwards" bugs).
+  // Project forward convention = local +Z (NOT Three.js default -Z).
+  // Verified by continuous 6-sample movement test on V1.8.2c:
+  //   actualMovement direction = player.local +Z in world (dot = +1.000)
+  //   player.local -Z in world is reversed (dot = -1.000)
+  // Forward axis is the matrix's third column (m[8], m[9], m[10]).
+  // Dot ≈ +1 means body-forward and player-forward agree (aligned).
+  // Dot ≈ -1 means the GLB is rendering backwards.
   window.__facingCheck = () => {
     const player = window.__player
     if (!player) return "NO_PLAYER"
@@ -209,7 +223,7 @@ if (typeof window !== "undefined") {
     const pm = player.matrixWorld.elements
     const blen = Math.sqrt(m[8] ** 2 + m[9] ** 2 + m[10] ** 2) || 1
     const plen = Math.sqrt(pm[8] ** 2 + pm[9] ** 2 + pm[10] ** 2) || 1
-    const dot = ((-m[8]) * (-pm[8]) + (-m[9]) * (-pm[9]) + (-m[10]) * (-pm[10])) / (blen * plen)
+    const dot = (m[8] * pm[8] + m[9] * pm[9] + m[10] * pm[10]) / (blen * plen)
     const verdict = dot > 0.9 ? "✅ aligned" : dot < -0.9 ? "❌ REVERSED 180°" : "⚠️ misaligned"
     console.log(
       `%c[facingCheck] dot=${dot.toFixed(3)} ${verdict}`,
