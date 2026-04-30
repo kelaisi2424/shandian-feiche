@@ -1153,22 +1153,28 @@ function buildTrack() {
     track.add(rib)
   }
 
-  // White dashed centerline — small white stripes 1.4m × 0.28m every 8m
-  // along progress. Reads as classic motorway lane markings; rushing past
-  // the player at speed sells the velocity better than any HUD number.
+  // Bright dashed lane markings — ONE row down the centre, plus two rows
+  // separating the 3 lanes. Spacing 5m, 1.6m long × 0.32m wide × 0.05
+  // tall, emissive 0.6 so they read as glowing in the dusk lighting.
+  // Triple density vs. before — they rip past the camera at speed and
+  // are the biggest single contributor to sense-of-velocity.
   const dashMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     emissive: 0xffffff,
-    emissiveIntensity: 0.35,
+    emissiveIntensity: 0.6,
     roughness: 0.5
   })
-  for (let s = 8; s < Track.length - 8; s += 8) {
-    const center = progressToWorld(s, 0, 0.22)
+  for (let s = 5; s < Track.length - 5; s += 5) {
     const tan = progressTangent(s).clone()
-    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 1.4), dashMat)
-    dash.position.copy(center)
-    dash.lookAt(center.clone().add(tan))
-    track.add(dash)
+    // Centre line (between the middle lane and the right lane), and a
+    // mirrored line between left + middle.
+    for (const offX of [-1.8, 1.8]) {
+      const pos = progressToWorld(s, offX, 0.23)
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 1.6), dashMat)
+      dash.position.copy(pos)
+      dash.lookAt(pos.clone().add(tan))
+      track.add(dash)
+    }
   }
 
   // big start-line zebra stripe + periodic narrower stripes
@@ -1801,23 +1807,36 @@ function buildPlayer() {
   glow.position.y = 0.05
   player.add(glow)
 
-  // nitro plume (hidden until active)
-  const plumeMat = new THREE.MeshBasicMaterial({
-    color: 0x2cc7ff,
-    transparent: true,
-    opacity: 0.0,
-    blending: THREE.AdditiveBlending
-  })
-  nitroPlume = new THREE.Mesh(new THREE.ConeGeometry(0.55, 4.0, 14, 1, true), plumeMat)
-  nitroPlume.rotation.x = Math.PI / 2
-  nitroPlume.position.set(0, 0.6, 3.4)
-  player.add(nitroPlume)
-  const plume2 = nitroPlume.clone()
-  plume2.material = plumeMat.clone()
-  plume2.material.color.set(0xffe45a)
-  plume2.scale.set(0.6, 1, 0.6)
-  player.add(plume2)
-  player.userData.plumes = [nitroPlume, plume2]
+  // Long flame trail plumes — twin streaks behind the rear bumper.
+  // Three layered cones per side: outer cyan glow, mid hot blue, inner
+  // white-yellow core. All hidden via opacity 0 until fireNitro flips
+  // them on. Total trail length ~10m, much longer than the old 4m cone.
+  const plumeColors = [
+    { color: 0x2cc7ff, op: 0.65, scale: [1.4, 1, 1.4] },     // outer cyan
+    { color: 0x66dfff, op: 0.85, scale: [0.9, 1, 0.9] },     // mid blue
+    { color: 0xfff0a0, op: 0.95, scale: [0.4, 1, 0.4] }      // hot white core
+  ]
+  player.userData.plumes = []
+  for (const tx of [-1.5, 1.5]) {
+    for (const layer of plumeColors) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: layer.color,
+        transparent: true,
+        opacity: 0.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 10, 16, 1, true), mat)
+      cone.rotation.x = Math.PI / 2
+      cone.position.set(tx, 0.6, 8)   // pushed back from the rear bumper
+      cone.scale.set(layer.scale[0], layer.scale[1], layer.scale[2])
+      cone.userData.targetOp = layer.op
+      player.add(cone)
+      player.userData.plumes.push(cone)
+    }
+  }
+  // Keep nitroPlume pointing at one of them so legacy references still work.
+  nitroPlume = player.userData.plumes[0]
 
   // headlight
   headlight = new THREE.SpotLight(0xfff5d0, 0, 70, Math.PI / 5, 0.4, 1.0)
@@ -3530,13 +3549,12 @@ function fireNitro() {
   // dragging long boost windows between checkpoints.
   const dur = CFG.nitroDuration * (state.level?.id === "lv4" ? 1.6 : 1)
   state.nitroTime = dur
-  state.shake = 0.3
-  // Saturation pop for ~600ms when nitro fires — colours pop brighter,
-  // sells the throttle-mash. updateNitroSaturation eases this back out.
-  state.nitroSaturateUntil = performance.now() + 600
+  state.shake = 0.4
+  state.nitroSaturateUntil = performance.now() + dur * 1000
   toast("NITRO!", 900)
   sfxNitro()
-  flashFx("nitro")
+  flashWhite()       // hard white flash on activation
+  flashFx("nitro")   // cyan halo follows
 }
 
 function finishRace(success = true) {
@@ -3765,18 +3783,41 @@ function updatePlayerFlash(now) {
   })
 }
 
-// Pop saturation on the canvas via CSS filter when nitro fires. Applied
-// to the #game element directly so it doesn't fight with stage transforms.
+// CSS filter on the canvas — combines a saturation boost (when nitro
+// fires) with a high-speed contrast/blur tweak above 250 km/h. Reads
+// as motion blur kicking in at extreme velocity.
 function updateNitroSaturation(now) {
   const cv = document.getElementById("game")
   if (!cv) return
+  const filters = []
   const remaining = state.nitroSaturateUntil - now
   if (remaining > 0) {
     const t = Math.min(1, remaining / 600)
-    cv.style.filter = `saturate(${1 + t * 0.5}) brightness(${1 + t * 0.1})`
-  } else if (cv.style.filter) {
-    cv.style.filter = ""
+    filters.push(`saturate(${(1 + t * 0.6).toFixed(2)})`)
+    filters.push(`brightness(${(1 + t * 0.12).toFixed(2)})`)
   }
+  // High-speed contrast bump — past 250 km/h colours pop and a tiny
+  // edge blur (via the CSS `blur()` filter ≤ 0.6px) sells the rush.
+  if (state.speed > 230) {
+    const v = clamp((state.speed - 230) / 80, 0, 1)
+    if (v > 0) {
+      filters.push(`contrast(${(1 + v * 0.18).toFixed(2)})`)
+      if (v > 0.5) filters.push(`blur(${(v * 0.6).toFixed(2)}px)`)
+    }
+  }
+  cv.style.filter = filters.join(" ")
+}
+
+// Brief white flash overlay when nitro fires. Reuses the impact flash
+// element with its own keyframe class so it doesn't clobber the red
+// collision flash.
+function flashWhite() {
+  const fx = $("screenFx")
+  if (!fx) return
+  fx.classList.remove("fx-impact", "fx-nitro", "fx-checkpoint", "fx-white")
+  void fx.offsetWidth
+  fx.classList.add("fx-white")
+  setTimeout(() => fx.classList.remove("fx-white"), 450)
 }
 
 function updateDriving(dt, now) {
@@ -3841,11 +3882,13 @@ function updateDriving(dt, now) {
     })
   }
 
-  // nitro plume
+  // nitro flame trail — animate each plume layer (6 cones total) with a
+  // wobble + targetOp from layer config. Gives a flickering long streak.
   const plumeOn = state.nitroTime > 0
-  player.userData.plumes?.forEach((p, i) => {
-    p.material.opacity = plumeOn ? lerp(p.material.opacity, i === 0 ? 0.85 : 0.6, 0.4) : lerp(p.material.opacity, 0, 0.2)
-    p.scale.z = plumeOn ? 1 + Math.sin(now * 0.04) * 0.18 : 0.6
+  player.userData.plumes?.forEach((p) => {
+    const target = plumeOn ? p.userData.targetOp : 0
+    p.material.opacity = lerp(p.material.opacity, target, plumeOn ? 0.5 : 0.18)
+    p.scale.z = plumeOn ? (1 + Math.sin(now * 0.05 + p.position.x) * 0.22) : 0.4
   })
   headlight.intensity = lerp(headlight.intensity, plumeOn ? 1.2 : 0.5, dt * 4)
   // nitro particle trail — spawn at world rear of player
@@ -4131,6 +4174,14 @@ function updateCamera(dt) {
     cameraTarget.y += (Math.random() - 0.5) * amp * 0.6
     cameraTarget.z += (Math.random() - 0.5) * amp * 0.4
   }
+  // Persistent micro-shake at high speed — sells the "extreme velocity
+  // road vibration" feeling. Intensifies past 200 km/h, peaks during
+  // nitro. Tiny amplitude so it never reads as a hit, just a buzz.
+  if (state.speed > 200) {
+    const v = clamp((state.speed - 200) / 100, 0, 1) * (state.nitroTime > 0 ? 1.4 : 1)
+    cameraTarget.x += (Math.random() - 0.5) * v * 0.18
+    cameraTarget.y += (Math.random() - 0.5) * v * 0.12
+  }
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
@@ -4139,23 +4190,22 @@ function updateCamera(dt) {
   state._cameraRoll = lerp(state._cameraRoll ?? 0, -state.steerVisual * 0.018, dt * 4)
   camera.rotateZ(state._cameraRoll)
 
-  // FOV bands by spec: <200 km/h → 60, 200–280 → 60→72 lerp, nitro → 80.
-  // Portrait gets +10 across the board so the same scene reads correctly
-  // at the rotated-shim aspect.
-  const baseFov = wide ? 60 : 70
+  // FOV bands per spec: idle 55 / cruise 65 / high-speed 80 / nitro 90.
+  // Portrait keeps a +5 offset across all bands for the rotated shim.
+  const fovOffset = wide ? 0 : 5
   const nitroOn = state.nitroTime > 0
   let target
   if (nitroOn) {
-    target = baseFov + 20             // 80 on landscape, 90 on portrait
-  } else if (state.speed > 200) {
-    target = baseFov + clamp((state.speed - 200) / 80, 0, 1) * 12  // → 72/82
+    target = 90 + fovOffset
+  } else if (state.speed >= 200) {
+    target = 65 + clamp((state.speed - 200) / 80, 0, 1) * 15 + fovOffset  // 65 → 80
+  } else if (state.speed >= 100) {
+    target = 55 + ((state.speed - 100) / 100) * 10 + fovOffset            // 55 → 65
   } else {
-    target = baseFov
+    target = 55 + fovOffset
   }
-  // Tiny accel-pull bias keeps the FOV reactive when the gas is mashed
-  // even at lower speeds (otherwise the FOV is glued at 60 until 200km/h).
   target += accelPull * 1.2
-  camera.fov = lerp(camera.fov, target, dt * (nitroOn ? 8 : 4))
+  camera.fov = lerp(camera.fov, target, dt * (nitroOn ? 12 : 4))
   camera.updateProjectionMatrix()
 }
 

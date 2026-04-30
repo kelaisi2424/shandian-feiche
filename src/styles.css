@@ -1496,6 +1496,16 @@ body.gate-dismissed.is-portrait .speed-lines {
   background:
     radial-gradient(ellipse at center, rgba(255, 90, 60, 0.18) 0%, rgba(255, 40, 40, 0.55) 55%, rgba(220, 0, 0, 0.85) 100%);
 }
+.screen-fx.fx-white {
+  animation: fxWhite 0.4s ease-out forwards;
+  background: rgba(255, 255, 255, 0.95);
+}
+@keyframes fxWhite {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  60%  { opacity: 0.45; }
+  100% { opacity: 0; }
+}
 .screen-fx.fx-nitro {
   animation: fxNitro 0.7s ease-out forwards;
   background:
