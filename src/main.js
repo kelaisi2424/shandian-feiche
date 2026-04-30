@@ -1073,6 +1073,67 @@ function setupPlayerWheelRuntime(car) {
   car.userData.wheelRadius = 0.46
 }
 
+// Attach 4 light cubes to the player car: 2 headlights at the nose + 2
+// taillights at the tail. These are the ONLY emissive elements on the
+// player vehicle — body/wheels stay matte. Brake state per-frame boosts
+// taillight emissiveIntensity 0.6 → 2.0 (see updatePlayerCarLights).
+function attachCarLights(car) {
+  // Find the body mesh (largest non-wheel mesh by vertex count if no
+  // mesh is named "body").
+  let body = car.getObjectByName("body")
+  if (!body) {
+    let maxVerts = 0
+    car.traverse((c) => {
+      if (!c.isMesh || !c.geometry || WHEEL_RE.test(c.name || "")) return
+      const v = c.geometry.attributes?.position?.count ?? 0
+      if (v > maxVerts) { maxVerts = v; body = c }
+    })
+  }
+  if (!body) return
+  body.geometry.computeBoundingBox()
+  const bb = body.geometry.boundingBox
+  const halfW = (bb.max.x - bb.min.x) * 0.32           // x offset from centreline
+  const yMid  = bb.min.y + (bb.max.y - bb.min.y) * 0.55
+  // GLB nose is at -Z, tail is at +Z (the playerBody-level rotateY(Math.PI)
+  // flips this when the car renders, but as a child of `body` the lights
+  // ride that flip transparently).
+  const noseZ = bb.min.z + 0.05
+  const tailZ = bb.max.z - 0.05
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0xfff5cc, emissive: 0xffeeaa, emissiveIntensity: 1.5
+  })
+  const tailMat = new THREE.MeshStandardMaterial({
+    color: 0x330000, emissive: 0xff0000, emissiveIntensity: 0.6
+  })
+  const headlights = []
+  const taillights = []
+  for (const sx of [-halfW, halfW]) {
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.05), headMat.clone())
+    head.position.set(sx, yMid, noseZ)
+    body.add(head)
+    headlights.push(head)
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.04), tailMat.clone())
+    tail.position.set(sx, yMid, tailZ)
+    body.add(tail)
+    taillights.push(tail)
+  }
+  car.userData.headlights = headlights
+  car.userData.taillights = taillights
+}
+
+// Per-frame brake-light boost. Smoothly interpolates emissiveIntensity
+// 0.6 ↔ 2.0 based on state.brake. Only touches taillights — never body
+// or wheel materials, so the no-emissive-on-body invariant holds.
+function updatePlayerCarLights() {
+  const tails = playerBody?.userData?.taillights
+  if (!tails) return
+  const target = state.brake ? 2.0 : 0.6
+  for (const t of tails) {
+    t.material.emissiveIntensity = lerp(t.material.emissiveIntensity, target, 0.3)
+  }
+}
+
 function auditPlayerCarRuntime() {
   const result = { meshCount: 0, materials: {} }
   if (!playerBody) return result
@@ -2003,6 +2064,8 @@ function rebuildPlayerCar() {
   upgradeCarMaterials(car, { clearcoat: 0.8, metalness: 0.55, roughness: 0.35 })
   sanitizePlayerCarMaterials(car)
   setupPlayerWheelRuntime(car)
+  attachCarLights(car)
+  attachNitroFlames(car)
   // ── DIAG: dump the player car's actual rendered geometry + materials.
   // If you see BoxGeometry / CylinderGeometry here it's the procedural
   // fallback. GLB content shows up as BufferGeometry with no parameters.
@@ -2713,13 +2776,73 @@ function makeNitroPickup() {
   return g
 }
 
+// Yellow-black warning stripe texture, generated procedurally via canvas.
+// Used as the surface of the construction-barrel fallback hazard so
+// obstacles read as "hazard" without needing additional GLB assets.
+let _hazardStripeTex = null
+function hazardStripeTexture() {
+  if (_hazardStripeTex) return _hazardStripeTex
+  const cv = document.createElement("canvas")
+  cv.width = 128
+  cv.height = 128
+  const g = cv.getContext("2d")
+  // dark base
+  g.fillStyle = "#181820"
+  g.fillRect(0, 0, 128, 128)
+  // diagonal yellow stripes
+  g.fillStyle = "#ffd31a"
+  g.save()
+  g.translate(64, 64)
+  g.rotate(-Math.PI / 4)
+  g.translate(-160, -160)
+  for (let y = 0; y < 320; y += 28) {
+    g.fillRect(0, y, 320, 14)
+  }
+  g.restore()
+  const t = new THREE.CanvasTexture(cv)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.colorSpace = THREE.SRGBColorSpace
+  _hazardStripeTex = t
+  return t
+}
+
+function makeHazardFallback() {
+  // Construction-barrel: dark cylinder body + bright yellow-black warning
+  // stripe band wrapped around the upper half. Reads as "barrier" at any
+  // distance without needing to load another GLB.
+  const g = new THREE.Group()
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2a32,
+    roughness: 0.85,
+    metalness: 0.18
+  })
+  const stripeMat = new THREE.MeshStandardMaterial({
+    map: hazardStripeTexture(),
+    roughness: 0.7,
+    metalness: 0.1
+  })
+  const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.85, 0.7, 16), bodyMat)
+  lower.position.y = 0.35
+  g.add(lower)
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.6, 16, 1, true), stripeMat)
+  stripe.position.y = 1.05
+  g.add(stripe)
+  const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.4, 16), bodyMat)
+  upper.position.y = 1.55
+  g.add(upper)
+  return g
+}
+
 function makeHazard() {
   const ass = cloneAsset("barrierRed", 4.0)
   if (ass) {
     ass.rotation.y = Math.PI / 2
     return ass
   }
-  return cloneAsset("cone", 1.6) || makeFallbackCar(0xff7a18, 0x222)
+  // Cone GLB or — if even that's missing — a hand-built construction
+  // barrel with proper yellow-black warning stripes (was makeFallbackCar
+  // which painted an orange car body that read as a parked vehicle).
+  return cloneAsset("cone", 1.6) || makeHazardFallback()
 }
 
 function spawnRamps() {
@@ -3671,7 +3794,13 @@ function fireNitro() {
   const dur = CFG.nitroDuration * (state.level?.id === "lv4" ? 1.6 : 1)
   state.nitroTime = dur
   state.shake = 0.4
-  state.nitroSaturateUntil = performance.now() + dur * 1000
+  const t = performance.now()
+  state.nitroSaturateUntil = t + dur * 1000
+  // V1.7.1 nitro burst: 200ms FOV spike to 92, then 400ms decay back as
+  // updateCamera lerps toward the normal target. nitroFovSpikeUntil is
+  // a hard window — while inside it, updateCamera force-targets 92 and
+  // ignores the speed/accel/portrait offset bands.
+  state.nitroFovSpikeUntil = t + 200
   toast("NITRO!", 900)
   sfxNitro()
   flashWhite()       // hard white flash on activation
@@ -3867,6 +3996,8 @@ function loop(now) {
     updateNitroSaturation(now)
     updateSpeedRibbons(now)
     updateInvincibility(now)
+    updatePlayerCarLights()
+    updateNitroFlames()
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {
@@ -4151,11 +4282,14 @@ function updateRivals(dt, now) {
         toast("撞开对手！", 800)
       } else if (now >= (state.invincibleUntil ?? 0)) {
         state.hits++
-        state.speed = Math.min(state.speed, 100)
+        // V1.7.1: cut speed to 55% (with floor 80) — softer than the
+        // hard-clamp-to-100 from before, more forgiving when you were
+        // already cruising slow but still readable as "I just got hit".
+        state.speed = Math.max(state.speed * 0.55, 80)
         state.vy = Math.max(state.vy, 4)
         state.shake = 0.5
         state.flashUntil = now + 250
-        state.invincibleUntil = now + 500   // 0.5s i-frames
+        state.invincibleUntil = now + 600   // 0.6s i-frames
         toast("被撞了！稳住", 900)
         flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -4205,11 +4339,11 @@ function updatePickups(dt, now) {
         p.taken = true
         p.mesh.visible = false
         state.hits++
-        state.speed = Math.min(state.speed, 100)
+        state.speed = Math.max(state.speed * 0.55, 80)
         state.vy = Math.max(state.vy, 4)
         state.shake = 0.5
         state.flashUntil = now + 250
-        state.invincibleUntil = now + 500   // 0.5s i-frames
+        state.invincibleUntil = now + 600   // 0.6s i-frames
         toast("撞到障碍！", 900)
         flashFx("impact")
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 32)
@@ -4307,17 +4441,24 @@ function updateCamera(dt) {
   // Bounded to [0..1] so it never dominates the base layout.
   state._gasPull = lerp(state._gasPull ?? 0, state.gas ? 1 : 0, dt * 3)
   const accelPull = state._gasPull * 1.4
-  const baseBack = wide ? 11 : 13
+  // V1.7.1 follow-camera tune per spec:
+  //   speedFactor = min(speed/280, 1)
+  //   followDist  = 7 + speedFactor * 2.5    (7 .. 9.5)
+  //   camHeight   = 3.0 + speedFactor * 0.6  (3.0 .. 3.6)
+  // Closer + lower than the previous "chase-cam from outer space" so
+  // the player car reads as a hero element instead of a speck on the
+  // road. Portrait keeps a small extra back/up offset for the rotated
+  // shim's letterboxed view.
+  const portraitBoost = wide ? 0 : 2
+  const speedFactor = clamp(state.speed / 280, 0, 1)
+  const baseBack = 7 + speedFactor * 2.5 + portraitBoost
   // Nitro snap: short-lived punch-IN (close camera) + recoil-out as it ends.
-  // state.nitroTime starts at CFG.nitroDuration and decays to 0; convert to
-  // a 0..1 phase that's 1 at the very start of nitro and decays to 0.
   const nitroPhase = state.nitroTime > 0 ? state.nitroTime / Math.max(0.01, CFG.nitroDuration ?? 2.4) : 0
   const nitroPunch = nitroPhase > 0.7 ? (nitroPhase - 0.7) / 0.3 : 0   // 0..1 in first ~30%
-  const back = baseBack + speedRatio * 2.5 + accelPull + (state.nitroTime > 0 ? 2.4 : 0) - nitroPunch * 2.6
-  // High speed → camera lowers slightly (more pressure / hood-cam vibe).
+  const back = baseBack + accelPull * 0.8 + (state.nitroTime > 0 ? 2.0 : 0) - nitroPunch * 2.2
   // Airborne → camera pulls a bit higher + further back for the cinematic.
   const airBoost = state.airborne ? 1.6 : 0
-  const high = (wide ? 4.6 : 5.4) + speedRatio * 0.4 - speedRatio * 0.5 + airBoost
+  const high = 3.0 + speedFactor * 0.6 + airBoost + (wide ? 0 : 0.6)
   const camProgress = clamp(state.progress - back - airBoost * 1.4, 0, Track.length)
   const lookProgress = clamp(state.progress + 22 + speedRatio * 8, 0, Track.length)
   const camWorld = progressToWorld(camProgress, state.lateral * 0.55 - state.steerVisual * 0.6, state.y + high)
@@ -4345,17 +4486,22 @@ function updateCamera(dt) {
   camera.position.lerp(cameraTarget, dt * 6)
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
-  // Subtle roll on turns: tilts the camera 0.5–1° into the direction the
-  // car is steering. Smoothed via state._cameraRoll so it doesn't snap.
-  state._cameraRoll = lerp(state._cameraRoll ?? 0, -state.steerVisual * 0.018, dt * 4)
+  // Steering roll (V1.7.1 spec): tilts the camera ~2.3° at full lock.
+  // Smoothed so a quick flick doesn't snap. Was 0.018 (~1°) — bumped
+  // to 0.04 so the corner lean reads as a real body roll.
+  state._cameraRoll = lerp(state._cameraRoll ?? 0, -state.steerVisual * 0.04, dt * 4)
   camera.rotateZ(state._cameraRoll)
 
   // FOV bands per spec: idle 55 / cruise 65 / high-speed 80 / nitro 90.
   // Portrait keeps a +5 offset across all bands for the rotated shim.
   const fovOffset = wide ? 0 : 5
   const nitroOn = state.nitroTime > 0
+  const nowT = performance.now()
+  const inSpike = nowT < (state.nitroFovSpikeUntil ?? 0)
   let target
-  if (nitroOn) {
+  if (inSpike) {
+    target = 92 + fovOffset                       // hard punch on activation
+  } else if (nitroOn) {
     target = 90 + fovOffset
   } else if (state.speed >= 200) {
     target = 65 + clamp((state.speed - 200) / 80, 0, 1) * 15 + fovOffset  // 65 → 80
@@ -4365,7 +4511,9 @@ function updateCamera(dt) {
     target = 55 + fovOffset
   }
   target += accelPull * 1.2
-  camera.fov = lerp(camera.fov, target, dt * (nitroOn ? 12 : 4))
+  // Spike uses a fast lerp (200ms snap-in), recovery uses 400ms decay.
+  const fovLerp = inSpike ? 18 : (nitroOn ? 8 : 4)
+  camera.fov = lerp(camera.fov, target, dt * fovLerp)
   camera.updateProjectionMatrix()
 }
 
@@ -4472,6 +4620,77 @@ function updateSpeedLines() {
   el.style.setProperty("--speed-fx", intensity.toFixed(3))
   el.classList.toggle("active", intensity > 0.05)
   el.classList.toggle("nitro", nitro)
+  // V1.7.1: during nitro, force opacity to 1.0 directly (the .nitro CSS
+  // class also targets opacity 1, but a direct inline override beats any
+  // accidental fade from animations or transitions still in flight).
+  el.style.opacity = nitro ? "1" : ""
+}
+
+// Build twin blue-flame planes anchored behind the rear bumper. Hidden
+// (opacity 0) by default; updateNitroFlames brings them up to 0.95
+// during nitro and billboards them toward the camera every frame so
+// the planes always read as solid streaks instead of edge-on cards.
+function attachNitroFlames(car) {
+  const body = car.getObjectByName("body")
+  if (!body) return
+  body.geometry.computeBoundingBox()
+  const bb = body.geometry.boundingBox
+  const tailZ = bb.max.z + 0.5
+  const halfW = (bb.max.x - bb.min.x) * 0.28
+  const yMid  = bb.min.y + (bb.max.y - bb.min.y) * 0.30
+  // Single flame texture — additive blending, vertical gradient blue→white→transparent
+  const flameTex = (() => {
+    const cv = document.createElement("canvas")
+    cv.width = 16
+    cv.height = 128
+    const g = cv.getContext("2d")
+    const grd = g.createLinearGradient(0, 128, 0, 0)
+    grd.addColorStop(0.00, "rgba(255, 255, 255, 1.0)")    // hot white at the bumper
+    grd.addColorStop(0.25, "rgba(140, 220, 255, 0.85)")
+    grd.addColorStop(0.65, "rgba(38, 120, 255, 0.45)")
+    grd.addColorStop(1.00, "rgba(20, 60, 200, 0.00)")     // fades to nothing
+    g.fillStyle = grd
+    g.fillRect(0, 0, 16, 128)
+    const t = new THREE.CanvasTexture(cv)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  })()
+  const flames = []
+  for (const sx of [-halfW, halfW]) {
+    const mat = new THREE.MeshBasicMaterial({
+      map: flameTex,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    })
+    const flame = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 4), mat)
+    flame.position.set(sx, yMid, tailZ)
+    body.add(flame)
+    flames.push(flame)
+  }
+  car.userData.nitroFlames = flames
+}
+
+// Per-frame: opacity ramps with nitro state, planes billboard toward
+// the camera. Anchor stays glued to the rear bumper because the planes
+// are children of `body`.
+function updateNitroFlames() {
+  const flames = playerBody?.userData?.nitroFlames
+  if (!flames || !flames.length) return
+  const on = state.nitroTime > 0
+  const target = on ? 0.95 : 0
+  for (const f of flames) {
+    f.material.opacity = lerp(f.material.opacity, target, on ? 0.5 : 0.18)
+    if (camera) {
+      // Billboard: rotate the plane to face the camera in body-local space.
+      // Re-apply the X 90° flip to keep the plane oriented "tall" with its
+      // length stretching back along +Z (behind the car).
+      const camLocal = f.parent.worldToLocal(camera.position.clone())
+      f.lookAt(camLocal)
+    }
+  }
 }
 
 // One-shot screen flash. kind: "impact" | "nitro" | "checkpoint"
