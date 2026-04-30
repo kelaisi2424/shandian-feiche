@@ -2328,24 +2328,39 @@ function bindControls() {
   bindCanvasGestures()
 }
 
-// Swipe-to-steer + double-tap nitro on the canvas itself, so phone players
-// can drive without precise button taps. Buttons still work in parallel.
+// Full-screen virtual steering pad + double-tap nitro on the canvas. The
+// entire racing surface is a wheel: the X position of the user's thumb
+// relative to the screen midline maps to steer direction + intensity, so
+// dropping the thumb on the left half instantly turns left, right half
+// turns right. Buttons + keyboard still work in parallel via state.steer.
 function bindCanvasGestures() {
   const canvas = $("game")
-  let startX = 0
-  let startY = 0
-  let startTime = 0
-  let lastTap = 0
   let active = false
+  let lastTap = 0
+
+  const computeSteer = (e) => {
+    // In the rotated-shim mode (portrait + dismissed) the canvas is
+    // CSS-rotated 90deg CW, so the user's left/right swipe lives along
+    // the viewport's Y axis. Detect once per call so it stays correct
+    // even if the user rotates mid-race.
+    const rot = isRotatedPortrait()
+    const span = rot ? innerHeight : innerWidth
+    const pos = rot ? e.clientY : e.clientX
+    const center = span / 2
+    // Full deflection at ~30% away from centre — the user doesn't have to
+    // drag all the way to the edge to peg the wheel, but small dead-zone
+    // taps near the midline don't snap-steer.
+    return clamp((pos - center) / (span * 0.3), -1, 1)
+  }
 
   canvas.addEventListener("pointerdown", (e) => {
     if (state.mode !== "playing") return
-    canvas.setPointerCapture?.(e.pointerId)
-    startX = e.clientX
-    startY = e.clientY
-    startTime = performance.now()
     active = true
-    // double-tap → nitro
+    state.steer = computeSteer(e)
+    // Capture so the move/up events keep flowing if the finger drifts off
+    // the canvas. Wrapped in try/catch — `?.` doesn't swallow throws and
+    // setPointerCapture errors on synthetic events / unsupported browsers.
+    try { canvas.setPointerCapture?.(e.pointerId) } catch (_) {}
     const now = performance.now()
     if (now - lastTap < 300) fireNitro()
     lastTap = now
@@ -2354,29 +2369,14 @@ function bindCanvasGestures() {
   canvas.addEventListener("pointermove", (e) => {
     if (!active || state.mode !== "playing") return
     e.preventDefault()
-    // Rotated-shim mode: the canvas is CSS-rotated 90deg CW, so the game's
-    // "right" lives at the bottom of the viewport. A downward viewport
-    // swipe should map to a rightward in-game steer.
-    const rot = isRotatedPortrait()
-    const drag = rot ? (e.clientY - startY) : (e.clientX - startX)
-    const span = rot ? innerHeight : innerWidth
-    const norm = clamp(drag / (span * 0.18), -1, 1)
-    state.steer = norm
+    state.steer = computeSteer(e)
   })
 
   const release = (e) => {
     if (!active) return
     active = false
-    canvas.releasePointerCapture?.(e.pointerId)
     state.steer = 0
-    // very short tap on right half of screen → fire nitro
-    const dt = performance.now() - startTime
-    const dx = Math.abs(e.clientX - startX)
-    const dy = Math.abs(e.clientY - startY)
-    if (dt < 220 && dx < 12 && dy < 12 && e.clientX > innerWidth * 0.5) {
-      // tap on right half acts as a gas pulse / nitro confirm; left half = brake pulse
-      // (brake is already on the pedal, so nothing here)
-    }
+    try { canvas.releasePointerCapture?.(e.pointerId) } catch (_) {}
   }
   canvas.addEventListener("pointerup", release)
   canvas.addEventListener("pointercancel", release)
