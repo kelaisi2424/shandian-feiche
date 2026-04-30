@@ -20,16 +20,11 @@
          to fit the landscape viewport. No internal layout responds to the
          device — only the stage itself scales. -->
     <div id="app" class="stage">
-      <header class="window-frame">
-        <span class="frame-corner">▮</span>
-        <h1 class="frame-title">闪电飞车</h1>
-        <nav class="frame-buttons">
-          <span title="more">•••</span>
-          <span title="min">━</span>
-          <span title="full">⛶</span>
-          <span title="record">⊙</span>
-        </nav>
-      </header>
+      <!-- V1.8.1: removed `<header class="window-frame">` decorative
+           browser-chrome. Its `<h1 class="frame-title">闪电飞车</h1>`
+           was visible at the same time as `.menu-topbar .brand b`,
+           reading as a duplicate title. The chrome had no functional
+           role (the four span buttons were dummy glyphs). -->
 
       <section id="menu" class="screen menu-screen active">
         <div class="menu-bg"></div>
@@ -174,11 +169,11 @@
               <em>SHARE</em>
             </button>
           </nav>
-          <button id="ctaStartRace" class="cta-btn">
-            <span>开始游戏</span>
-            <em>START RACE</em>
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M9 6 16 12 9 18z"/></svg>
-          </button>
+          <!-- V1.8.1: removed `<button id="ctaStartRace">` — it was a
+               duplicate of the big `#startGame` tile (both said
+               "开始游戏 START RACE" and both ran startRace on click).
+               main.js wires this id with `if (ctaBtn) ctaBtn.addEvent…`
+               so the missing element is a no-op there. -->
         </footer>
       </section>
 

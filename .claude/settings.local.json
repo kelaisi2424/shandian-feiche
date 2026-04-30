@@ -63,7 +63,8 @@
       "Bash(grep -E \"\\\\.\\(glb\\)$|^[a-z]\")",
       "Bash(python3 -c \"print\\('0x2a2a3e =', 0x2a2a3e\\); print\\('0x1f2138 =', 0x1f2138\\); print\\('0x1a1a2e =', 0x1a1a2e\\); print\\('0xffffff =', 0xffffff\\); print\\('0xffd31a =', 0xffd31a\\); print\\('0x1392ff =', 0x1392ff\\)\")",
       "Bash(node -e \"console.log\\('0x2a2a3e =', 0x2a2a3e\\); console.log\\('0x1f2138 =', 0x1f2138\\); console.log\\('0x1a1a2e =', 0x1a1a2e\\); console.log\\('0xffd31a =', 0xffd31a\\); console.log\\('0x9ed3f6 =', 0x9ed3f6\\); console.log\\('0x4d8bc4 =', 0x4d8bc4\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -368,6 +368,15 @@ canvas,
 }
 .screen.active {
   display: flex;
+  /* `!important` defeats the screen-fade-in animation's opacity stop:
+   * the menu's #menu element ships with `class="… active"` in HTML, and
+   * by the time setMode() adds `fade-in` after assets load (5s+ later),
+   * the WebAnimation lands in a `currentTime: 0, playState: running`
+   * stuck state where the keyframe `from { opacity: 0 }` is held forever.
+   * Forcing opacity:1 here keeps the menu visible. The scale transform
+   * in screen-fade-in still animates (only the opacity step is overridden)
+   * so the visual still has the zoom-in feel. */
+  opacity: 1 !important;
 }
 
 /* The branded loading splash was removed in favour of going straight
@@ -2293,8 +2302,12 @@ canvas,
   margin-top: calc(var(--ui) * 0.4);
 }
 
-/* fade transitions between screens */
-.screen.fade-in { animation: screen-fade-in 0.35s ease-out; }
+/* fade transitions between screens — `forwards` so the animated
+ * properties stay at the final keyframe values after the animation
+ * ends. Without it, the menu was reverting to opacity:0 (the from-
+ * keyframe value) and the only way to see it was a console
+ * `style.opacity = '1'` override. */
+.screen.fade-in { animation: screen-fade-in 0.35s ease-out forwards; }
 .screen.fade-out { animation: screen-fade-out 0.25s ease-in forwards; }
 @keyframes screen-fade-in {
   from { opacity: 0; transform: scale(0.97); }
