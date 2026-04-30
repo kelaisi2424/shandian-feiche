@@ -245,6 +245,36 @@ body.gate-dismissed.is-portrait .speed-lines {
   transform-origin: 50% 50%;
 }
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
+canvas,
+#game {
+  display: block;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+#app,
+.stage {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  transform: none !important;
+}
+
 /* ---- title bar at top of screen (像截图里的窗口) ---- */
 .window-frame {
   position: fixed;

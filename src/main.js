@@ -4,6 +4,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js"
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js"
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js"
 import { Save } from "./save.js"
 import {
   PLAYER_CARS,
@@ -506,49 +507,37 @@ async function init() {
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 0.95
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x9bd0f6)
-  scene.fog = new THREE.Fog(0x9bd0f6, 220, 760)
+  scene.background = new THREE.Color(0x1a1430)
+  scene.fog = new THREE.Fog(0x2a2638, 350, 1200)
 
   camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500)
   camera.position.set(0, 6, 30)
   scene.add(track, world, dynamic, particles)
 
-  scene.add(new THREE.HemisphereLight(0xfff7d6, 0x3d72b3, 1.7))
-  const sun = new THREE.DirectionalLight(0xfff5d8, 2.8)
+  scene.add(new THREE.HemisphereLight(0x88aaff, 0x442266, 0.6))
+  const sun = new THREE.DirectionalLight(0xfff5d8, 1.5)
   sun.position.set(110, 140, 60)
+  sun.castShadow = true
+  sun.shadow.mapSize.set(1024, 1024)
+  sun.shadow.camera.left = -120
+  sun.shadow.camera.right = 120
+  sun.shadow.camera.top = 120
+  sun.shadow.camera.bottom = -80
+  sun.shadow.camera.near = 1
+  sun.shadow.camera.far = 420
+  sun.shadow.bias = -0.0005
   scene.add(sun)
-  const fill = new THREE.DirectionalLight(0x9ed8ff, 0.8)
+  const fill = new THREE.DirectionalLight(0x9ed8ff, 0.4)
   fill.position.set(-60, 30, -120)
   scene.add(fill)
 
-  // env map for car paint reflections — procedural "studio sky + ground" via PMREM
+  // Studio env map for clean car paint reflections.
   const pmrem = new THREE.PMREMGenerator(renderer)
-  pmrem.compileEquirectangularShader()
-  const envCanvas = document.createElement("canvas")
-  envCanvas.width = 256
-  envCanvas.height = 128
-  const ec = envCanvas.getContext("2d")
-  const sky = ec.createLinearGradient(0, 0, 0, 128)
-  sky.addColorStop(0, "#cfe6ff")
-  sky.addColorStop(0.55, "#88baff")
-  sky.addColorStop(0.6, "#3b69aa")
-  sky.addColorStop(1, "#1f3050")
-  ec.fillStyle = sky
-  ec.fillRect(0, 0, 256, 128)
-  // hot soft sun
-  const sunG = ec.createRadialGradient(180, 30, 0, 180, 30, 38)
-  sunG.addColorStop(0, "rgba(255,250,210,1)")
-  sunG.addColorStop(1, "rgba(255,250,210,0)")
-  ec.fillStyle = sunG
-  ec.fillRect(120, 0, 130, 60)
-  const envTex = new THREE.CanvasTexture(envCanvas)
-  envTex.mapping = THREE.EquirectangularReflectionMapping
-  envTex.colorSpace = THREE.SRGBColorSpace
-  const envMap = pmrem.fromEquirectangular(envTex).texture
-  scene.environment = envMap
-  envTex.dispose()
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
   pmrem.dispose()
 
   // post-processing — bloom on glow elements (lights, nitro, coins, neon)
@@ -597,7 +586,7 @@ async function init() {
   // expose for debugging
   window.__state = state
   window.__Track = Track
-  window.__player = player
+  window.__player = playerBody
   window.__camera = camera
   window.__renderer = renderer
   window.__composer = composer
@@ -725,7 +714,7 @@ function buildMaterials() {
     metalness: 0.42
   })
   mats.cyan = new THREE.MeshStandardMaterial({
-    color: 0x36e0ff,
+    color: 0x2ec8ff,
     emissive: 0x1e8eff,
     emissiveIntensity: 0.7
   })
@@ -919,19 +908,20 @@ function cloneAsset(name, targetSize, axis = "x") {
 }
 
 // Recolor only the bright body panels of a Kenney car GLB, leaving glass / wheels / lights alone.
-// Kenney car materials use a small palette via the `colormap.png` texture, so we look at the
-// existing material color and only repaint the parts that read as "body paint" (mid-bright,
-// roughly grey/neutral or saturated). Tires / windows / chrome are left intact. Optional
-// `emissive` (hex) + `emissiveIntensity` apply a glow to the body panels — used to give the
-// player vehicle a hero-card neon halo, baked into the material instead of an outline mesh.
+// Player paint must stay opaque and non-emissive; glow belongs to the world,
+// not to cloned shells or polluted car materials.
 // Pre-built dark-rubber tire material reused for every wheel mesh.
 // MeshStandardMaterial intentionally — no clearcoat, high roughness so
 // they read as matte rubber instead of lacquered chassis panels.
 const TIRE_MAT = new THREE.MeshStandardMaterial({
   color: 0x1a1a1a,
   roughness: 0.9,
-  metalness: 0.1
+  metalness: 0.1,
+  emissive: 0x000000,
+  emissiveIntensity: 0
 })
+TIRE_MAT.transparent = false
+TIRE_MAT.opacity = 1
 
 // Mesh-name pattern that flags a wheel/tire/rim — the Kenney Car Kit GLBs
 // export them as "wheel-back-left" / "wheel-front-right" / etc., so a
@@ -941,8 +931,6 @@ const WHEEL_RE = /wheel|tire|tyre|rim/i
 function recolorCar(asset, opts = {}) {
   const body = new THREE.Color(opts.body ?? 0x18b6ff)
   const accent = new THREE.Color(opts.accent ?? 0x081a36)
-  const emi = opts.emissive != null ? new THREE.Color(opts.emissive) : null
-  const emiI = opts.emissiveIntensity ?? 0.3
   asset.traverse((m) => {
     if (!m.isMesh || !m.material) return
     // Wheels: replace with the shared dark-rubber tire material and skip
@@ -952,6 +940,7 @@ function recolorCar(asset, opts = {}) {
     if (m.name && WHEEL_RE.test(m.name)) {
       m.material = TIRE_MAT
       m.castShadow = true
+      m.receiveShadow = true
       return
     }
     const mats = Array.isArray(m.material) ? m.material : [m.material]
@@ -977,23 +966,16 @@ function recolorCar(asset, opts = {}) {
       }
       mat.metalness = Math.max(mat.metalness ?? 0.2, 0.6)
       mat.roughness = Math.min(mat.roughness ?? 0.5, 0.28)
-      // Apply emissive glow to body panels (off by default — the player
-      // path now passes emissiveIntensity 0 so the GLB silhouette isn't
-      // hidden under a halo).
-      if (emi && isBodyPanel && mat.emissive) {
-        mat.emissive.copy(emi)
-        mat.emissiveIntensity = emiI
-      }
-      // Force opaque body materials. The collision invincibility used
-      // to flicker `mat.opacity` and leave `transparent: true` set when
-      // the window closed; the tinted alpha then made the chassis read
-      // as ghostly. Both flags reset here on every rebuild.
+      if (mat.emissive) mat.emissive.setHex(0x000000)
+      mat.emissiveIntensity = 0
       mat.transparent = false
       mat.opacity = 1
+      mat.depthWrite = true
       mats[i] = mat
     }
     m.material = Array.isArray(m.material) ? mats : mats[0]
     m.castShadow = true
+    m.receiveShadow = true
   })
 }
 
@@ -1004,9 +986,9 @@ function recolorCar(asset, opts = {}) {
 // or saturated mid-tone — same heuristic recolorCar uses). Wheels /
 // glass / lights keep their source materials.
 function upgradeCarMaterials(asset, opts = {}) {
-  const clearcoat = opts.clearcoat ?? 0.85
-  const metalness = opts.metalness ?? 0.6
-  const roughness = opts.roughness ?? 0.25
+  const clearcoat = opts.clearcoat ?? 0.8
+  const metalness = opts.metalness ?? 0.55
+  const roughness = opts.roughness ?? 0.35
   asset.traverse((m) => {
     if (!m.isMesh || !m.material) return
     // Wheels keep the matte rubber material set in recolorCar — no
@@ -1032,10 +1014,14 @@ function upgradeCarMaterials(asset, opts = {}) {
         metalness,
         roughness,
         clearcoat,
-        clearcoatRoughness: 0.08,
-        emissive: src.emissive ? src.emissive.clone() : new THREE.Color(0x000000),
-        emissiveIntensity: src.emissiveIntensity ?? 0
+        clearcoatRoughness: 0.15,
+        envMapIntensity: 1.0,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0
       })
+      next.transparent = false
+      next.opacity = 1
+      next.depthWrite = true
       next.userData = next.userData || {}
       next.userData._origEmiH = next.emissive.getHex()
       next.userData._origEmiI = next.emissiveIntensity ?? 0
@@ -1043,6 +1029,66 @@ function upgradeCarMaterials(asset, opts = {}) {
     }
     m.material = Array.isArray(m.material) ? mats : mats[0]
   })
+}
+
+function sanitizePlayerCarMaterials(asset) {
+  asset.traverse((m) => {
+    if (!m.isMesh || !m.material) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    for (const mat of mats) {
+      if (!mat) continue
+      if (mat.emissive) mat.emissive.setHex(0x000000)
+      mat.emissiveIntensity = 0
+      mat.transparent = false
+      mat.opacity = 1
+      mat.depthWrite = true
+      mat.envMapIntensity = mat.envMapIntensity ?? 1.0
+      mat.needsUpdate = true
+    }
+    m.castShadow = true
+    m.receiveShadow = true
+  })
+}
+
+function setupPlayerWheelRuntime(car) {
+  const rollingWheels = []
+  car.traverse((o) => {
+    if (o.isMesh && WHEEL_RE.test(o.name || "")) rollingWheels.push(o)
+  })
+  const steeringPivots = []
+  for (const wheelName of ["wheel-front-left", "wheel-front-right"]) {
+    const wheel = car.getObjectByName(wheelName)
+    if (!wheel || !wheel.parent) continue
+    const parent = wheel.parent
+    const steeringPivot = new THREE.Group()
+    steeringPivot.name = `steering-${wheel.name}`
+    steeringPivot.position.copy(wheel.position)
+    parent.add(steeringPivot)
+    steeringPivot.add(wheel)
+    wheel.position.set(0, 0, 0)
+    steeringPivots.push(steeringPivot)
+  }
+  car.userData.rollingWheels = rollingWheels
+  car.userData.steeringPivots = steeringPivots
+  car.userData.wheelRadius = 0.46
+}
+
+function auditPlayerCarRuntime() {
+  const result = { meshCount: 0, materials: {} }
+  if (!playerBody) return result
+  playerBody.traverse((c) => {
+    if (!c.isMesh) return
+    result.meshCount++
+    if (!c.name || !c.material) return
+    const mat = Array.isArray(c.material) ? c.material[0] : c.material
+    result.materials[c.name] = {
+      em: mat.emissive?.getHexString?.(),
+      ei: mat.emissiveIntensity,
+      t: mat.transparent,
+      o: mat.opacity
+    }
+  })
+  return result
 }
 
 function tintAsset(asset, color, accent) {
@@ -1769,9 +1815,8 @@ function makeCityBlock(width, height, seed = 0) {
     ant.position.y = height + 2
     g.add(ant)
   }
-  // Roof neon: ~1 in 3 buildings get a coloured emissive crown + a soft
-  // PointLight, tinting nearby buildings and the sky overhead. Cycled
-  // through a fixed neon palette so the skyline reads cyberpunk.
+  // Roof neon: emissive crowns give skyline colour without adding dynamic
+  // PointLights to the render pipeline.
   if ((seed % 3) === 1) {
     const palette = [0xff3aa6, 0x26d6ff, 0xb24aff, 0x5cff8a]
     const c = palette[seed % palette.length]
@@ -1782,9 +1827,6 @@ function makeCityBlock(width, height, seed = 0) {
     const crown = new THREE.Mesh(crownGeo, crownMat)
     crown.position.y = height + 0.4
     g.add(crown)
-    const pl = new THREE.PointLight(c, 1.6, 60, 1.6)
-    pl.position.y = height + 1.8
-    g.add(pl)
   }
   return g
 }
@@ -1905,103 +1947,24 @@ function buildPlayer() {
   scene.add(player)
   rebuildPlayerCar()
 
-  // glow underside (cyan light bar) — sized to the enlarged player body
-  const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(5.5, 11.5),
-    new THREE.MeshBasicMaterial({ color: 0x36e0ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending })
-  )
-  glow.rotation.x = -Math.PI / 2
-  glow.position.y = 0.05
-  player.add(glow)
-
-  // Long flame trail plumes — twin streaks behind the rear bumper.
-  // Three layered cones per side: outer cyan glow, mid hot blue, inner
-  // white-yellow core. All hidden via opacity 0 until fireNitro flips
-  // them on. Total trail length ~10m, much longer than the old 4m cone.
-  const plumeColors = [
-    { color: 0x2cc7ff, op: 0.65, scale: [1.4, 1, 1.4] },     // outer cyan
-    { color: 0x66dfff, op: 0.85, scale: [0.9, 1, 0.9] },     // mid blue
-    { color: 0xfff0a0, op: 0.95, scale: [0.4, 1, 0.4] }      // hot white core
-  ]
-  player.userData.plumes = []
-  for (const tx of [-1.5, 1.5]) {
-    for (const layer of plumeColors) {
-      const mat = new THREE.MeshBasicMaterial({
-        color: layer.color,
-        transparent: true,
-        opacity: 0.0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      })
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 10, 16, 1, true), mat)
-      cone.rotation.x = Math.PI / 2
-      cone.position.set(tx, 0.6, 8)   // pushed back from the rear bumper
-      cone.scale.set(layer.scale[0], layer.scale[1], layer.scale[2])
-      cone.userData.targetOp = layer.op
-      player.add(cone)
-      player.userData.plumes.push(cone)
-    }
-  }
-  // Keep nitroPlume pointing at one of them so legacy references still work.
-  nitroPlume = player.userData.plumes[0]
-
-  // headlight
-  headlight = new THREE.SpotLight(0xfff5d0, 0, 70, Math.PI / 5, 0.4, 1.0)
-  headlight.position.set(0, 1.1, -1)
-  headlight.target.position.set(0, 0.6, -8)
-  player.add(headlight, headlight.target)
-
-  // Twin red tail lights — point lights inside small unlit emissive caps.
-  // Sized for the enlarged car (~11m long, so tails sit at z = +5).
-  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2244, transparent: true, opacity: 0.95 })
-  for (const tx of [-1.6, 1.6]) {
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), tailMat)
-    cap.position.set(tx, 0.95, 5)
-    player.add(cap)
-    const tail = new THREE.PointLight(0xff2244, 1.4, 14, 1.6)
-    tail.position.set(tx, 0.95, 5.1)
-    player.add(tail)
-  }
-
-  // Twin speed-ribbon flame trails — flat planes behind each rear wheel,
-  // billboarded toward the camera each frame, opacity scaling with speed
-  // (visible above 230 km/h, full opacity at 305 km/h, longer + cyan
-  // tint during nitro). Per spec these are PlaneGeometry, not particle
-  // systems — cheap and read as continuous streaks at speed.
-  const ribbonTexture = (() => {
-    const cv = document.createElement("canvas")
-    cv.width = 16
-    cv.height = 128
-    const g = cv.getContext("2d")
-    const grd = g.createLinearGradient(0, 0, 0, 128)
-    grd.addColorStop(0.00, "rgba(255, 255, 255, 1.0)")    // hot at the bumper
-    grd.addColorStop(0.25, "rgba(120, 220, 255, 0.80)")
-    grd.addColorStop(0.65, "rgba(40, 120, 255, 0.40)")
-    grd.addColorStop(1.00, "rgba(20, 60, 200, 0.00)")     // fades to nothing
-    g.fillStyle = grd
-    g.fillRect(0, 0, 16, 128)
-    const t = new THREE.CanvasTexture(cv)
-    t.colorSpace = THREE.SRGBColorSpace
-    return t
-  })()
-  player.userData.ribbons = []
-  for (const tx of [-1.4, 1.4]) {
-    const ribbonMat = new THREE.MeshBasicMaterial({
-      map: ribbonTexture,
+  const fakeShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1.4, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0x000000,
       transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
+      opacity: 0.35,
+      depthWrite: false
     })
-    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 5), ribbonMat)
-    // Billboarded toward camera each frame in updateRibbons; default
-    // pose puts the ribbon length along +Z, anchored at the rear bumper.
-    ribbon.position.set(tx, 0.5, 7.5)
-    ribbon.rotation.x = Math.PI / 2
-    player.add(ribbon)
-    player.userData.ribbons.push(ribbon)
-  }
+  )
+  fakeShadow.name = "player-fake-shadow"
+  fakeShadow.rotation.x = -Math.PI / 2
+  fakeShadow.position.y = 0.02
+  player.add(fakeShadow)
+  player.userData.fakeShadow = fakeShadow
+  player.userData.plumes = []
+  player.userData.ribbons = []
+  nitroPlume = null
+  headlight = null
 
   player.position.set(0, state.y, state.z)
 }
@@ -2011,13 +1974,12 @@ function makeFallbackCar(color, trim) {
 }
 
 // Rebuild player visual to match the currently-selected car (called on car
-// switch). Existing player Group, glow, plumes, headlight stay intact.
+// switch). Existing player Group and fake shadow stay intact.
 function rebuildPlayerCar() {
   const carId = Save.get().selectedCar
   const cfg = CAR_BY_ID[carId] ?? CAR_BY_ID[DEFAULT_CAR_ID]
-  // remove the old visual body + neon outline if any
+  // remove the old visual body
   if (playerBody) player.remove(playerBody)
-  if (player.userData.neonOutline) player.remove(player.userData.neonOutline)
   // ── DIAG: did the GLB actually land in `assets`? ──
   console.log(`[REBUILD] selectedCar=${carId}, cfg.asset="${cfg.asset}", assets["${cfg.asset}"]=${assets[cfg.asset] ? "GLB-loaded" : "MISSING"}`)
   // Prefer the Kenney Car Kit GLB (race-future / sedan-sports / race
@@ -2035,15 +1997,12 @@ function rebuildPlayerCar() {
   // nose forward. makeProperCar already bakes this rotation in, so the
   // flip is a harmless no-op there.
   car.rotation.y = Math.PI
-  // Upgrade body materials: clearcoat lacquer + metalness + cyan emissive
-  // glow so the player vehicle reads as a luminous hero.
   if (cfg.body !== undefined) {
-    // No emissive on the body — the cyan glow was producing a halo that
-    // hid the GLB's actual surface detail and made the car read as a
-    // luminous blob. Body colour comes purely from the paint.
-    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x000000, emissiveIntensity: 0 })
+    recolorCar(car, { body: cfg.body, accent: cfg.accent })
   }
-  upgradeCarMaterials(car, { clearcoat: 0.85, metalness: 0.6, roughness: 0.25 })
+  upgradeCarMaterials(car, { clearcoat: 0.8, metalness: 0.55, roughness: 0.35 })
+  sanitizePlayerCarMaterials(car)
+  setupPlayerWheelRuntime(car)
   // ── DIAG: dump the player car's actual rendered geometry + materials.
   // If you see BoxGeometry / CylinderGeometry here it's the procedural
   // fallback. GLB content shows up as BufferGeometry with no parameters.
@@ -2065,26 +2024,9 @@ function rebuildPlayerCar() {
   console.table(meshDump)
   player.add(car)
   playerBody = car
-
-  // Neon outline: a back-side-only clone scaled slightly larger paints a
-  // luminous halo around the car silhouette. Reads at any track distance
-  // and keeps the player visible against busy scenery.
-  const outline = car.clone(true)
-  const rim = new THREE.Color(cfg.rim ?? 0x36e0ff)
-  outline.traverse((m) => {
-    if (!m.isMesh) return
-    m.material = new THREE.MeshBasicMaterial({
-      color: rim,
-      side: THREE.BackSide,
-      transparent: true,
-      opacity: 0.55,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    })
-  })
-  outline.scale.multiplyScalar(1.05)
-  player.add(outline)
-  player.userData.neonOutline = outline
+  window.__player = playerBody
+  window.__playerAudit = auditPlayerCarRuntime
+  console.log("[PLAYER_AUDIT]", JSON.stringify(auditPlayerCarRuntime()))
 
   // apply stats to runtime CFG via the shared physics derivation
   const phys = deriveCarPhysics(cfg)
@@ -2126,8 +2068,8 @@ function applyTrack() {
   const lvl = state.level
   const trackId = lvl?.trackStyle ?? Save.get().selectedTrack
   const t = TRACKS[trackId] ?? TRACKS.sky
-  scene.background = new THREE.Color(t.sky)
-  scene.fog = new THREE.Fog(t.fog[0], t.fog[1], t.fog[2])
+  scene.background = new THREE.Color(0x1a1430)
+  scene.fog = new THREE.Fog(0x2a2638, 350, 1200)
 
   // Per-level sky theme override — repaints the dome and fog so each
   // level feels distinct. Falls through to TRACKS data if the level
@@ -2138,15 +2080,15 @@ function applyTrack() {
     skyDome.material.map = makeSkyTexture(palette.stops)
     skyDome.material.needsUpdate = true
     if (oldMap?.dispose) oldMap.dispose()
-    scene.fog = new THREE.Fog(palette.fog[0], palette.fog[1], palette.fog[2])
-    scene.background = new THREE.Color(palette.fog[0])
+    scene.fog = new THREE.Fog(0x2a2638, 350, 1200)
+    scene.background = new THREE.Color(0x1a1430)
   }
 
   // wet-night look for level 5: tint the fog darker + hint of teal so the
   // road's specular highlights read as water reflection.
   if (lvl?.rainShader) {
-    scene.fog = new THREE.Fog(0x0a1428, 90, 380)
-    scene.background = new THREE.Color(0x040814)
+    scene.fog = new THREE.Fog(0x2a2638, 350, 1200)
+    scene.background = new THREE.Color(0x1a1430)
   }
 
   // Rain particles only exist on lv5 — clear them otherwise so leaving
@@ -2299,10 +2241,6 @@ function makeProperCar(opts = {}) {
     const h = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.10), headMat)
     h.position.set(sx, 0.7, -2.58)
     car.add(h)
-    // light source
-    const pl = new THREE.PointLight(0xfff4c8, 0.9, 14, 1.6)
-    pl.position.set(sx, 0.7, -2.65)
-    car.add(pl)
   }
 
   // ── taillights (rear) ─────────────────────────────────────
@@ -2310,9 +2248,6 @@ function makeProperCar(opts = {}) {
     const t = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.10), tailMat)
     t.position.set(sx, 0.74, 2.58)
     car.add(t)
-    const pl = new THREE.PointLight(0xff2244, 1.4, 14, 1.6)
-    pl.position.set(sx, 0.74, 2.65)
-    car.add(pl)
   }
   // brake light strip across the rear
   const brake = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.06), tailMat)
@@ -3427,7 +3362,11 @@ function refreshCurrencyHud() {
 function applyQuality() {
   const q = Save.get().settings.quality
   const dpr = q === "low" ? 1 : q === "medium" ? 1.5 : q === "high" ? 2 : Math.min(window.devicePixelRatio || 1, 2)
-  if (renderer) renderer.setPixelRatio(dpr)
+  if (renderer) {
+    renderer.setPixelRatio(dpr)
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  }
 }
 
 // First-time tutorial overlay — shown on the very first race only
@@ -3994,15 +3933,10 @@ function updateSpeedRibbons(now) {
 // 500ms and ignores hazard/rival hits during that time. Implementation
 // is a simple `playerBody.visible` toggle — no material mutations, so
 // wheels stay matte black and body keeps its paint detail.
-function updateInvincibility(now) {
+function updateInvincibility() {
   if (!playerBody) return
-  const remaining = (state.invincibleUntil ?? 0) - now
-  if (remaining > 0) {
-    // 80ms half-cycle — blink ~6 times per second
-    playerBody.visible = (Math.floor(now / 80) % 2) === 0
-  } else if (!playerBody.visible) {
-    playerBody.visible = true
-  }
+  const invincibleFrames = Math.max(0, (state.invincibleUntil ?? 0) - performance.now())
+  if(invincibleFrames>0) playerBody.visible = Math.floor(performance.now()/80)%2===0; else playerBody.visible=true;
 }
 
 // CSS filter on the canvas — combines a saturation boost (when nitro
@@ -4093,15 +4027,11 @@ function updateDriving(dt, now) {
   player.rotation.z += -state.steerVisual * 0.18
   if (playerBody) {
     playerBody.rotation.y = Math.PI - state.steerVisual * 0.05
-    // wheel spin: rotate any sub-mesh whose name looks like a wheel
-    const spin = state.speed * dt * 0.16
-    playerBody.traverse((o) => {
-      if (!o.isMesh) return
-      const n = (o.name || "").toLowerCase()
-      if (n.includes("wheel") || n.includes("tire") || n.includes("tyre")) {
-        o.rotation.x -= spin
-      }
-    })
+    const steerAngle = state.steerVisual * 0.45
+    playerBody.userData.steeringPivots?.forEach((p) => { p.rotation.y = steerAngle })
+    const wheelRadius = playerBody.userData.wheelRadius || 0.46
+    const spin = state.speed * dt * 0.278 / wheelRadius
+    playerBody.userData.rollingWheels?.forEach((wheel) => { wheel.rotation.x -= spin })
   }
 
   // nitro flame trail — animate each plume layer (6 cones total) with a
@@ -4112,7 +4042,7 @@ function updateDriving(dt, now) {
     p.material.opacity = lerp(p.material.opacity, target, plumeOn ? 0.5 : 0.18)
     p.scale.z = plumeOn ? (1 + Math.sin(now * 0.05 + p.position.x) * 0.22) : 0.4
   })
-  headlight.intensity = lerp(headlight.intensity, plumeOn ? 1.2 : 0.5, dt * 4)
+  if (headlight) headlight.intensity = lerp(headlight.intensity, plumeOn ? 1.2 : 0.5, dt * 4)
   // nitro particle trail — spawn at world rear of player
   if (plumeOn) {
     state._nitroEmitTimer = (state._nitroEmitTimer || 0) - dt
@@ -4123,7 +4053,7 @@ function updateDriving(dt, now) {
       back.x += (Math.random() - 0.5) * 1.2
       back.y += 0.45 + Math.random() * 0.2
       back.z += (Math.random() - 0.5) * 1.2
-      nitroTrail(back.x, back.y, back.z, Math.random() < 0.5 ? 0x36e0ff : 0xfff15a)
+      nitroTrail(back.x, back.y, back.z, Math.random() < 0.5 ? 0x2ec8ff : 0xfff15a)
     }
   }
 
@@ -4355,7 +4285,7 @@ function updateCheckpoints(now) {
     if (state.progress > c.progress) {
       c.passed = true
       const pos = progressToWorld(c.progress, 0, 4.5)
-      sparks(pos.x, pos.y, pos.z, 0x36e0ff, 28)
+      sparks(pos.x, pos.y, pos.z, 0x2ec8ff, 28)
       toast("通过检查点！", 800)
       flashFx("checkpoint")
       sfxCheckpoint()
