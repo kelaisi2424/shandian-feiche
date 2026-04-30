@@ -20,7 +20,10 @@ export const PLAYER_CARS = [
     id: "lightning_s1",
     name: "LIGHTNING S1",
     tier: "C",
-    asset: "lightning_s1",
+    // Kenney Car Kit "race-future" — the higher-detail GLB. Was the
+    // ~42KB no-logo variant; that one reads as a low-poly cartoon at
+    // hero scale.
+    asset: "race-future",
     topSpeed: 248,
     accel0to100: 4.6,
     handling: 8.1,
@@ -33,7 +36,9 @@ export const PLAYER_CARS = [
     id: "nova_gt",
     name: "NOVA GT",
     tier: "B",
-    asset: "nova_gt",
+    // Kenney Car Kit "sedan-sports" — sedan/GT silhouette, fits the
+    // mid-tier B-class fantasy.
+    asset: "sedan-sports",
     topSpeed: 269,
     accel0to100: 3.9,
     handling: 8.4,
@@ -46,7 +51,8 @@ export const PLAYER_CARS = [
     id: "phantom_x",
     name: "PHANTOM X",
     tier: "A",
-    asset: "phantom_x",
+    // Kenney Car Kit "race" — classic supercar silhouette, A-tier hero.
+    asset: "race",
     topSpeed: 292,
     accel0to100: 3.4,
     handling: 8.9,

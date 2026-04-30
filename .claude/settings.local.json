@@ -59,7 +59,8 @@
       "Bash(where.exe magick *)",
       "WebFetch(domain:shandian.railmountgame.com)",
       "Bash(curl -s -A \"Mozilla/5.0 \\(iPhone; CPU iPhone OS 17_0 like Mac OS X\\) AppleWebKit/605.1.15\" -L \"https://shandian.railmountgame.com/\" -o /tmp/deployed.html)",
-      "Bash(curl -s -A \"Mozilla/5.0 \\(iPhone; CPU iPhone OS 17_0 like Mac OS X\\) AppleWebKit/605.1.15\" -L \"https://shandian.railmountgame.com/assets/index-juMa1k_H.js\" -o /tmp/deployed.js)"
+      "Bash(curl -s -A \"Mozilla/5.0 \\(iPhone; CPU iPhone OS 17_0 like Mac OS X\\) AppleWebKit/605.1.15\" -L \"https://shandian.railmountgame.com/assets/index-juMa1k_H.js\" -o /tmp/deployed.js)",
+      "Bash(grep -E \"\\\\.\\(glb\\)$|^[a-z]\")"
     ]
   }
 }

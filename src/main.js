@@ -905,7 +905,11 @@ function recolorCar(asset, opts = {}) {
       if (mat.color) {
         const hsl = { h: 0, s: 0, l: 0 }
         mat.color.getHSL(hsl)
-        if (hsl.l > 0.35 && hsl.l < 0.92) {
+        // Body paint: any bright panel (l > 0.35) that isn't a pure
+        // saturated colour (the Kenney lights/glass which keep their
+        // original look). Tinted white (l ≈ 1, s = 0) panels — the
+        // default body of race-future / sedan-sports / race — count.
+        if (hsl.l > 0.35) {
           if (hsl.s < 0.55 || hsl.l > 0.55) {
             mat.color.copy(body)
             mat.map = null      // drop Kenney palette texture so paint reads pure
@@ -935,6 +939,49 @@ function recolorCar(asset, opts = {}) {
     }
     m.material = Array.isArray(m.material) ? mats : mats[0]
     m.castShadow = true
+  })
+}
+
+// Walk a loaded GLB car and upgrade body-panel materials to a clearcoat
+// lacquer that catches the bloom + sky reflections. Heuristic: the body
+// panels have the largest mesh by triangle count, plus any mesh whose
+// material's color reads as "body paint" (mid-luminance, low-saturation
+// or saturated mid-tone — same heuristic recolorCar uses). Wheels /
+// glass / lights keep their source materials.
+function upgradeCarMaterials(asset, opts = {}) {
+  const clearcoat = opts.clearcoat ?? 0.85
+  const metalness = opts.metalness ?? 0.6
+  const roughness = opts.roughness ?? 0.25
+  asset.traverse((m) => {
+    if (!m.isMesh || !m.material) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    for (let i = 0; i < mats.length; i++) {
+      const src = mats[i]
+      if (!src.color) continue
+      const hsl = { h: 0, s: 0, l: 0 }
+      src.color.getHSL(hsl)
+      // Skip pitch-black (tires) and pure-emissive lights (those usually
+      // have non-zero emissiveIntensity). Anything else with mid-bright
+      // luminance counts as a body panel that gets the lacquer upgrade.
+      // Includes the now-bright-blue panels recolorCar just produced.
+      const isLight = (src.emissiveIntensity ?? 0) > 0.5
+      const isBody = !isLight && hsl.l > 0.30 && (hsl.s < 0.95 || hsl.l > 0.45)
+      if (!isBody) continue
+      const next = new THREE.MeshPhysicalMaterial({
+        color: src.color.clone(),
+        metalness,
+        roughness,
+        clearcoat,
+        clearcoatRoughness: 0.08,
+        emissive: src.emissive ? src.emissive.clone() : new THREE.Color(0x000000),
+        emissiveIntensity: src.emissiveIntensity ?? 0
+      })
+      next.userData = next.userData || {}
+      next.userData._origEmiH = next.emissive.getHex()
+      next.userData._origEmiI = next.emissiveIntensity ?? 0
+      mats[i] = next
+    }
+    m.material = Array.isArray(m.material) ? mats : mats[0]
   })
 }
 
@@ -1378,8 +1425,12 @@ function buildScenery() {
   const trackId = Save.get().selectedTrack
   const isNight = trackId === "neon"
 
-  // ─── light poles every 50m along both sides ───
-  for (let s = 30; s < Track.length; s += 50) {
+  // ─── light poles every 12m along both sides ───
+  // Past speed-of-velocity research: dense roadside vertical objects
+  // rushing past the camera are the single strongest visual cue for
+  // speed. 12m spacing × 2 sides on a 2400m track = ~400 poles. Cheap
+  // (each is 2 meshes + 1 PointLight at night), high impact.
+  for (let s = 24; s < Track.length; s += 12) {
     for (const sd of [-1, 1]) {
       const pole = makeLightPole(isNight)
       const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + 1.6), 0)
@@ -1522,11 +1573,10 @@ function makeLightPole(isNight) {
   )
   lamp.position.set(1.2, 6.4, 0)
   g.add(lamp)
-  if (isNight) {
-    const halo = new THREE.PointLight(lampColor, 0.6, 14)
-    halo.position.copy(lamp.position)
-    g.add(halo)
-  }
+  // No per-pole PointLight: with poles every 12m × 2 sides we'd be
+  // spawning hundreds of dynamic lights and tank the GPU. The emissive
+  // material at intensity 1.4 catches the existing UnrealBloomPass
+  // and reads as a luminous lamp on its own.
   return g
 }
 
@@ -1843,6 +1893,46 @@ function buildPlayer() {
     player.add(tail)
   }
 
+  // Twin speed-ribbon flame trails — flat planes behind each rear wheel,
+  // billboarded toward the camera each frame, opacity scaling with speed
+  // (visible above 230 km/h, full opacity at 305 km/h, longer + cyan
+  // tint during nitro). Per spec these are PlaneGeometry, not particle
+  // systems — cheap and read as continuous streaks at speed.
+  const ribbonTexture = (() => {
+    const cv = document.createElement("canvas")
+    cv.width = 16
+    cv.height = 128
+    const g = cv.getContext("2d")
+    const grd = g.createLinearGradient(0, 0, 0, 128)
+    grd.addColorStop(0.00, "rgba(255, 255, 255, 1.0)")    // hot at the bumper
+    grd.addColorStop(0.25, "rgba(120, 220, 255, 0.80)")
+    grd.addColorStop(0.65, "rgba(40, 120, 255, 0.40)")
+    grd.addColorStop(1.00, "rgba(20, 60, 200, 0.00)")     // fades to nothing
+    g.fillStyle = grd
+    g.fillRect(0, 0, 16, 128)
+    const t = new THREE.CanvasTexture(cv)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  })()
+  player.userData.ribbons = []
+  for (const tx of [-1.4, 1.4]) {
+    const ribbonMat = new THREE.MeshBasicMaterial({
+      map: ribbonTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    })
+    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 5), ribbonMat)
+    // Billboarded toward camera each frame in updateRibbons; default
+    // pose puts the ribbon length along +Z, anchored at the rear bumper.
+    ribbon.position.set(tx, 0.5, 7.5)
+    ribbon.rotation.x = Math.PI / 2
+    player.add(ribbon)
+    player.userData.ribbons.push(ribbon)
+  }
+
   player.position.set(0, state.y, state.z)
 }
 
@@ -1858,17 +1948,22 @@ function rebuildPlayerCar() {
   // remove the old visual body + neon outline if any
   if (playerBody) player.remove(playerBody)
   if (player.userData.neonOutline) player.remove(player.userData.neonOutline)
-  // Hand-built procedural car (chassis + sloped cabin + windshield +
-  // headlights + taillights + spoiler + 4 wheels) reads as a real car
-  // at our render scale. The Kenney GLB pack is intentionally cartoony
-  // and fights with the cyberpunk lighting, so we skip it here.
-  const car = makeProperCar({
-    body: cfg.body ?? 0x1872ff,
-    accent: cfg.accent ?? 0x081530
-  })
-  // Scale to the same chunky hero size the GLB path used (target ~10m long).
-  car.scale.setScalar(2.0)
-  // makeProperCar's nose already points -Z (forward), so no flip needed.
+  // Prefer the Kenney Car Kit GLB (race-future / sedan-sports / race
+  // ~170KB each — proper supercar silhouettes). Fall back to the hand-
+  // built procedural car only if the GLB failed to load.
+  const car = cloneAsset(cfg.asset, 12, "z")
+    ?? makeProperCar({ body: cfg.body ?? 0x1872ff, accent: cfg.accent ?? 0x081530 })
+  // GLB nose points -Z natively → after lookAt(target+tan) the local -Z
+  // points toward the tangent target → we need the 180° flip to put the
+  // nose forward. makeProperCar already bakes this rotation in, so the
+  // flip is a harmless no-op there.
+  car.rotation.y = Math.PI
+  // Upgrade body materials: clearcoat lacquer + metalness + cyan emissive
+  // glow so the player vehicle reads as a luminous hero.
+  if (cfg.body !== undefined) {
+    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x00ffff, emissiveIntensity: 0.18 })
+  }
+  upgradeCarMaterials(car, { clearcoat: 0.85, metalness: 0.6, roughness: 0.25 })
   player.add(car)
   playerBody = car
 
@@ -2432,14 +2527,15 @@ function addRival(cfg) {
   const opp = cfg.opp
   const style = cfg.style ?? "steady"
   const knobs = RIVAL_STYLE[style] ?? RIVAL_STYLE.steady
-  // Rivals use the same hand-built car shape as the player but with each
-  // opponent's distinct body colour from OPPONENT_CARS. Scaled slightly
-  // smaller (1.4x vs the player's 2.0x) so the player reads as the hero.
-  const car = makeProperCar({
-    body: opp.body ?? 0xe04040,
-    accent: opp.accent ?? 0x300404
-  })
-  car.scale.setScalar(1.4)
+  // Rivals: Kenney no-logo pack GLBs (rival_one, crimson, shadow_zx,
+  // ghost, nighthawk, etc.). 6.5m target length, recoloured per-rival.
+  const car = cloneAsset(opp.asset, 6.5, "z")
+    ?? makeProperCar({ body: opp.body ?? 0xe04040, accent: opp.accent ?? 0x300404 })
+  car.rotation.y = Math.PI
+  if (opp.body !== undefined) {
+    recolorCar(car, { body: opp.body, accent: opp.accent ?? 0x300404 })
+  }
+  upgradeCarMaterials(car, { clearcoat: 0.55, metalness: 0.55, roughness: 0.35 })
   // place along curve at given progress
   const pos = progressToWorld(cfg.progress, cfg.lateral, 0.22)
   car.position.copy(pos)
@@ -3731,6 +3827,8 @@ function loop(now) {
     updateHUD()
     updatePlayerFlash(now)
     updateNitroSaturation(now)
+    updateSpeedRibbons(now)
+    updateInvincibility(now)
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {
@@ -3768,6 +3866,61 @@ function updatePlayerFlash(now) {
       }
     }
   })
+}
+
+// Tail flame ribbons — opacity grows past 230 km/h, length stretches
+// during nitro, planes face the camera each frame so they read as
+// solid streaks instead of flat cards seen from the side.
+function updateSpeedRibbons(now) {
+  const ribbons = player?.userData?.ribbons
+  if (!ribbons) return
+  const speed = state.speed
+  const nitroOn = state.nitroTime > 0
+  let visT = clamp((speed - 230) / 75, 0, 1)
+  if (nitroOn) visT = 1
+  const lenScale = nitroOn ? 1.6 : 1
+  const tint = nitroOn ? 0xb8f0ff : 0x66dfff
+  for (const r of ribbons) {
+    r.material.opacity = lerp(r.material.opacity, visT * 0.95, 0.25)
+    r.material.color.setHex(tint)
+    r.scale.y = lerp(r.scale.y, lenScale, 0.2)
+    // Billboard: rotate the plane to face the camera in player-local
+    // space. After lookAt, restore the original 90° X rotation so the
+    // ribbon stays anchored along the car's +Z (length trailing back).
+    const camLocal = player.worldToLocal(camera.position.clone())
+    const target = new THREE.Vector3(camLocal.x, r.position.y, camLocal.z)
+    r.lookAt(target)
+    r.rotateX(Math.PI / 2)
+  }
+}
+
+// Brief post-collision invincibility window: the player flashes
+// transparent and ignores hazard/rival hits for 500ms. Avoids the
+// "I just got hit and got hit again on the next frame" feel.
+function updateInvincibility(now) {
+  if (!playerBody) return
+  const remaining = (state.invincibleUntil ?? 0) - now
+  if (remaining > 0) {
+    const strobe = (Math.floor(now / 80) % 2) === 0 ? 0.4 : 0.95
+    playerBody.traverse((m) => {
+      if (!m.isMesh || !m.material) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      for (const mat of mats) {
+        mat.transparent = true
+        mat.opacity = strobe
+      }
+    })
+  } else if (state._wasInvincible) {
+    state._wasInvincible = false
+    playerBody.traverse((m) => {
+      if (!m.isMesh || !m.material) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      for (const mat of mats) {
+        mat.opacity = 1
+      }
+    })
+  }
+  state._wasInvincible = remaining > 0
 }
 
 // CSS filter on the canvas — combines a saturation boost (when nitro
@@ -3984,14 +4137,13 @@ function updateRivals(dt, now) {
       if (state.nitroTime > 0) {
         state.speed *= 0.92
         toast("撞开对手！", 800)
-      } else {
+      } else if (now >= (state.invincibleUntil ?? 0)) {
         state.hits++
-        // Hard brake to 100 km/h then re-accel — the user actually
-        // FEELS the rival contact instead of a soft 30% nick.
         state.speed = Math.min(state.speed, 100)
         state.vy = Math.max(state.vy, 4)
-        state.shake = 0.5               // 0.5s shake
-        state.flashUntil = now + 250    // 0.25s white car-flash
+        state.shake = 0.5
+        state.flashUntil = now + 250
+        state.invincibleUntil = now + 500   // 0.5s i-frames
         toast("被撞了！稳住", 900)
         flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -4037,16 +4189,15 @@ function updatePickups(dt, now) {
         showTutorialHint("intro_nitro",
           isTouchDevice() ? "双击屏幕或点击 ⚡ 使用氮气加速" : "按空格使用氮气加速 ⚡",
           2200)
-      } else if (p.type === "hazard" && state.nitroTime <= 0) {
+      } else if (p.type === "hazard" && state.nitroTime <= 0 && now >= (state.invincibleUntil ?? 0)) {
         p.taken = true
         p.mesh.visible = false
         state.hits++
-        // Bigger physical reaction: speed crashes to ~100 km/h regardless
-        // of current speed, then accelerates back up. Car bounces (vy kick).
         state.speed = Math.min(state.speed, 100)
         state.vy = Math.max(state.vy, 4)
-        state.shake = 0.5               // 0.5s camera shake
-        state.flashUntil = now + 250    // 0.25s white car-flash
+        state.shake = 0.5
+        state.flashUntil = now + 250
+        state.invincibleUntil = now + 500   // 0.5s i-frames
         toast("撞到障碍！", 900)
         flashFx("impact")
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 32)

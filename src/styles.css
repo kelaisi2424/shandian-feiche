@@ -43,15 +43,22 @@ body {
 }
 
 /* 3D canvas lives at viewport pixels, never inside the scaled stage —
- * so WebGL renders 1:1 instead of being upscaled by CSS transform. */
+ * so WebGL renders 1:1 instead of being upscaled by CSS transform.
+ * `!important` overrides the inline width/height Three.js writes via
+ * renderer.setSize so a stale viewport never leaves a coloured strip
+ * above or below the rendered scene. */
 #game {
   position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw !important;
+  height: 100vh !important;
   display: block;
   z-index: 0;
   touch-action: none;
+  background: #050a18;
+}
+@supports (height: 100dvh) {
+  #game { height: 100dvh !important; }
 }
 
 /* The stage is the design-time game shell. JS computes --stage-scale on
