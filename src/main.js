@@ -216,25 +216,45 @@ function unlockAudio() {
   audio.musicGain.connect(audio.ctx.destination)
   initMusic()
 
-  // engine: two saw oscillators slightly detuned + lowpass + gain
+  // Engine drone: saw + square + sub oscillator through a speed-modulated
+  // lowpass. A slow LFO on osc1 frequency adds the "lumpy" rumble that
+  // sells the engine as a real machine instead of a static buzz.
   const osc1 = audio.ctx.createOscillator()
   const osc2 = audio.ctx.createOscillator()
+  const oscSub = audio.ctx.createOscillator()
   osc1.type = "sawtooth"
   osc2.type = "square"
+  oscSub.type = "sine"
   osc1.frequency.value = 60
   osc2.frequency.value = 90
+  oscSub.frequency.value = 30
+  // LFO → tiny pitch warble (~6 Hz, ±4 Hz on osc1) for combustion lumpiness
+  const lfo = audio.ctx.createOscillator()
+  const lfoGain = audio.ctx.createGain()
+  lfo.frequency.value = 6
+  lfoGain.gain.value = 4
+  lfo.connect(lfoGain)
+  lfoGain.connect(osc1.frequency)
+  lfo.start()
   const lp = audio.ctx.createBiquadFilter()
   lp.type = "lowpass"
   lp.frequency.value = 900
   const eg = audio.ctx.createGain()
   eg.gain.value = 0
+  // Sub feeds into engine gain through its own (smaller) gain so it adds
+  // chest-thump without muddying the high end.
+  const subGain = audio.ctx.createGain()
+  subGain.gain.value = 0.5
   osc1.connect(lp)
   osc2.connect(lp)
   lp.connect(eg)
+  oscSub.connect(subGain)
+  subGain.connect(eg)
   eg.connect(audio.master)
   osc1.start()
   osc2.start()
-  audio.engine = { osc1, osc2, gain: eg, lp }
+  oscSub.start()
+  audio.engine = { osc1, osc2, oscSub, gain: eg, lp }
 
   // wind: white noise → bandpass
   const buf = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 2, audio.ctx.sampleRate)
@@ -258,13 +278,21 @@ function unlockAudio() {
 
 function setEngineLoad(speedKmh, nitroOn) {
   if (!audio.engine) return
-  // map 0..305 km/h to 50..420 Hz on osc1 (and osc2 = osc1 * 1.5)
+  // map 0..305 km/h to 50..420 Hz on osc1; osc2 = osc1*1.5; subOsc = osc1*0.5
   const f = 50 + (speedKmh / 305) * 360
-  audio.engine.osc1.frequency.setTargetAtTime(f, audio.ctx.currentTime, 0.05)
-  audio.engine.osc2.frequency.setTargetAtTime(f * 1.5, audio.ctx.currentTime, 0.05)
-  audio.engine.lp.frequency.setTargetAtTime(700 + (speedKmh / 305) * 1500, audio.ctx.currentTime, 0.08)
-  audio.engine.gain.gain.setTargetAtTime(state.mode === "playing" ? (nitroOn ? 0.35 : 0.22) : 0, audio.ctx.currentTime, 0.1)
-  audio.windGain.gain.setTargetAtTime(state.mode === "playing" ? Math.min(0.18, speedKmh / 305 * 0.18) : 0, audio.ctx.currentTime, 0.15)
+  const t = audio.ctx.currentTime
+  audio.engine.osc1.frequency.setTargetAtTime(f, t, 0.05)
+  audio.engine.osc2.frequency.setTargetAtTime(f * 1.5, t, 0.05)
+  audio.engine.oscSub.frequency.setTargetAtTime(f * 0.5, t, 0.05)
+  audio.engine.lp.frequency.setTargetAtTime(700 + (speedKmh / 305) * 1500, t, 0.08)
+  // More dynamic range so you actually feel the throttle: idle 0.16, mid
+  // 0.32, top 0.42, nitro slams to 0.55. Was 0.22/0.35 — flat across the
+  // run, so the engine never seemed to react to gas.
+  const speedRatio = speedKmh / 305
+  const baseGain = 0.16 + speedRatio * 0.26   // 0.16 → 0.42
+  const target = state.mode === "playing" ? (nitroOn ? 0.55 : baseGain) : 0
+  audio.engine.gain.gain.setTargetAtTime(target, t, 0.1)
+  audio.windGain.gain.setTargetAtTime(state.mode === "playing" ? Math.min(0.22, speedRatio * 0.22) : 0, t, 0.15)
 }
 
 function sfxImpact() {
