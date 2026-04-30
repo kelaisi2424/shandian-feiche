@@ -1073,8 +1073,11 @@ function buildTrackCurve() {
   // bend multiplier: level.bend = 0.2 means tutorial-style near-straight,
   // level.bend = 1.2 means twistier neon city-night track.
   const bendMul = lvl?.bend ?? 1
-  const baseWobble = tCfg.id === "neon" ? 36 : tCfg.id === "sunset" ? 26 : 18
-  const baseHills = tCfg.id === "neon" ? 2.6 : tCfg.id === "sunset" ? 2.0 : 1.4
+  // Track curvature was too gentle to read as actual turns at race speed.
+  // Bumped baseWobble across all tracks ~2.5x so the spline produces
+  // visible left/right sweepers instead of a near-straight line.
+  const baseWobble = tCfg.id === "neon" ? 80 : tCfg.id === "sunset" ? 65 : 50
+  const baseHills = tCfg.id === "neon" ? 3.6 : tCfg.id === "sunset" ? 2.8 : 2.0
   const wobble = baseWobble * bendMul
   const hills = baseHills * bendMul
   // sample control points every ~70m
