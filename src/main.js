@@ -1852,21 +1852,17 @@ function rebuildPlayerCar() {
   // remove the old visual body + neon outline if any
   if (playerBody) player.remove(playerBody)
   if (player.userData.neonOutline) player.remove(player.userData.neonOutline)
-  // The Kenney pack ships small cars (~4.6m long); scale them up so the
-  // player vehicle reads as a hero element on screen instead of a speck.
-  const car = cloneAsset(cfg.asset, 11, "z") || makeHypercar({ body: cfg.body })
-  // GLB pack convention: car nose points -Z, same as the camera-forward in
-  // our scene. cloneAsset doesn't change orientation; flip 180° so the
-  // player faces "into" the track when placed at progress 0.
-  car.rotation.y = Math.PI
-  // recolor only if the new pack ships untextured placeholders — when a
-  // future high-poly GLB carries its own paint, dropping `body`/`accent`
-  // from the car entry will skip this and keep the model's native colours.
-  // Player gets a cyan emissive glow baked into body panels so the hero
-  // vehicle reads as luminous on screen.
-  if (cfg.body !== undefined) {
-    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x00ffff, emissiveIntensity: 0.3 })
-  }
+  // Hand-built procedural car (chassis + sloped cabin + windshield +
+  // headlights + taillights + spoiler + 4 wheels) reads as a real car
+  // at our render scale. The Kenney GLB pack is intentionally cartoony
+  // and fights with the cyberpunk lighting, so we skip it here.
+  const car = makeProperCar({
+    body: cfg.body ?? 0x1872ff,
+    accent: cfg.accent ?? 0x081530
+  })
+  // Scale to the same chunky hero size the GLB path used (target ~10m long).
+  car.scale.setScalar(2.0)
+  // makeProperCar's nose already points -Z (forward), so no flip needed.
   player.add(car)
   playerBody = car
 
@@ -2009,6 +2005,168 @@ function updateRain(dt) {
 // Koenigsegg-ish hypercar with sloped hood, bubble cabin, side scoops, big rear wing.
 // Uses cell-shaded smooth surfaces instead of Kenney's blocky kit so the silhouette
 // matches the screenshot's blue supercar.
+// Hand-built car using primitives. Reads better than the source Kenney
+// GLBs (which are intentionally low-poly cartoons) at the size we now
+// render the player at. Chassis + sloped cabin + windshield + tinted
+// glass + headlights + taillights + spoiler + 4 wheels. Body uses
+// MeshStandardMaterial(metalness 0.7, roughness 0.3) for the lacquered-
+// supercar sheen, glass uses a darker tinted physical material.
+function makeProperCar(opts = {}) {
+  const cfg = {
+    body: 0x1872ff,
+    accent: 0x081530,
+    glass: 0x06121f,
+    head: 0xfff0a0,
+    tail: 0xff2244,
+    rim: 0xc0c8d4,
+    ...opts
+  }
+  const car = new THREE.Group()
+  // ── shared materials ──────────────────────────────────────
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: cfg.body, metalness: 0.7, roughness: 0.3
+  })
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: cfg.accent, metalness: 0.6, roughness: 0.45
+  })
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: cfg.glass, metalness: 0.3, roughness: 0.05,
+    transparent: true, opacity: 0.55
+  })
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.85 })
+  const rimMat = new THREE.MeshStandardMaterial({ color: cfg.rim, metalness: 0.9, roughness: 0.22 })
+  const headMat = new THREE.MeshStandardMaterial({ color: cfg.head, emissive: 0xfff4c8, emissiveIntensity: 1.2 })
+  const tailMat = new THREE.MeshStandardMaterial({ color: cfg.tail, emissive: 0xff1a2a, emissiveIntensity: 1.0 })
+  const splitMat = new THREE.MeshStandardMaterial({ color: 0x161620, roughness: 0.9 })
+
+  // ── lower body (chassis) ──────────────────────────────────
+  // Long, low, slightly wider than the cabin. Centered at z=0; nose at -2.6.
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.66, 5.2), bodyMat)
+  chassis.position.set(0, 0.55, 0)
+  car.add(chassis)
+  // Front splitter — black bar under the nose
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.16, 0.4), splitMat)
+  splitter.position.set(0, 0.18, -2.5)
+  car.add(splitter)
+  // Side skirts — narrow accent strips low on each side
+  for (const sx of [-1.21, 1.21]) {
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 4.4), accentMat)
+    skirt.position.set(sx, 0.32, 0)
+    car.add(skirt)
+  }
+
+  // ── cabin (upper) ──────────────────────────────────────────
+  // Trapezoidal cross-section: narrower at top than bottom for a sleek
+  // silhouette. Achieved by rotating the front+rear faces slightly via
+  // two box pieces with a slope.
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.62, 2.4), bodyMat)
+  cabin.position.set(0, 1.16, -0.1)
+  car.add(cabin)
+  // Sloped windshield — a thin box rotated 25° to read as a raked screen.
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.84, 1.10, 0.10), glassMat)
+  windshield.position.set(0, 1.18, -1.2)
+  windshield.rotation.x = -0.42
+  car.add(windshield)
+  // Sloped rear window (less raked).
+  const rearWin = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.95, 0.10), glassMat)
+  rearWin.position.set(0, 1.18, 1.0)
+  rearWin.rotation.x = 0.5
+  car.add(rearWin)
+  // Roof
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.08, 1.7), bodyMat)
+  roof.position.set(0, 1.5, -0.1)
+  car.add(roof)
+  // Side windows (per side) — same tinted glass
+  for (const sx of [-1.01, 1.01]) {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 2.0), glassMat)
+    sw.position.set(sx, 1.18, -0.1)
+    car.add(sw)
+  }
+
+  // ── rear spoiler ──────────────────────────────────────────
+  const spoilerStand1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.12), accentMat)
+  spoilerStand1.position.set(-0.85, 1.05, 2.35)
+  car.add(spoilerStand1)
+  const spoilerStand2 = spoilerStand1.clone()
+  spoilerStand2.position.x = 0.85
+  car.add(spoilerStand2)
+  const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.10, 0.4), accentMat)
+  spoilerWing.position.set(0, 1.25, 2.35)
+  car.add(spoilerWing)
+
+  // ── headlights (front, low) ───────────────────────────────
+  for (const sx of [-0.78, 0.78]) {
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.10), headMat)
+    h.position.set(sx, 0.7, -2.58)
+    car.add(h)
+    // light source
+    const pl = new THREE.PointLight(0xfff4c8, 0.9, 14, 1.6)
+    pl.position.set(sx, 0.7, -2.65)
+    car.add(pl)
+  }
+
+  // ── taillights (rear) ─────────────────────────────────────
+  for (const sx of [-0.78, 0.78]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.10), tailMat)
+    t.position.set(sx, 0.74, 2.58)
+    car.add(t)
+    const pl = new THREE.PointLight(0xff2244, 1.4, 14, 1.6)
+    pl.position.set(sx, 0.74, 2.65)
+    car.add(pl)
+  }
+  // brake light strip across the rear
+  const brake = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.06), tailMat)
+  brake.position.set(0, 1.05, 2.58)
+  car.add(brake)
+
+  // ── wheels (4) ────────────────────────────────────────────
+  // Cylinder geometry rotated so the axis points along X (left/right).
+  const wheelGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.34, 18)
+  for (const [wx, wz] of [[-1.12, -1.7], [1.12, -1.7], [-1.12, 1.7], [1.12, 1.7]]) {
+    const tire = new THREE.Mesh(wheelGeo, tireMat)
+    tire.rotation.z = Math.PI / 2
+    tire.position.set(wx, 0.4, wz)
+    car.add(tire)
+    // Hubcap (small disk inside the tire face) — outward-facing chrome.
+    const hub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.24, 0.18, 14),
+      rimMat
+    )
+    hub.rotation.z = Math.PI / 2
+    hub.position.set(wx + (wx > 0 ? 0.04 : -0.04), 0.4, wz)
+    car.add(hub)
+  }
+
+  // Tag every body-panel material with a userData.origEmiH so the
+  // white-flash collision effect can restore values.
+  car.traverse((m) => {
+    if (!m.isMesh || !m.material) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    for (const mat of mats) {
+      if (mat.emissive) {
+        mat.userData = mat.userData || {}
+        mat.userData._origEmiH = mat.emissive.getHex()
+        mat.userData._origEmiI = mat.emissiveIntensity ?? 0
+      }
+    }
+  })
+  // Match the Kenney-pack convention: nose points +Z. The downstream player
+  // and rival update code applies rotateY(π) on top of lookAt, expecting
+  // the imported model to face +Z natively. Bake that in here so the
+  // procedural car drops in seamlessly.
+  car.rotation.y = Math.PI
+  // Bake the rotation into the geometry so future overrides of
+  // playerBody.rotation.y (per-frame at line ~3820) don't undo it.
+  car.updateMatrixWorld(true)
+  const baked = new THREE.Group()
+  car.children.slice().forEach((child) => {
+    car.remove(child)
+    child.applyMatrix4(car.matrix)
+    baked.add(child)
+  })
+  return baked
+}
+
 function makeHypercar(opts = {}) {
   const colors = {
     body: 0x16a8ff,
@@ -2268,14 +2426,14 @@ function addRival(cfg) {
   const opp = cfg.opp
   const style = cfg.style ?? "steady"
   const knobs = RIVAL_STYLE[style] ?? RIVAL_STYLE.steady
-  // Rivals scaled to ~6.6m (was 4.4m) so they read at the same chunky
-  // proportion as the enlarged player car. Each rival keeps its own body
-  // colour from OPPONENT_CARS so the field stays visually distinct.
-  const car = cloneAsset(opp.asset, 6.6, "z") || makeHypercar({ body: opp.body })
-  car.rotation.y = Math.PI
-  if (opp.body !== undefined) {
-    recolorCar(car, { body: opp.body, accent: opp.accent ?? 0x300404 })
-  }
+  // Rivals use the same hand-built car shape as the player but with each
+  // opponent's distinct body colour from OPPONENT_CARS. Scaled slightly
+  // smaller (1.4x vs the player's 2.0x) so the player reads as the hero.
+  const car = makeProperCar({
+    body: opp.body ?? 0xe04040,
+    accent: opp.accent ?? 0x300404
+  })
+  car.scale.setScalar(1.4)
   // place along curve at given progress
   const pos = progressToWorld(cfg.progress, cfg.lateral, 0.22)
   car.position.copy(pos)
