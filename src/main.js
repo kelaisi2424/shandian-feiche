@@ -399,15 +399,27 @@ function scheduleMusic() {
 function sfxCoin() {
   if (!audio.ctx) return
   const now = audio.ctx.currentTime
-  const osc = audio.ctx.createOscillator()
-  osc.type = "triangle"
-  osc.frequency.setValueAtTime(880, now)
-  osc.frequency.linearRampToValueAtTime(1320, now + 0.06)
-  const g = audio.ctx.createGain()
-  g.gain.setValueAtTime(0.18, now)
-  g.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
-  osc.connect(g); g.connect(audio.master)
-  osc.start(now); osc.stop(now + 0.2)
+  // Classic "ding-ding" chime: two stacked triangle pings, the second a
+  // perfect fifth above and 60ms later. Each ping is brief and bright.
+  const ping = (startAt, freq, peakGain, dur) => {
+    const osc = audio.ctx.createOscillator()
+    osc.type = "triangle"
+    osc.frequency.setValueAtTime(freq, startAt)
+    osc.frequency.linearRampToValueAtTime(freq * 1.05, startAt + 0.05)
+    // Add a tiny sine sub for body so the ding doesn't sound thin
+    const sub = audio.ctx.createOscillator()
+    sub.type = "sine"
+    sub.frequency.setValueAtTime(freq * 0.5, startAt)
+    const g = audio.ctx.createGain()
+    g.gain.setValueAtTime(0, startAt)
+    g.gain.linearRampToValueAtTime(peakGain, startAt + 0.005)
+    g.gain.exponentialRampToValueAtTime(0.001, startAt + dur)
+    osc.connect(g); sub.connect(g); g.connect(audio.master)
+    osc.start(startAt); sub.start(startAt)
+    osc.stop(startAt + dur + 0.05); sub.stop(startAt + dur + 0.05)
+  }
+  ping(now,         988,  0.22, 0.18)   // B5 — first ding
+  ping(now + 0.06,  1480, 0.20, 0.22)   // F#6 — second ding (perfect fifth up)
 }
 const tmpVec = new THREE.Vector3()
 const cameraTarget = new THREE.Vector3()
