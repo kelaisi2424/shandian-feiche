@@ -671,22 +671,27 @@ function runDemoSequence() {
 // materials & textures
 // ────────────────────────────────────────────────────────────────────
 function buildMaterials() {
+  // Solid dark asphalt — no map. The previous map-based road was leaving
+  // material.color = #ffffff (default) which read as pure white in
+  // diagnostics; the texture's #2a2a3e base wasn't reliably showing.
+  // Now the colour comes straight off the material so the road renders
+  // dark consistently regardless of texture loader state.
   mats.roadCenter = new THREE.MeshStandardMaterial({
-    map: roadCenterTexture(),
-    roughness: 0.55,
+    color: 0x2a2a3e,
+    roughness: 0.85,
     metalness: 0.05,
     envMapIntensity: 0.15
   })
   mats.roadEdge = new THREE.MeshStandardMaterial({
-    map: roadEdgeTexture(),
-    roughness: 0.45,
-    metalness: 0.08,
+    color: 0x1f2138,
+    roughness: 0.85,
+    metalness: 0.05,
     envMapIntensity: 0.2
   })
   mats.roadEdgeR = new THREE.MeshStandardMaterial({
-    map: roadEdgeTexture(true),
-    roughness: 0.45,
-    metalness: 0.08,
+    color: 0x1f2138,
+    roughness: 0.85,
+    metalness: 0.05,
     envMapIntensity: 0.2
   })
   // Rails get a low-intensity emissive so they read as glowing strips at
