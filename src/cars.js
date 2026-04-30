@@ -24,6 +24,7 @@ export const PLAYER_CARS = [
     // ~42KB no-logo variant; that one reads as a low-poly cartoon at
     // hero scale.
     asset: "race-future",
+    modelScale: 1.0,
     topSpeed: 248,
     accel0to100: 4.6,
     handling: 8.1,
@@ -39,6 +40,7 @@ export const PLAYER_CARS = [
     // Kenney Car Kit "sedan-sports" — sedan/GT silhouette, fits the
     // mid-tier B-class fantasy.
     asset: "sedan-sports",
+    modelScale: 1.0,
     topSpeed: 269,
     accel0to100: 3.9,
     handling: 8.4,
@@ -53,6 +55,7 @@ export const PLAYER_CARS = [
     tier: "A",
     // Kenney Car Kit "race" — classic supercar silhouette, A-tier hero.
     asset: "race",
+    modelScale: 1.0,
     topSpeed: 292,
     accel0to100: 3.4,
     handling: 8.9,
@@ -69,6 +72,7 @@ export const OPPONENT_CARS = [
     name: "RIVAL ONE",
     tier: "A",
     asset: "rival_one",
+    modelScale: 1.0,
     topSpeed: 282,
     aiAggression: 6,
     cornering: 8,
@@ -80,6 +84,7 @@ export const OPPONENT_CARS = [
     name: "STORMER",
     tier: "B",
     asset: "stormer",
+    modelScale: 1.0,
     topSpeed: 258,
     aiAggression: 5,
     cornering: 7,
@@ -91,6 +96,7 @@ export const OPPONENT_CARS = [
     name: "NIGHTHAWK",
     tier: "A",
     asset: "nighthawk",
+    modelScale: 1.0,
     topSpeed: 295,
     aiAggression: 7,
     cornering: 8,
@@ -102,6 +108,7 @@ export const OPPONENT_CARS = [
     name: "CRIMSON",
     tier: "B",
     asset: "crimson",
+    modelScale: 1.0,
     topSpeed: 266,
     aiAggression: 6,
     cornering: 7,
@@ -113,6 +120,7 @@ export const OPPONENT_CARS = [
     name: "SILVER BULLET",
     tier: "A",
     asset: "silver_bullet",
+    modelScale: 1.0,
     topSpeed: 302,
     aiAggression: 5,
     cornering: 8,
@@ -124,6 +132,7 @@ export const OPPONENT_CARS = [
     name: "GHOST",
     tier: "S",
     asset: "ghost",
+    modelScale: 1.0,
     topSpeed: 318,
     aiAggression: 8,
     cornering: 9,
@@ -135,6 +144,7 @@ export const OPPONENT_CARS = [
     name: "IRONCLAD",
     tier: "B",
     asset: "ironclad",
+    modelScale: 1.0,
     topSpeed: 252,
     aiAggression: 8,
     cornering: 6,
@@ -146,6 +156,7 @@ export const OPPONENT_CARS = [
     name: "VELOCITY",
     tier: "A",
     asset: "velocity",
+    modelScale: 1.0,
     topSpeed: 288,
     aiAggression: 4,
     cornering: 9,
@@ -157,6 +168,7 @@ export const OPPONENT_CARS = [
     name: "ONYX",
     tier: "S",
     asset: "onyx",
+    modelScale: 1.0,
     topSpeed: 315,
     aiAggression: 9,
     cornering: 8,
@@ -171,6 +183,19 @@ export const OPPONENT_CARS = [
 export const CAR_BY_ID = Object.fromEntries(
   [...PLAYER_CARS, ...OPPONENT_CARS].map((c) => [c.id, c])
 )
+
+export const MIN_SCALE = 0.8
+export const MAX_SCALE = 1.3
+
+export function applyModelScale(player, car) {
+  const s = car.modelScale ?? 1.0
+  if (s < MIN_SCALE || s > MAX_SCALE) {
+    console.error(`[scale-guard] Car "${car.id}" modelScale=${s} out of allowed range [${MIN_SCALE}, ${MAX_SCALE}], reset to 1.0`)
+    player.scale.setScalar(1.0)
+  } else {
+    player.scale.setScalar(s)
+  }
+}
 
 // Translate user-facing stats (topSpeed/accel0to100/handling/nitro) into
 // the runtime physics knobs the driving loop actually consumes.

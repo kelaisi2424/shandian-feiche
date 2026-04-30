@@ -1,3 +1,21 @@
+/*
+⚠️ 关键约束（V1.8 起，不许违反）
+
+玩家车 scale 通过 cars.js 的 modelScale 控制，严格限制 [0.8, 1.3]
+
+相机必须真正跟车，distanceTo(player) 报警 <20，目标 8-12
+
+body/wheel mesh 不允许 emissive、transparent、opacity<1
+
+不允许 BoxGeometry 给玩家车做"光晕外壳"
+
+障碍物必须用 GLB（Kenney CC0），加载失败 fallback 必须报警
+
+mesh 数用基线突变检测（baseline + 6），不是硬上限
+
+验证工具：src/utils/audit.js -> runAudit()
+手动验证：浏览器 console 输入 window.__audit()
+*/
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js"
@@ -12,6 +30,7 @@ import {
   CAR_BY_ID,
   DEFAULT_CAR_ID,
   deriveCarPhysics,
+  applyModelScale,
   rivalBaseSpeed,
   TIER_STYLE
 } from "./cars.js"
@@ -23,6 +42,7 @@ import {
   nextLevelId,
   TUTORIAL_HINT
 } from "./levels.js"
+import { captureBaseline, runAudit } from "./utils/audit.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -485,6 +505,34 @@ function sfxCoin() {
 const tmpVec = new THREE.Vector3()
 const cameraTarget = new THREE.Vector3()
 const cameraLook = new THREE.Vector3()
+const _camTargetPos = new THREE.Vector3()
+const _camLookAt = new THREE.Vector3()
+const _forward = new THREE.Vector3()
+let auditFrame = 0
+let auditOverlay = null
+
+function inspectLegacyScaleStorage() {
+  const inspected = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key) continue
+      if (/shandian-feiche|scale/i.test(key)) inspected.push(key)
+      if (/scale/i.test(key)) {
+        const raw = localStorage.getItem(key)
+        const num = Number(raw)
+        if (Number.isFinite(num) && num > 1.5) {
+          console.warn(`[scale-guard] Reset legacy localStorage key "${key}" from ${raw} to 1.0`)
+          localStorage.setItem(key, "1.0")
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[scale-guard] localStorage scale inspection failed", e)
+  }
+  console.log("[scale-guard] inspected localStorage keys:", inspected)
+  window.__scaleStorageKeys = inspected
+}
 
 // ────────────────────────────────────────────────────────────────────
 // init
@@ -495,6 +543,7 @@ async function init() {
   // on slow mobile networks — if we wait until after that to wire the
   // button, the user's click during loading is a silent no-op.
   bindRotateGate()
+  inspectLegacyScaleStorage()
   setStageScale()
 
   renderer = new THREE.WebGLRenderer({
@@ -586,11 +635,18 @@ async function init() {
   // expose for debugging
   window.__state = state
   window.__Track = Track
-  window.__player = playerBody
+  window.__player = player
   window.__camera = camera
   window.__renderer = renderer
   window.__composer = composer
   window.__scene = scene
+  if (import.meta.env.DEV) {
+    window.__audit = () => {
+      const issues = runAudit(window.__player, window.__scene, window.__camera)
+      console.log("[audit]", issues.length === 0 ? "✅ all clean" : issues)
+      return issues
+    }
+  }
 
   // assets ready → menu is the initial state. No splash, no two-stage
   // launch flow. The menu HTML markup ships with `class="… active"` so
@@ -830,6 +886,7 @@ async function loadAssets() {
     overhead: "/models/racing/overheadRoundColored.gltf",
     barrierRed: "/models/racing/barrierRed.gltf",
     barrierWhite: "/models/racing/barrierWhite.gltf",
+    barrierWall: "/models/racing/barrierWall.gltf",
     pylon: "/models/racing/pylon.gltf",
     rampKit: "/models/racing/ramp.gltf",
     grandStand: "/models/racing/grandStand.gltf",
@@ -883,7 +940,7 @@ async function loadAssets() {
   assets = Object.fromEntries(results)
 }
 
-function cloneAsset(name, targetSize, axis = "x") {
+function cloneAsset(name, targetSize = null, axis = "x") {
   const src = assets[name]
   if (!src) return null
   const clone = src.clone(true)
@@ -898,7 +955,7 @@ function cloneAsset(name, targetSize, axis = "x") {
   const center = box.getCenter(new THREE.Vector3())
   clone.position.sub(center)
   const dim = axis === "z" ? size.z : axis === "y" ? size.y : Math.max(size.x, size.z)
-  const scale = targetSize / Math.max(0.001, dim)
+  const scale = targetSize == null ? 1 : targetSize / Math.max(0.001, dim)
   const wrap = new THREE.Group()
   wrap.add(clone)
   wrap.scale.setScalar(scale)
@@ -1507,7 +1564,14 @@ function makeRailMesh(samples, lateral, yCenter, w, h, material) {
 }
 
 function makeOverheadGantry(topColor = 0xffce15, accent = 0x10c8ff, withLight = false) {
+  const asset = cloneAsset("overhead", 10, "x")
+  if (asset) {
+    tagObstacle(asset, withLight ? "checkpoint-gate" : "finish-gate", "overhead")
+    return asset
+  }
+  console.warn("[obstacle-glb] Failed to load overhead gate, fallback to placeholder")
   const g = new THREE.Group()
+  g.userData.isFallback = true
   const w = CFG.roadHalfWidth + 1
   for (const side of [-1, 1]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 7.4, 0.55), mats.support)
@@ -1546,6 +1610,35 @@ function makeOverheadGantry(topColor = 0xffce15, accent = 0x10c8ff, withLight = 
     g.add(flag)
   }
   return g
+}
+
+function tagObstacle(obj, kind, asset) {
+  obj.userData = {
+    ...obj.userData,
+    isObstacle: true,
+    obstacleKind: kind,
+    obstacleAsset: asset
+  }
+  obj.traverse((c) => {
+    c.userData = {
+      ...c.userData,
+      isObstacle: true,
+      obstacleKind: kind,
+      obstacleAsset: asset
+    }
+  })
+  return obj
+}
+
+function makeObstacleFallback(kind) {
+  console.warn(`[obstacle-glb] Failed to load ${kind}, fallback to placeholder`)
+  const fallback = new THREE.Mesh(
+    new THREE.ConeGeometry(0.5, 1, 8),
+    new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 })
+  )
+  fallback.position.y = 0.5
+  fallback.userData.isFallback = true
+  return tagObstacle(fallback, kind, "fallback")
 }
 
 function makeFinishLine() {
@@ -2026,6 +2119,8 @@ function buildPlayer() {
   player.userData.ribbons = []
   nitroPlume = null
   headlight = null
+  window.__player = player
+  captureBaseline(player)
 
   player.position.set(0, state.y, state.z)
 }
@@ -2046,7 +2141,7 @@ function rebuildPlayerCar() {
   // Prefer the Kenney Car Kit GLB (race-future / sedan-sports / race
   // ~170KB each — proper supercar silhouettes). Fall back to the hand-
   // built procedural car only if the GLB failed to load.
-  const glbCar = cloneAsset(cfg.asset, 12, "z")
+  const glbCar = cloneAsset(cfg.asset, null, "z")
   const usingFallback = !glbCar
   if (usingFallback) {
     console.warn(`[REBUILD] GLB ${cfg.asset} failed to clone — falling back to makeProperCar`)
@@ -2087,7 +2182,10 @@ function rebuildPlayerCar() {
   console.table(meshDump)
   player.add(car)
   playerBody = car
-  window.__player = playerBody
+  playerBody.scale.setScalar(1)
+  applyModelScale(player, cfg)
+  window.__player = player
+  window.__playerBody = playerBody
   window.__playerAudit = auditPlayerCarRuntime
   console.log("[PLAYER_AUDIT]", JSON.stringify(auditPlayerCarRuntime()))
 
@@ -2703,7 +2801,7 @@ function spawnPickups() {
     const span = Track.length - 360
     for (let i = 0; i < hazardCount; i++) {
       const s = 240 + (span * i) / Math.max(1, hazardCount - 1)
-      const m = makeHazard()
+      const m = makeHazard(i)
       const lane = LANE_X[(i + 1) % LANE_X.length]   // staggered vs coins
       placeAlongTrack(m, s, lane, 0.6 - 0.22)
       dynamic.add(m)
@@ -2744,7 +2842,7 @@ function spawnHeroPickups() {
   for (let s = 220; s < len - 80; s += 80) {
     const lane = HAZ_PATTERN[h % HAZ_PATTERN.length]
     h++
-    const m = makeHazard()
+    const m = makeHazard(h)
     placeAlongTrack(m, s, lane, 0.6 - 0.22)
     dynamic.add(m)
     pickups.push({ mesh: m, progress: s, lateral: lane, type: "hazard", taken: false })
@@ -2830,19 +2928,29 @@ function makeHazardFallback() {
   const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.4, 16), bodyMat)
   upper.position.y = 1.55
   g.add(upper)
-  return g
+  g.userData.isFallback = true
+  return tagObstacle(g, "fallback-barrel", "fallback")
 }
 
-function makeHazard() {
-  const ass = cloneAsset("barrierRed", 4.0)
-  if (ass) {
-    ass.rotation.y = Math.PI / 2
-    return ass
+function makeHazard(index = 0) {
+  const sequence = ["cone", "barrier", "barrel"]
+  const kind = sequence[index % sequence.length]
+  if (kind === "cone") {
+    const cone = cloneAsset("cone", 1.4, "y")
+    if (cone) return tagObstacle(cone, "cone", "cone")
+    return makeObstacleFallback("cone")
   }
-  // Cone GLB or — if even that's missing — a hand-built construction
-  // barrel with proper yellow-black warning stripes (was makeFallbackCar
-  // which painted an orange car body that read as a parked vehicle).
-  return cloneAsset("cone", 1.6) || makeHazardFallback()
+  if (kind === "barrel") {
+    const barrel = cloneAsset("box", 1.7, "y")
+    if (barrel) return tagObstacle(barrel, "barrel", "box")
+    return makeObstacleFallback("barrel")
+  }
+  const barrier = cloneAsset(index % 2 === 0 ? "barrierRed" : "barrierWhite", 4.0)
+  if (barrier) {
+    barrier.rotation.y = Math.PI / 2
+    return tagObstacle(barrier, "barrier", index % 2 === 0 ? "barrierRed" : "barrierWhite")
+  }
+  return makeObstacleFallback("barrier")
 }
 
 function spawnRamps() {
@@ -3381,6 +3489,7 @@ function openGarage() {
     card.addEventListener("click", () => {
       if (unlocked) {
         Save.set({ selectedCar: c.id })
+        rebuildPlayerCar()
         openGarage()
       } else {
         const cur = Save.get()
@@ -3388,6 +3497,7 @@ function openGarage() {
           Save.addCoins(-c.price)
           Save.unlockCar(c.id)
           Save.set({ selectedCar: c.id })
+          rebuildPlayerCar()
           refreshCurrencyHud()
           openGarage()
         } else {
@@ -3489,6 +3599,61 @@ function applyQuality() {
     renderer.setPixelRatio(dpr)
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  }
+}
+
+function ensureAuditOverlay() {
+  if (!import.meta.env.DEV) return null
+  if (auditOverlay) return auditOverlay
+  auditOverlay = document.createElement("div")
+  auditOverlay.id = "audit-overlay"
+  auditOverlay.textContent = "audit pending"
+  document.body.appendChild(auditOverlay)
+  return auditOverlay
+}
+
+function updateAuditGuard() {
+  auditFrame++
+  if (auditFrame % 60 !== 0) return
+  const issues = runAudit(window.__player, scene, camera)
+  let meshCount = 0
+  window.__player?.traverse((c) => { if (c.isMesh) meshCount++ })
+  let fallbackCount = 0
+  const obstacleSamples = []
+  const obstacleSampleKeys = new Set()
+  scene.traverse((c) => {
+    if (c.userData?.isFallback) fallbackCount++
+    if (c.userData?.isObstacle && obstacleSamples.length < 12) {
+      const key = `${c.userData.obstacleKind}:${c.userData.obstacleAsset}:${c.type}:${c.geometry?.type ?? "group"}`
+      if (obstacleSampleKeys.has(key)) return
+      obstacleSampleKeys.add(key)
+      obstacleSamples.push({
+        type: c.type,
+        geometry: c.geometry?.type ?? null,
+        kind: c.userData.obstacleKind,
+        asset: c.userData.obstacleAsset,
+        isFallback: !!c.userData.isFallback
+      })
+    }
+  })
+  const data = {
+    playerScaleX: window.__player?.scale?.x,
+    cameraDistance: camera.position.distanceTo(window.__player.position),
+    playerMeshCount: meshCount,
+    auditIssues: issues,
+    obstacleSamples,
+    fallbackCount
+  }
+  window.__lastAuditData = data
+  console.log("[AUDIT_DATA]", JSON.stringify(data))
+  if (import.meta.env.DEV) {
+    const overlay = ensureAuditOverlay()
+    if (overlay) {
+      overlay.textContent = issues.length === 0 ? "✅ audit clean" : issues.join(" | ")
+      overlay.classList.toggle("bad", issues.length > 0)
+    }
+  } else if (issues.length > 0) {
+    console.warn("[audit]", issues)
   }
 }
 
@@ -3998,6 +4163,7 @@ function loop(now) {
     updateInvincibility(now)
     updatePlayerCarLights()
     updateNitroFlames()
+    updateAuditGuard()
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {
@@ -4432,89 +4598,38 @@ function updateCheckpoints(now) {
 // camera
 // ────────────────────────────────────────────────────────────────────
 function updateCamera(dt) {
-  const wide = innerWidth > innerHeight
-  // dynamic camera distance: pulls back as speed climbs, further when actively
-  // accelerating (gas held + speed still rising), and most during nitro —
-  // sells the "punch into the screen" feel of acceleration.
-  const speedRatio = clamp(state.speed / CFG.maxSpeed, 0, 1.4)
-  // smoothed gas-pull: grows while gas is held, decays when released.
-  // Bounded to [0..1] so it never dominates the base layout.
-  state._gasPull = lerp(state._gasPull ?? 0, state.gas ? 1 : 0, dt * 3)
-  const accelPull = state._gasPull * 1.4
-  // V1.7.1 follow-camera tune per spec:
-  //   speedFactor = min(speed/280, 1)
-  //   followDist  = 7 + speedFactor * 2.5    (7 .. 9.5)
-  //   camHeight   = 3.0 + speedFactor * 0.6  (3.0 .. 3.6)
-  // Closer + lower than the previous "chase-cam from outer space" so
-  // the player car reads as a hero element instead of a speck on the
-  // road. Portrait keeps a small extra back/up offset for the rotated
-  // shim's letterboxed view.
-  const portraitBoost = wide ? 0 : 2
-  const speedFactor = clamp(state.speed / 280, 0, 1)
-  const baseBack = 7 + speedFactor * 2.5 + portraitBoost
-  // Nitro snap: short-lived punch-IN (close camera) + recoil-out as it ends.
-  const nitroPhase = state.nitroTime > 0 ? state.nitroTime / Math.max(0.01, CFG.nitroDuration ?? 2.4) : 0
-  const nitroPunch = nitroPhase > 0.7 ? (nitroPhase - 0.7) / 0.3 : 0   // 0..1 in first ~30%
-  const back = baseBack + accelPull * 0.8 + (state.nitroTime > 0 ? 2.0 : 0) - nitroPunch * 2.2
-  // Airborne → camera pulls a bit higher + further back for the cinematic.
-  const airBoost = state.airborne ? 1.6 : 0
-  const high = 3.0 + speedFactor * 0.6 + airBoost + (wide ? 0 : 0.6)
-  const camProgress = clamp(state.progress - back - airBoost * 1.4, 0, Track.length)
-  const lookProgress = clamp(state.progress + 22 + speedRatio * 8, 0, Track.length)
-  const camWorld = progressToWorld(camProgress, state.lateral * 0.55 - state.steerVisual * 0.6, state.y + high)
-  const lookWorld = progressToWorld(lookProgress, state.lateral * 0.4, state.y + 1.1)
-  cameraTarget.copy(camWorld)
+  _forward.set(0, 0, -1).applyQuaternion(player.quaternion)
+  _forward.y = 0
+  _forward.normalize()
+  const speedFactor = Math.min(Math.abs(state.speed) / 280, 1)
+  const followDist = 8.5 + speedFactor * 2.0
+  const camHeight = 3.2 + speedFactor * 0.5
+
+  _camTargetPos.copy(player.position)
+    .addScaledVector(_forward, -followDist)
+    .add(new THREE.Vector3(0, camHeight, 0))
+
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
-    // Punchier shake: amplitude scales with remaining shake time, so a 0.3s
-    // collision kick stays violent through its whole window instead of a
-    // single perceptible jolt that quickly fades.
     const k = state.shake
     const amp = 0.7 + k * 1.4
-    cameraTarget.x += (Math.random() - 0.5) * amp
-    cameraTarget.y += (Math.random() - 0.5) * amp * 0.6
-    cameraTarget.z += (Math.random() - 0.5) * amp * 0.4
+    _camTargetPos.x += (Math.random() - 0.5) * amp
+    _camTargetPos.y += (Math.random() - 0.5) * amp * 0.6
+    _camTargetPos.z += (Math.random() - 0.5) * amp * 0.4
   }
-  // Persistent micro-shake at high speed — sells the "extreme velocity
-  // road vibration" feeling. Intensifies past 200 km/h, peaks during
-  // nitro. Tiny amplitude so it never reads as a hit, just a buzz.
-  if (state.speed > 200) {
-    const v = clamp((state.speed - 200) / 100, 0, 1) * (state.nitroTime > 0 ? 1.4 : 1)
-    cameraTarget.x += (Math.random() - 0.5) * v * 0.18
-    cameraTarget.y += (Math.random() - 0.5) * v * 0.12
-  }
-  camera.position.lerp(cameraTarget, dt * 6)
-  cameraLook.copy(lookWorld)
-  camera.lookAt(cameraLook)
-  // Steering roll (V1.7.1 spec): tilts the camera ~2.3° at full lock.
-  // Smoothed so a quick flick doesn't snap. Was 0.018 (~1°) — bumped
-  // to 0.04 so the corner lean reads as a real body roll.
-  state._cameraRoll = lerp(state._cameraRoll ?? 0, -state.steerVisual * 0.04, dt * 4)
-  camera.rotateZ(state._cameraRoll)
 
-  // FOV bands per spec: idle 55 / cruise 65 / high-speed 80 / nitro 90.
-  // Portrait keeps a +5 offset across all bands for the rotated shim.
-  const fovOffset = wide ? 0 : 5
-  const nitroOn = state.nitroTime > 0
-  const nowT = performance.now()
-  const inSpike = nowT < (state.nitroFovSpikeUntil ?? 0)
-  let target
-  if (inSpike) {
-    target = 92 + fovOffset                       // hard punch on activation
-  } else if (nitroOn) {
-    target = 90 + fovOffset
-  } else if (state.speed >= 200) {
-    target = 65 + clamp((state.speed - 200) / 80, 0, 1) * 15 + fovOffset  // 65 → 80
-  } else if (state.speed >= 100) {
-    target = 55 + ((state.speed - 100) / 100) * 10 + fovOffset            // 55 → 65
-  } else {
-    target = 55 + fovOffset
+  const t = 1 - Math.exp(-8 * dt)
+  camera.position.lerp(_camTargetPos, t)
+  const actualDist = camera.position.distanceTo(player.position)
+  if (actualDist < 8 || actualDist > 12) {
+    tmpVec.copy(_camTargetPos).sub(player.position).normalize()
+    camera.position.copy(player.position).addScaledVector(tmpVec, clamp(actualDist, 8.5, 12))
   }
-  target += accelPull * 1.2
-  // Spike uses a fast lerp (200ms snap-in), recovery uses 400ms decay.
-  const fovLerp = inSpike ? 18 : (nitroOn ? 8 : 4)
-  camera.fov = lerp(camera.fov, target, dt * fovLerp)
-  camera.updateProjectionMatrix()
+
+  _camLookAt.copy(player.position)
+    .addScaledVector(_forward, 8)
+    .add(new THREE.Vector3(0, 1.0, 0))
+  camera.lookAt(_camLookAt)
 }
 
 function updateMenuCamera(now) {
@@ -4841,14 +4956,8 @@ function updateParticles(dt) {
   }
 }
 
-// `body.gate-dismissed.is-portrait` activates the rotation shim: the canvas
-// + stage are CSS-rotated 90deg CW so the landscape design fills a portrait
-// viewport (necessary on WeChat iOS where orientation lock is a no-op). The
-// renderer/scale math then runs against swapped dims so WebGL aspect and
-// touch input stay correct.
 function isRotatedPortrait() {
-  const b = document.body
-  return !!(b && b.classList.contains("gate-dismissed") && b.classList.contains("is-portrait"))
+  return false
 }
 
 function resize() {
@@ -4867,25 +4976,8 @@ function resize() {
   if (bloomPass) bloomPass.setSize(w, h)
 }
 
-// Compute the uniform scale that fits the 1920×1080 design stage into the
-// current viewport. CSS pulls --stage-scale and applies it via
-// transform: scale(...). Internal layout never reflows — only the wrapper
-// scales, so the same composition reads at every device size. Mobile
-// browsers can briefly report a stale viewport at page-load (address-bar
-// animations, WeChat settle-in) — callers re-run this on staggered timers
-// to pick up the corrected dims.
 function setStageScale() {
-  const stage = document.getElementById("app")
-  if (!stage) return
-  const designW = 1920
-  const designH = 1080
-  const rot = isRotatedPortrait()
-  const vw = rot ? window.innerHeight : window.innerWidth
-  const vh = rot ? window.innerWidth : window.innerHeight
-  if (vw < 50 || vh < 50) return  // viewport not ready yet — skip
-  const scale = Math.min(vw / designW, vh / designH)
-  // round to 4 decimals to keep CSS tidy and avoid sub-pixel jitter
-  document.documentElement.style.setProperty("--stage-scale", scale.toFixed(4))
+  document.documentElement.style.setProperty("--stage-scale", "1")
 }
 
 // Wire the rotate-gate's "我知道了" button. We try the orientation-lock APIs

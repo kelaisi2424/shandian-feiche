@@ -87,6 +87,26 @@ function migrateLegacyCarIds(s) {
   return s
 }
 
+function migrateLegacyScaleFields(s) {
+  const walk = (obj, path = []) => {
+    if (!obj || typeof obj !== "object") return false
+    let changed = false
+    for (const [key, value] of Object.entries(obj)) {
+      const nextPath = [...path, key]
+      if (/scale/i.test(key) && typeof value === "number" && value > 1.5) {
+        console.warn(`[scale-guard] Reset legacy localStorage scale field "${nextPath.join(".")}" from ${value} to 1.0`)
+        obj[key] = 1.0
+        changed = true
+      } else if (value && typeof value === "object") {
+        changed = walk(value, nextPath) || changed
+      }
+    }
+    return changed
+  }
+  if (walk(s)) save()
+  return s
+}
+
 function load() {
   if (cache) return cache
   try {
@@ -95,7 +115,7 @@ function load() {
   } catch {
     cache = { ...DEFAULT, settings: { ...DEFAULT.settings } }
   }
-  cache = migrateLegacyCarIds(cache)
+  cache = migrateLegacyScaleFields(migrateLegacyCarIds(cache))
   return cache
 }
 

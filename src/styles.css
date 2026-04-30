@@ -1,13 +1,4 @@
-/* ---- design-stage layout ----
- * The game shell is rendered into a fixed 1920×1080 "stage" and the whole
- * stage is uniformly scaled with `transform: scale()` to fit whatever
- * landscape viewport the player has. Internal layout never reflows — only
- * the stage scale changes — so the design stays pixel-identical from
- * desktop down to phone landscape.
- *
- * --ui / --frame-h are FIXED inside the stage (overridden below), so
- * children compute against design-time values regardless of the device.
- */
+/* ---- fullscreen layout ---- */
 :root {
   --ui: 14px;
   --frame-h: 40px;
@@ -64,15 +55,12 @@ body {
   #game { height: 100dvh !important; }
 }
 
-/* The stage is the design-time game shell. JS computes --stage-scale on
- * resize / orientationchange to fit the viewport without ever distorting. */
 .stage {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  width: var(--stage-w);
-  height: var(--stage-h);
-  transform: translate(-50%, -50%) scale(var(--stage-scale));
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  transform: none !important;
   transform-origin: 50% 50%;
   z-index: 1;
   overflow: hidden;
@@ -215,33 +203,26 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate {
   }
 }
 
-/* ---- portrait rotation shim ----
- * Triggered when the user dismisses the gate while the device is still
- * portrait. CSS-rotates the canvas + stage 90deg CW so the 1920×1080
- * landscape design fills a portrait viewport. resize() / setStageScale()
- * / canvas swipe handler in main.js read body.gate-dismissed.is-portrait
- * via isRotatedPortrait() and use swapped dims so WebGL aspect, stage
- * scale, and steer input all match the rotated layout. */
 body.gate-dismissed.is-portrait #game {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 100vh;
-  height: 100vw;
-  transform: translate(-50%, -50%) rotate(90deg);
+  inset: 0 !important;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  transform: none !important;
   transform-origin: 50% 50%;
 }
 body.gate-dismissed.is-portrait #app.stage {
-  transform: translate(-50%, -50%) rotate(90deg) scale(var(--stage-scale));
+  transform: none !important;
 }
 body.gate-dismissed.is-portrait .screen-fx,
 body.gate-dismissed.is-portrait .speed-lines {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 100vh;
-  height: 100vw;
-  transform: translate(-50%, -50%) rotate(90deg);
+  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  transform: none !important;
   transform-origin: 50% 50%;
 }
 
@@ -273,6 +254,26 @@ canvas,
   width: 100vw !important;
   height: 100vh !important;
   transform: none !important;
+}
+
+#audit-overlay {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 500;
+  max-width: min(620px, calc(100vw - 20px));
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(6, 40, 20, 0.88);
+  border: 1px solid rgba(92, 255, 138, 0.65);
+  color: #b9ffd0;
+  font: 700 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  pointer-events: none;
+}
+#audit-overlay.bad {
+  background: rgba(80, 8, 12, 0.9);
+  border-color: rgba(255, 90, 90, 0.75);
+  color: #ffd0d0;
 }
 
 /* ---- title bar at top of screen (像截图里的窗口) ---- */
@@ -504,6 +505,7 @@ canvas,
   opacity: 0.7;
 }
 .cta-btn {
+  display: none;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -1132,9 +1134,11 @@ canvas,
 .hud-stats {
   position: absolute;
   top: calc(var(--ui) * 2);
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(var(--ui) * 18);
+  right: calc(var(--ui) * 7);
+  transform: none;
   display: flex;
+  justify-content: center;
   gap: calc(var(--ui) * 0.8);
   z-index: 6;
   pointer-events: none;
