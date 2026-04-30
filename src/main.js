@@ -298,7 +298,8 @@ function setEngineLoad(speedKmh, nitroOn) {
 function sfxImpact() {
   if (!audio.ctx) return
   const now = audio.ctx.currentTime
-  // short metallic noise burst
+
+  // Layer 1 — metallic noise burst through bandpass (the "crunch")
   const buf = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 0.3, audio.ctx.sampleRate)
   const d = buf.getChannelData(0)
   for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4)
@@ -314,6 +315,31 @@ function sfxImpact() {
   src.connect(bp); bp.connect(g); g.connect(audio.master)
   src.start(now)
   src.stop(now + 0.3)
+
+  // Layer 2 — sub-bass thud (a fast 110→40Hz sine drop). This is what
+  // turns a brittle "tssh" into a chest-thump "BANG".
+  const thud = audio.ctx.createOscillator()
+  thud.type = "sine"
+  thud.frequency.setValueAtTime(110, now)
+  thud.frequency.exponentialRampToValueAtTime(40, now + 0.15)
+  const tg = audio.ctx.createGain()
+  tg.gain.setValueAtTime(0, now)
+  tg.gain.linearRampToValueAtTime(0.7, now + 0.005)
+  tg.gain.exponentialRampToValueAtTime(0.001, now + 0.28)
+  thud.connect(tg); tg.connect(audio.master)
+  thud.start(now); thud.stop(now + 0.32)
+
+  // Layer 3 — short distorted square crack at the very front for transient
+  // attack. ~12ms long, drops fast, gives the impact its leading edge.
+  const crack = audio.ctx.createOscillator()
+  crack.type = "square"
+  crack.frequency.setValueAtTime(180, now)
+  const cg = audio.ctx.createGain()
+  cg.gain.setValueAtTime(0.4, now)
+  cg.gain.exponentialRampToValueAtTime(0.001, now + 0.04)
+  crack.connect(cg); cg.connect(audio.master)
+  crack.start(now); crack.stop(now + 0.05)
+
   // public hook for future external SFX (e.g. swap in a real crash sample
   // by reassigning window.sfxHit = () => myAudio.play()). No-op by default.
   if (typeof window !== "undefined" && typeof window.sfxHit === "function") {
