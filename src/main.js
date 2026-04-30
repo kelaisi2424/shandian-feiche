@@ -160,6 +160,16 @@ const state = {
   airborne: false,
   airSince: 0,
   countdown: 0,
+  // Slow-mo factor applied to the loop's dt. Ramps push it to 0.4 for a
+  // brief cinematic jump, then it eases back to 1. Persisted on state so
+  // updateRamps() doesn't need to thread a closure through.
+  timeScale: 1,
+  // Timestamp (perf.now) until which the player's body materials should
+  // flash bright white — set when a collision lands. updatePlayerFlash()
+  // reads it every frame and restores cached emissive when the window ends.
+  flashUntil: 0,
+  // Timestamp until which a saturation boost is applied for nitro pop.
+  nitroSaturateUntil: 0,
   // level system
   level: null,           // current LEVEL_BY_ID entry while a race is running
   ghost: null,           // { car, progress, speed, beaten } when level.ghost is set
@@ -864,15 +874,20 @@ function cloneAsset(name, targetSize, axis = "x") {
 // Recolor only the bright body panels of a Kenney car GLB, leaving glass / wheels / lights alone.
 // Kenney car materials use a small palette via the `colormap.png` texture, so we look at the
 // existing material color and only repaint the parts that read as "body paint" (mid-bright,
-// roughly grey/neutral or saturated). Tires / windows / chrome are left intact.
+// roughly grey/neutral or saturated). Tires / windows / chrome are left intact. Optional
+// `emissive` (hex) + `emissiveIntensity` apply a glow to the body panels — used to give the
+// player vehicle a hero-card neon halo, baked into the material instead of an outline mesh.
 function recolorCar(asset, opts = {}) {
   const body = new THREE.Color(opts.body ?? 0x18b6ff)
   const accent = new THREE.Color(opts.accent ?? 0x081a36)
+  const emi = opts.emissive != null ? new THREE.Color(opts.emissive) : null
+  const emiI = opts.emissiveIntensity ?? 0.3
   asset.traverse((m) => {
     if (!m.isMesh || !m.material) return
     const mats = Array.isArray(m.material) ? m.material : [m.material]
     for (let i = 0; i < mats.length; i++) {
       const mat = mats[i].clone()
+      let isBodyPanel = false
       if (mat.color) {
         const hsl = { h: 0, s: 0, l: 0 }
         mat.color.getHSL(hsl)
@@ -880,6 +895,7 @@ function recolorCar(asset, opts = {}) {
           if (hsl.s < 0.55 || hsl.l > 0.55) {
             mat.color.copy(body)
             mat.map = null      // drop Kenney palette texture so paint reads pure
+            isBodyPanel = true
           } else {
             mat.color.copy(accent)
           }
@@ -887,6 +903,20 @@ function recolorCar(asset, opts = {}) {
       }
       mat.metalness = Math.max(mat.metalness ?? 0.2, 0.6)
       mat.roughness = Math.min(mat.roughness ?? 0.5, 0.28)
+      // Apply emissive glow to body panels so the player car reads as a
+      // luminous hero from any track distance. Skip glass/wheels/lights —
+      // they already have their own emissive in the source GLBs.
+      if (emi && isBodyPanel && mat.emissive) {
+        mat.emissive.copy(emi)
+        mat.emissiveIntensity = emiI
+      }
+      // cache original emissive so the white-flash collision effect can
+      // restore values cleanly after the flash window closes.
+      if (mat.emissive) {
+        mat.userData = mat.userData || {}
+        mat.userData._origEmiH = mat.emissive.getHex()
+        mat.userData._origEmiI = mat.emissiveIntensity ?? 0
+      }
       mats[i] = mat
     }
     m.material = Array.isArray(m.material) ? mats : mats[0]
@@ -1055,6 +1085,24 @@ function buildTrack() {
     const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), tan, Track._up)
     rib.setRotationFromMatrix(m)
     track.add(rib)
+  }
+
+  // White dashed centerline — small white stripes 1.4m × 0.28m every 8m
+  // along progress. Reads as classic motorway lane markings; rushing past
+  // the player at speed sells the velocity better than any HUD number.
+  const dashMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.35,
+    roughness: 0.5
+  })
+  for (let s = 8; s < Track.length - 8; s += 8) {
+    const center = progressToWorld(s, 0, 0.22)
+    const tan = progressTangent(s).clone()
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 1.4), dashMat)
+    dash.position.copy(center)
+    dash.lookAt(center.clone().add(tan))
+    track.add(dash)
   }
 
   // big start-line zebra stripe + periodic narrower stripes
@@ -1694,6 +1742,18 @@ function buildPlayer() {
   headlight.target.position.set(0, 0.6, -8)
   player.add(headlight, headlight.target)
 
+  // Twin red tail lights — point lights inside small unlit emissive caps.
+  // Sized for the enlarged car (~11m long, so tails sit at z = +5).
+  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2244, transparent: true, opacity: 0.95 })
+  for (const tx of [-1.6, 1.6]) {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), tailMat)
+    cap.position.set(tx, 0.95, 5)
+    player.add(cap)
+    const tail = new THREE.PointLight(0xff2244, 1.4, 14, 1.6)
+    tail.position.set(tx, 0.95, 5.1)
+    player.add(tail)
+  }
+
   player.position.set(0, state.y, state.z)
 }
 
@@ -1719,8 +1779,10 @@ function rebuildPlayerCar() {
   // recolor only if the new pack ships untextured placeholders — when a
   // future high-poly GLB carries its own paint, dropping `body`/`accent`
   // from the car entry will skip this and keep the model's native colours.
+  // Player gets a cyan emissive glow baked into body panels so the hero
+  // vehicle reads as luminous on screen.
   if (cfg.body !== undefined) {
-    recolorCar(car, { body: cfg.body, accent: cfg.accent })
+    recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x00ffff, emissiveIntensity: 0.3 })
   }
   player.add(car)
   playerBody = car
@@ -2057,7 +2119,10 @@ function addRival(cfg) {
   const opp = cfg.opp
   const style = cfg.style ?? "steady"
   const knobs = RIVAL_STYLE[style] ?? RIVAL_STYLE.steady
-  const car = cloneAsset(opp.asset, 4.4, "z") || makeHypercar({ body: opp.body })
+  // Rivals scaled to ~6.6m (was 4.4m) so they read at the same chunky
+  // proportion as the enlarged player car. Each rival keeps its own body
+  // colour from OPPONENT_CARS so the field stays visually distinct.
+  const car = cloneAsset(opp.asset, 6.6, "z") || makeHypercar({ body: opp.body })
   car.rotation.y = Math.PI
   if (opp.body !== undefined) {
     recolorCar(car, { body: opp.body, accent: opp.accent ?? 0x300404 })
@@ -2979,6 +3044,9 @@ function fireNitro() {
   state.nitroCharges--
   state.nitroTime = CFG.nitroDuration
   state.shake = 0.3
+  // Saturation pop for ~600ms when nitro fires — colours pop brighter,
+  // sells the throttle-mash. updateNitroSaturation eases this back out.
+  state.nitroSaturateUntil = performance.now() + 600
   toast("NITRO!", 900)
   sfxNitro()
   flashFx("nitro")
@@ -3135,8 +3203,14 @@ function finishRace(success = true) {
 // main loop
 // ────────────────────────────────────────────────────────────────────
 function loop(now) {
-  const dt = Math.min(0.033, (now - last) / 1000)
+  const realDt = Math.min(0.033, (now - last) / 1000)
   last = now
+  // Slow-mo: scale game-update dt by state.timeScale (1 normally, 0.4 during
+  // a ramp jump), and ease it back toward 1 over ~0.6s.
+  const dt = realDt * state.timeScale
+  if (state.timeScale < 1) {
+    state.timeScale = Math.min(1, state.timeScale + realDt * 1.4)
+  }
 
   if (state.mode === "playing") {
     updateDriving(dt, now)
@@ -3148,19 +3222,59 @@ function loop(now) {
     checkTimeLimit(now)
     updateCamera(dt)
     updateHUD()
+    updatePlayerFlash(now)
+    updateNitroSaturation(now)
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {
     updateCamera(dt * 0.4)
   }
 
-  // background world animation always active
-  animateScenery(dt, now)
-  updateParticles(dt)
+  // background world animation always active (use real dt so background
+  // motion isn't yanked into slow-mo too — it would feel wrong).
+  animateScenery(realDt, now)
+  updateParticles(realDt)
   setEngineLoad(state.speed, state.nitroTime > 0)
   if (composer) composer.render()
   else renderer.render(scene, camera)
   requestAnimationFrame(loop)
+}
+
+// Flash the player car's body materials bright white briefly after a
+// collision. Cached _origEmiH/_origEmiI on each material (set in
+// recolorCar) lets us restore values cleanly when the window closes.
+function updatePlayerFlash(now) {
+  if (!playerBody) return
+  const remaining = state.flashUntil - now
+  const t = remaining > 0 ? Math.min(1, remaining / 200) : 0  // 0.2s window
+  playerBody.traverse((m) => {
+    if (!m.isMesh || !m.material) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    for (const mat of mats) {
+      if (!mat.emissive || !mat.userData?._origEmiH == null) continue
+      if (t > 0) {
+        mat.emissive.setHex(0xffffff)
+        mat.emissiveIntensity = (mat.userData._origEmiI ?? 0) + t * 1.6
+      } else if (mat.userData._origEmiH != null) {
+        mat.emissive.setHex(mat.userData._origEmiH)
+        mat.emissiveIntensity = mat.userData._origEmiI ?? 0
+      }
+    }
+  })
+}
+
+// Pop saturation on the canvas via CSS filter when nitro fires. Applied
+// to the #game element directly so it doesn't fight with stage transforms.
+function updateNitroSaturation(now) {
+  const cv = document.getElementById("game")
+  if (!cv) return
+  const remaining = state.nitroSaturateUntil - now
+  if (remaining > 0) {
+    const t = Math.min(1, remaining / 600)
+    cv.style.filter = `saturate(${1 + t * 0.5}) brightness(${1 + t * 0.1})`
+  } else if (cv.style.filter) {
+    cv.style.filter = ""
+  }
 }
 
 function updateDriving(dt, now) {
@@ -3187,7 +3301,12 @@ function updateDriving(dt, now) {
   state.vy -= 32 * dt
   state.y += state.vy * dt
   if (state.y < 0.22) {
-    if (state.airborne) state.shake = Math.max(state.shake, 0.18)
+    if (state.airborne) {
+      state.shake = Math.max(state.shake, 0.22)
+      // Dust kick on landing — grey/brown puff at the wheels.
+      const land = progressToWorld(state.progress, state.lateral, 0.3)
+      sparks(land.x, land.y, land.z, 0x9a7a50, 14)
+    }
     state.y = 0.22
     state.vy = 0
     state.airborne = false
@@ -3327,6 +3446,7 @@ function updateRivals(dt, now) {
         state.hits++
         state.speed *= 0.7              // -30% speed on collision
         state.shake = 0.3               // 0.3s camera shake
+        state.flashUntil = now + 200    // 0.2s white car-flash
         toast("被撞了！稳住", 900)
         flashFx("impact")
         if (state.hits >= CFG.hitLimit) finishRace(false)
@@ -3370,6 +3490,7 @@ function updatePickups(dt, now) {
         state.hits++
         state.speed *= 0.7              // -30% speed on hazard hit
         state.shake = 0.3               // 0.3s camera shake
+        state.flashUntil = now + 200    // 0.2s white car-flash
         toast("撞到障碍！", 900)
         flashFx("impact")
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xff7a18, 24)
@@ -3391,6 +3512,9 @@ function updateRamps(dt, now) {
       state.vy = power
       state.airborne = true
       state.shake = 0.32
+      // Cinematic slow-mo punch — dt scaled to 0.4 in the loop, ramps back
+      // to 1 over ~0.6s. Sells the launch as a hero moment.
+      state.timeScale = 0.4
       const sparkPos = progressToWorld(r.progress, r.lateral, 1.0)
       sparks(sparkPos.x, sparkPos.y, sparkPos.z, 0xffd23a, 24)
       toast(state.nitroTime > 0 ? "超级飞跃！" : "飞跃！", 900)
@@ -3486,15 +3610,23 @@ function updateCamera(dt) {
   cameraLook.copy(lookWorld)
   camera.lookAt(cameraLook)
 
-  // FOV pulse driven by speed + nitro + gas-pull (extra punch when accelerating).
-  // Nitro pushes the lerp target to ~75 on landscape (60 base + 15 boost)
-  // and snaps in twice as fast for a hit-the-button-feel-it punch, then
-  // eases back when nitro ends.
+  // FOV bands by spec: <200 km/h → 60, 200–280 → 60→72 lerp, nitro → 80.
+  // Portrait gets +10 across the board so the same scene reads correctly
+  // at the rotated-shim aspect.
   const baseFov = wide ? 60 : 70
   const nitroOn = state.nitroTime > 0
-  const nitroBoost = nitroOn ? 15 : 0
-  const targetFov = baseFov + speedRatio * 6 + accelPull * 2 + nitroBoost
-  camera.fov = lerp(camera.fov, targetFov, dt * (nitroOn ? 8 : 4))
+  let target
+  if (nitroOn) {
+    target = baseFov + 20             // 80 on landscape, 90 on portrait
+  } else if (state.speed > 200) {
+    target = baseFov + clamp((state.speed - 200) / 80, 0, 1) * 12  // → 72/82
+  } else {
+    target = baseFov
+  }
+  // Tiny accel-pull bias keeps the FOV reactive when the gas is mashed
+  // even at lower speeds (otherwise the FOV is glued at 60 until 200km/h).
+  target += accelPull * 1.2
+  camera.fov = lerp(camera.fov, target, dt * (nitroOn ? 8 : 4))
   camera.updateProjectionMatrix()
 }
 
@@ -3589,14 +3721,15 @@ function updateMiniMap(progress) {
   if (player) player.style.top = `${progress * 100}%`
 }
 
-// Speed lines overlay: opacity scales with speed, switches to cyan during nitro.
-// Threshold 150 km/h so they only show at racing speeds, not while cruising.
+// Speed lines overlay: opacity scales with speed, switches to cyan during
+// nitro. Per spec: invisible below 200 km/h, ramps 0→0.6 between 200 and
+// 305 km/h, full 1.0 during nitro.
 function updateSpeedLines() {
   const el = $("speedLines")
   if (!el) return
-  const speedRatio = clamp((state.speed - 150) / 150, 0, 1)
+  const speedRatio = clamp((state.speed - 200) / 105, 0, 1) * 0.6
   const nitro = state.nitroTime > 0
-  const intensity = nitro ? Math.max(0.7, speedRatio) : speedRatio
+  const intensity = nitro ? 1 : speedRatio
   el.style.setProperty("--speed-fx", intensity.toFixed(3))
   el.classList.toggle("active", intensity > 0.05)
   el.classList.toggle("nitro", nitro)
