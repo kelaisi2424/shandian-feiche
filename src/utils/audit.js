@@ -119,6 +119,83 @@ if (typeof window !== "undefined") {
     if (++_swapTries > 30) clearInterval(_swapTimer)
   }, 1000)
 
+  // V1.8.2c: world scroll-direction sanity check.
+  //
+  // Architecture note (verified with matrixWorld sampling on 2026-05-01):
+  // this game is NOT a runner architecture. updateDriving in main.js
+  // does `state.progress += speed * dt; player.position.copy(progressToWorld(...))`
+  // — the PLAYER moves along the spline; obstacles are statically
+  // placed via placeAlongTrack at race start and never updated per
+  // frame. Confirmed by: scene.traverse → 35 obstacles spread
+  // worldZ ∈ [-2450, +24] and zero `obstacle.position.z = …` writes
+  // anywhere in the per-frame path.
+  //
+  // So __scrollCheck measures the RELATIVE motion between obstacles
+  // and the camera by sampling the nearest-ahead obstacle's world z
+  // twice. As the player drives forward, the nearest obstacle ahead
+  // gets closer (its z relative to camera shrinks toward 0). If that
+  // relative z is INCREASING (obstacle pulling away), there's a real
+  // bug somewhere — either player isn't moving or obstacles are
+  // moving the wrong way.
+  let __obstacleSample = null
+  window.__scrollCheck = () => {
+    const scene = window.__scene
+    const camera = window.__camera
+    if (!scene || !camera) return "NO_SCENE"
+    const camZ = camera.position.z
+    const camX = camera.position.x
+    const obstacles = []
+    scene.traverse((c) => {
+      if (!c.userData?.isObstacle) return
+      // Only top-level obstacle groups (skip submeshes whose userData
+      // also got tagged by tagObstacle's traverse).
+      if (c.parent && c.parent.userData?.isObstacle) return
+      c.updateMatrixWorld(true)
+      const m = c.matrixWorld.elements
+      const wx = m[12]
+      const wz = m[14]
+      const distSq = (wx - camX) ** 2 + (wz - camZ) ** 2
+      obstacles.push({
+        kind: c.userData.obstacleKind,
+        wz,
+        dz: wz - camZ,        // relative to camera; +ve = behind camera, -ve = ahead
+        distSq
+      })
+    })
+    if (obstacles.length === 0) return { warning: "no obstacles in scene" }
+    // The "nearest ahead" obstacle: smallest |dz| among those with dz < 0.
+    obstacles.sort((a, b) => a.distSq - b.distSq)
+    const nearest = obstacles[0]
+    const now = performance.now()
+    if (!__obstacleSample || now - __obstacleSample.time > 5000) {
+      __obstacleSample = { time: now, nearest }
+      console.log("[scrollCheck] sample recorded, run again in 1-2 seconds")
+      return "NEED_SECOND_SAMPLE"
+    }
+    const dt = (now - __obstacleSample.time) / 1000
+    // Relative z change of the same nearest obstacle: nearest.dz - prev.dz.
+    // Positive = obstacle's relative z is increasing (player drove past it
+    // OR obstacle moved away). Negative = relative z shrinking (player
+    // approaching). For "moving player driving forward", expect the
+    // nearest obstacle to either CYCLE through (one passes, next becomes
+    // nearest) or distSq to be roughly stable as the player advances.
+    const dDistSq = nearest.distSq - __obstacleSample.nearest.distSq
+    const playerProgress = window.__state?.progress ?? null
+    const lastProgress = __obstacleSample.progress ?? null
+    const progressDelta = (lastProgress != null && playerProgress != null) ? playerProgress - lastProgress : null
+    const verdict = progressDelta != null && progressDelta > 1
+      ? "✅ player progressing along track"
+      : progressDelta != null && progressDelta <= 0
+        ? "❌ PLAYER STATIC — progress not advancing"
+        : "⚠️ insufficient data"
+    console.log(
+      `%c[scrollCheck] dt=${dt.toFixed(1)}s, progressΔ=${progressDelta?.toFixed(1) ?? "n/a"}, dDistSq=${dDistSq.toFixed(0)} ${verdict}`,
+      progressDelta > 1 ? "color:#4ade80;font-weight:bold" : "color:#ef4444;font-weight:bold"
+    )
+    __obstacleSample = { time: now, nearest, progress: playerProgress }
+    return { dt, progressDelta, dDistSq, verdict, nearestKind: nearest.kind, obstacleCount: obstacles.length }
+  }
+
   // V1.8.2: visual facing check (catches "car renders backwards" bugs).
   // Body's world -Z vs player Group's world -Z. Dot ≈ +1 means aligned;
   // dot ≈ -1 means the car is reversed 180°.
