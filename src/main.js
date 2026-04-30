@@ -850,9 +850,31 @@ async function loadAssets() {
   for (const [k, url] of entries) {
     try {
       const g = await loader.loadAsync(url)
+      // ── DIAG: confirm GLB landed and how many vertices it has. ──
+      let meshCount = 0
+      let vertexCount = 0
+      const matSummary = []
+      g.scene.traverse((c) => {
+        if (c.isMesh) {
+          meshCount++
+          vertexCount += c.geometry?.attributes?.position?.count ?? 0
+          matSummary.push({
+            name: c.name || "(unnamed)",
+            mat: c.material?.type,
+            color: c.material?.color?.getHexString(),
+            opacity: c.material?.opacity
+          })
+        }
+      })
+      console.log(`[GLB] ${k} from ${url}: ${meshCount} meshes, ${vertexCount} verts, scene.children=${g.scene.children.length}`)
+      // Player car assets get full per-mesh material dump — that's where
+      // we actually need to verify materials aren't getting clobbered.
+      if (k === "race-future" || k === "sedan-sports" || k === "race") {
+        console.log(`[GLB-MATS] ${k}:`, matSummary)
+      }
       results.push([k, g.scene])
     } catch (e) {
-      console.warn("asset missing", url, e)
+      console.warn("[GLB-FAIL]", url, e)
       results.push([k, null])
     }
     done++
@@ -1948,10 +1970,17 @@ function rebuildPlayerCar() {
   // remove the old visual body + neon outline if any
   if (playerBody) player.remove(playerBody)
   if (player.userData.neonOutline) player.remove(player.userData.neonOutline)
+  // ── DIAG: did the GLB actually land in `assets`? ──
+  console.log(`[REBUILD] selectedCar=${carId}, cfg.asset="${cfg.asset}", assets["${cfg.asset}"]=${assets[cfg.asset] ? "GLB-loaded" : "MISSING"}`)
   // Prefer the Kenney Car Kit GLB (race-future / sedan-sports / race
   // ~170KB each — proper supercar silhouettes). Fall back to the hand-
   // built procedural car only if the GLB failed to load.
-  const car = cloneAsset(cfg.asset, 12, "z")
+  const glbCar = cloneAsset(cfg.asset, 12, "z")
+  const usingFallback = !glbCar
+  if (usingFallback) {
+    console.warn(`[REBUILD] GLB ${cfg.asset} failed to clone — falling back to makeProperCar`)
+  }
+  const car = glbCar
     ?? makeProperCar({ body: cfg.body ?? 0x1872ff, accent: cfg.accent ?? 0x081530 })
   // GLB nose points -Z natively → after lookAt(target+tan) the local -Z
   // points toward the tangent target → we need the 180° flip to put the
@@ -1964,6 +1993,25 @@ function rebuildPlayerCar() {
     recolorCar(car, { body: cfg.body, accent: cfg.accent, emissive: 0x00ffff, emissiveIntensity: 0.18 })
   }
   upgradeCarMaterials(car, { clearcoat: 0.85, metalness: 0.6, roughness: 0.25 })
+  // ── DIAG: dump the player car's actual rendered geometry + materials.
+  // If you see BoxGeometry / CylinderGeometry here it's the procedural
+  // fallback. GLB content shows up as BufferGeometry with no parameters.
+  const meshDump = []
+  car.traverse((c) => {
+    if (c.isMesh) {
+      meshDump.push({
+        name: c.name || "(unnamed)",
+        geo: c.geometry?.type,
+        params: c.geometry?.parameters ? Object.keys(c.geometry.parameters).join(",") : "—",
+        verts: c.geometry?.attributes?.position?.count ?? 0,
+        mat: c.material?.type,
+        color: c.material?.color?.getHexString?.(),
+        opacity: c.material?.opacity
+      })
+    }
+  })
+  console.log(`[REBUILD] playerBody using ${usingFallback ? "FALLBACK MAKEPROPERCAR" : "GLB " + cfg.asset}, mesh count=${meshDump.length}`)
+  console.table(meshDump)
   player.add(car)
   playerBody = car
 
