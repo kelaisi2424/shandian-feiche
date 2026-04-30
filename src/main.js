@@ -3084,45 +3084,122 @@ function maybeShowTutorial() {
 }
 
 // Generate a result-screenshot PNG and offer it to the user
-function shareResult() {
+// Build a challenge URL that re-renders this run's headline on the
+// recipient's home page banner. Format: ?challenge=<lvId>_<sec>s_<grade>
+// e.g. ?challenge=lv1_38s_S — small enough to paste, parseable
+// without a server.
+function buildChallengeUrl(lvlId, ms, grade) {
+  const sec = Math.round(ms / 1000)
+  const url = new URL(location.href)
+  url.searchParams.set("challenge", `${lvlId}_${sec}s_${grade ?? "C"}`)
+  return url.toString()
+}
+
+// Generate the result card as a 720×960 PNG and either trigger a download
+// or hand it to the OS share sheet via navigator.share / clipboard.
+async function shareResult() {
   try {
+    const sv = Save.get()
+    const lvl = state.level
+    const grade = state._lastGrade ?? "?"
     const c = document.createElement("canvas")
     c.width = 720
-    c.height = 480
+    c.height = 960
     const g = c.getContext("2d")
-    // backdrop
-    const grd = g.createLinearGradient(0, 0, 0, 480)
-    grd.addColorStop(0, "#0a1c3a")
-    grd.addColorStop(1, "#1c4a99")
-    g.fillStyle = grd
-    g.fillRect(0, 0, 720, 480)
-    // logo
+    // backdrop — deep navy → indigo → magenta sweep, picks up the cyberpunk vibe
+    const bg = g.createLinearGradient(0, 0, 0, 960)
+    bg.addColorStop(0, "#070b1c")
+    bg.addColorStop(0.55, "#181a4a")
+    bg.addColorStop(1, "#3d0f56")
+    g.fillStyle = bg
+    g.fillRect(0, 0, 720, 960)
+    // gold border frame
+    g.strokeStyle = "#ffd31a"
+    g.lineWidth = 4
+    g.strokeRect(20, 20, 680, 920)
+    // header
     g.fillStyle = "#ffd31a"
-    g.font = "bold 64px sans-serif"
+    g.font = "bold 56px sans-serif"
     g.textAlign = "center"
-    g.fillText("⚡ 闪电飞车", 360, 80)
-    // result
-    g.fillStyle = "#fff"
-    g.font = "bold 38px sans-serif"
-    g.fillText($("resultTitle").textContent, 360, 160)
-    g.font = "bold 28px sans-serif"
-    g.fillStyle = "#cfe0ff"
-    g.fillText(`用时 ${$("resStatTime").textContent}`, 360, 240)
-    g.fillText(`金币 ${$("resStatCoins").textContent}`, 360, 290)
-    g.fillText(`碰撞 ${$("resStatHits").textContent}`, 360, 340)
-    // footer
-    g.font = "16px sans-serif"
+    g.fillText("⚡ 闪电飞车", 360, 110)
     g.fillStyle = "#93a8c8"
-    g.fillText("shandian-feiche.netlify.app", 360, 440)
-    c.toBlob((blob) => {
+    g.font = "bold 18px sans-serif"
+    g.fillText("LIGHTNING RACER", 360, 138)
+    // level name + sub
+    if (lvl) {
+      g.fillStyle = "#fff"
+      g.font = "bold 32px sans-serif"
+      g.fillText(`第 ${lvl.num} 关 · ${lvl.name}`, 360, 198)
+      g.fillStyle = "#93a8c8"
+      g.font = "16px sans-serif"
+      g.fillText(lvl.sub, 360, 224)
+    }
+    // big grade letter
+    g.fillStyle = grade === "S" ? "#ffd31a" : grade === "A" ? "#26d6ff" : "#cfe0ff"
+    g.font = "bold 220px sans-serif"
+    g.fillText(grade, 360, 460)
+    // stats grid
+    g.font = "bold 30px sans-serif"
+    g.fillStyle = "#fff"
+    g.textAlign = "left"
+    const stats = [
+      ["用时", $("resStatTime").textContent],
+      ["金币", $("resStatCoins").textContent],
+      ["最高速度", `${($("resStatTopSpeed")?.textContent ?? Math.round(state.topSpeed))} KM/H`],
+      ["碰撞", $("resStatHits").textContent],
+      ["排名", `第 ${state._finalRank ?? 1} 名`]
+    ]
+    let row = 540
+    for (const [label, value] of stats) {
+      g.fillStyle = "#93a8c8"
+      g.font = "20px sans-serif"
+      g.fillText(label, 90, row)
+      g.fillStyle = "#ffe35a"
+      g.font = "bold 32px sans-serif"
+      g.textAlign = "right"
+      g.fillText(value, 630, row)
+      g.textAlign = "left"
+      row += 56
+    }
+    // footer
+    g.fillStyle = "#93a8c8"
+    g.font = "16px sans-serif"
+    g.textAlign = "center"
+    g.fillText("shandian.railmountgame.com", 360, 880)
+    if (lvl) {
+      const ms = state.finishedAt - state.startedAt - state.pauseAcc
+      const challenge = buildChallengeUrl(lvl.id, ms, grade)
+      g.fillStyle = "#ffd31a"
+      g.font = "14px sans-serif"
+      g.fillText("挑战链接: " + (challenge.length > 56 ? challenge.slice(0, 56) + "…" : challenge), 360, 910)
+    }
+    // Output: try Web Share with file → clipboard URL → download fallback.
+    c.toBlob(async (blob) => {
+      if (!blob) { toast("生成失败", 900); return }
+      const file = new File([blob], `shandian-feiche-${Date.now()}.png`, { type: "image/png" })
+      const challenge = lvl ? buildChallengeUrl(lvl.id, state.finishedAt - state.startedAt - state.pauseAcc, grade) : location.href
+      try {
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({
+            title: "闪电飞车战绩",
+            text: lvl ? `${lvl.name} ${grade} 级，挑战我！` : "闪电飞车战绩",
+            url: challenge,
+            files: [file]
+          })
+          toast("已分享", 1200)
+          return
+        }
+      } catch (_) { /* user cancelled or unsupported — fall through */ }
+      // Download fallback: card as PNG + copy challenge URL to clipboard.
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `shandian-feiche-${Date.now()}.png`
+      a.download = file.name
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
-      toast("成绩已保存到相册/下载", 1200)
-    })
+      try { await navigator.clipboard?.writeText(challenge) } catch (_) {}
+      toast("战绩卡已下载，挑战链接已复制", 1500)
+    }, "image/png")
   } catch (e) {
     toast("分享生成失败", 900)
   }
@@ -3413,6 +3490,7 @@ function finishRace(success = true) {
       }
     }
     // grade badge (S / A / B / C / fail)
+    state._lastGrade = grade ?? "C"
     const gradeEl = $("resGrade")
     if (gradeEl) {
       gradeEl.classList.remove("g-S", "g-A", "g-B", "g-C", "g-fail")
@@ -4250,6 +4328,27 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {})
   })
 }
+
+// Parse a ?challenge=lv1_38s_S URL param (shared from another player's
+// run) and surface a banner inviting the recipient to beat the time.
+// Lives outside init so it fires immediately, even before assets load.
+function showChallengeBannerFromURL() {
+  const banner = document.getElementById("challengeBanner")
+  const text = document.getElementById("challengeBannerText")
+  if (!banner || !text) return
+  const params = new URLSearchParams(location.search)
+  const c = params.get("challenge")
+  if (!c) return
+  const m = c.match(/^(lv\d+)_(\d+)s_([SABC])$/i)
+  if (!m) return
+  const [, lvId, sec, grade] = m
+  // Try to look up the level name from the LEVELS catalogue (loaded async),
+  // but don't block the banner — fall back to "第 N 关" if lookup fails.
+  const num = parseInt(lvId.slice(2), 10) || 1
+  text.textContent = `你的朋友用 ${sec} 秒 ${grade.toUpperCase()} 级通关了第 ${num} 关，你能打败他吗？`
+  banner.classList.add("visible")
+}
+showChallengeBannerFromURL()
 
 // init with friendly error UI on hard failure
 init().catch((err) => {
