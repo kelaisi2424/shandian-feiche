@@ -598,6 +598,10 @@ async function init() {
   window.__state = state
   window.__Track = Track
   window.__player = player
+  window.__camera = camera
+  window.__renderer = renderer
+  window.__composer = composer
+  window.__scene = scene
 
   // assets ready → menu is the initial state. No splash, no two-stage
   // launch flow. The menu HTML markup ships with `class="… active"` so
@@ -728,9 +732,11 @@ function roadCenterTexture() {
   const c = document.createElement("canvas")
   c.width = c.height = 512
   const g = c.getContext("2d")
-  // dark asphalt base — was bright yellow which made the road read as
-  // a frozen surface and gave no contrast for the player car.
-  g.fillStyle = "#1a1a2e"
+  // Dark asphalt base — was bright yellow which made the road read as
+  // a frozen surface. Slightly lighter than the previous #1a1a2e so the
+  // road catches the dusk lighting and the player car silhouette stays
+  // readable at night-track fog levels.
+  g.fillStyle = "#2a2a3e"
   g.fillRect(0, 0, 512, 512)
   // subtle aggregate speckle so the asphalt isn't flat
   for (let i = 0; i < 1400; i++) {
@@ -1475,12 +1481,13 @@ function buildScenery() {
   const trackId = Save.get().selectedTrack
   const isNight = trackId === "neon"
 
-  // ─── light poles every 12m along both sides ───
-  // Past speed-of-velocity research: dense roadside vertical objects
-  // rushing past the camera are the single strongest visual cue for
-  // speed. 12m spacing × 2 sides on a 2400m track = ~400 poles. Cheap
-  // (each is 2 meshes + 1 PointLight at night), high impact.
-  for (let s = 24; s < Track.length; s += 12) {
+  // ─── light poles every 24m along both sides ───
+  // Trade-off: dense vertical objects rushing past = strong speed cue,
+  // but 12m spacing × 2 sides × 200 poles each side = 400 emissive
+  // meshes through the bloom pass — enough to tank the WebGL
+  // pipeline and produce a black frame. 24m is dense enough to read
+  // as a wall of lights at speed without blowing the GPU budget.
+  for (let s = 24; s < Track.length; s += 24) {
     for (const sd of [-1, 1]) {
       const pole = makeLightPole(isNight)
       const pos = progressToWorld(s, sd * (CFG.roadHalfWidth + 1.6), 0)
@@ -3916,8 +3923,13 @@ function loop(now) {
   animateScenery(realDt, now)
   updateParticles(realDt)
   setEngineLoad(state.speed, state.nitroTime > 0)
-  if (composer) composer.render()
-  else renderer.render(scene, camera)
+  // Direct scene render. The EffectComposer pipeline (RenderPass +
+  // UnrealBloomPass + OutputPass) was producing 1 draw call / 12
+  // triangles per frame after the recent material upgrades — the
+  // post-process passes silently ate the scene. Until we figure out
+  // which pass is broken, render straight to the canvas. Bloom is a
+  // nice-to-have; visibility is not.
+  renderer.render(scene, camera)
   requestAnimationFrame(loop)
 }
 
