@@ -661,13 +661,19 @@ function buildMaterials() {
     metalness: 0.08,
     envMapIntensity: 0.2
   })
+  // Rails get a low-intensity emissive so they read as glowing strips at
+  // night / dusk lighting without dominating the scene during the day.
   mats.rail = new THREE.MeshStandardMaterial({
     color: 0x0e63b8,
+    emissive: 0x1a4cff,
+    emissiveIntensity: 0.18,
     roughness: 0.32,
     metalness: 0.45
   })
   mats.railTop = new THREE.MeshStandardMaterial({
     color: 0xffd11a,
+    emissive: 0xff8a16,
+    emissiveIntensity: 0.22,
     roughness: 0.4,
     metalness: 0.18
   })
@@ -1589,6 +1595,23 @@ function makeCityBlock(width, height, seed = 0) {
     )
     ant.position.y = height + 2
     g.add(ant)
+  }
+  // Roof neon: ~1 in 3 buildings get a coloured emissive crown + a soft
+  // PointLight, tinting nearby buildings and the sky overhead. Cycled
+  // through a fixed neon palette so the skyline reads cyberpunk.
+  if ((seed % 3) === 1) {
+    const palette = [0xff3aa6, 0x26d6ff, 0xb24aff, 0x5cff8a]
+    const c = palette[seed % palette.length]
+    const crownGeo = new THREE.BoxGeometry(width * 0.95, 0.6, width * 0.65)
+    const crownMat = new THREE.MeshStandardMaterial({
+      color: c, emissive: c, emissiveIntensity: 1.4, roughness: 0.4
+    })
+    const crown = new THREE.Mesh(crownGeo, crownMat)
+    crown.position.y = height + 0.4
+    g.add(crown)
+    const pl = new THREE.PointLight(c, 1.6, 60, 1.6)
+    pl.position.y = height + 1.8
+    g.add(pl)
   }
   return g
 }
