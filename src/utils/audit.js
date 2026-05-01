@@ -49,25 +49,16 @@ export function runAudit(player, scene, camera) {
     issues.push(`OBSTACLE_FALLBACK_USED: ${fallbackCount} placeholders in scene (GLB load failed)`)
   }
 
-  // V1.8.3a: visual facing sanity check.
-  // Project forward convention = local +Z (NOT Three.js default -Z).
-  // Verified by continuous 6-sample movement test on V1.8.2c:
-  //   actualMovement = (0.243, 0, -0.970)
-  //   player.local +Z in world = (0.24, 0, -0.97)  → dot = +1.000
-  //   player.local -Z in world                     → dot = -1.000
-  // Forward axis is the matrix's third column (m[8], m[9], m[10]).
-  if (player) {
-    let body = null
-    player.traverse((c) => { if (c.isMesh && c.name === "body") body = c })
-    if (body) {
-      const m = body.matrixWorld.elements
-      const pm = player.matrixWorld.elements
-      const blen = Math.sqrt(m[8] ** 2 + m[9] ** 2 + m[10] ** 2) || 1
-      const plen = Math.sqrt(pm[8] ** 2 + pm[9] ** 2 + pm[10] ** 2) || 1
-      const dot = (m[8] * pm[8] + m[9] * pm[9] + m[10] * pm[10]) / (blen * plen)
-      if (dot < 0.9) issues.push(`VISUAL_FACING_REVERSED: dot=${dot.toFixed(3)}`)
-    }
-  }
+  // V1.8.3a-3: VISUAL_FACING_REVERSED check removed from runAudit.
+  //
+  // Reason: with the new window.__tune.visualYawOffset A/B knob (default
+  // Math.PI), the body's local axes are intentionally rotated relative
+  // to the player Group, so a body-vs-player axis dot product cannot
+  // distinguish "designed orientation" from "bug". The visual decision
+  // is now made by the player flipping the knob and looking at the
+  // car (window.__tryFlipVisual()). window.__facingCheck below still
+  // returns the raw dot for diagnostic purposes — it just no longer
+  // pollutes window.__audit().
 
   return issues
 }

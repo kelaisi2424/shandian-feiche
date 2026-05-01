@@ -2161,7 +2161,12 @@ function rebuildPlayerCar() {
   // the offset is applied once here, the per-frame line uses the cached
   // value, and the GLB's actual nose direction sets the convention.
   const _yaw = cfg.modelYawOffset ?? 0
-  car.rotation.y = _yaw
+  // V1.8.3a-3: visualYawOffset is a runtime A/B knob layered ON TOP of
+  // the cars.js modelYawOffset. Default Math.PI → same net rotation as
+  // the pre-V1.8.2 baseline. Flip live with window.__tryFlipVisual().
+  // The cars.js field stays untouched.
+  const _vis = window.__tune?.visualYawOffset ?? Math.PI
+  car.rotation.y = _yaw + _vis
   car.userData.modelYawOffset = _yaw
   if (cfg.body !== undefined) {
     recolorCar(car, { body: cfg.body, accent: cfg.accent })
@@ -4346,13 +4351,13 @@ function updateDriving(dt, now) {
   player.rotation.x += -state.vy * 0.012 + (state.airborne ? 0.05 : 0)
   player.rotation.z += -state.steerVisual * 0.18
   if (playerBody) {
-    // V1.8.2: was `Math.PI - state.steerVisual * 0.05` — the hard-coded
-    // π was the second (per-frame) source of the visual-reversed-180°
-    // bug. The yaw offset now comes from the car catalogue, applied once
-    // at GLB load (rebuildPlayerCar) and stamped onto userData; this line
-    // just reads it back so the steering tilt still rides on top.
+    // V1.8.3a-3: rotation.y = modelYawOffset (cars.js, default 0) +
+    // visualYawOffset (tune.js, default Math.PI) − steerTilt. The
+    // visualYawOffset is the live A/B knob; flip with
+    // window.__tryFlipVisual() to test 0 vs π without rebuild.
     const yawBase = playerBody.userData.modelYawOffset ?? 0
-    playerBody.rotation.y = yawBase - state.steerVisual * 0.05
+    const visYaw = window.__tune?.visualYawOffset ?? Math.PI
+    playerBody.rotation.y = yawBase + visYaw - state.steerVisual * 0.05
     const steerAngle = state.steerVisual * 0.45
     playerBody.userData.steeringPivots?.forEach((p) => { p.rotation.y = steerAngle })
     const wheelRadius = playerBody.userData.wheelRadius || 0.46
