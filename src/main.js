@@ -512,6 +512,14 @@ const cameraLook = new THREE.Vector3()
 const _camTargetPos = new THREE.Vector3()
 const _camLookAt = new THREE.Vector3()
 const _forward = new THREE.Vector3()
+// V1.8.7: motion-derived chase camera state. lastPlayerPos and
+// lastValidMoveDir track the player's actual world-space displacement
+// over time so the camera follows movement, not player.quaternion's
+// "forward" axis (which we measured to be in the OPPOSITE direction
+// of motion in playing mode → camera ended up ahead of the car).
+const _camLastPlayerPos = new THREE.Vector3()
+const _camLastValidMoveDir = new THREE.Vector3()
+let _camLastPlayerPosInit = false
 let auditFrame = 0
 let auditOverlay = null
 
@@ -4703,17 +4711,58 @@ function updateCheckpoints(now) {
 // camera
 // ────────────────────────────────────────────────────────────────────
 function updateCamera(dt) {
-  _forward.set(0, 0, -1).applyQuaternion(player.quaternion)
-  _forward.y = 0
-  _forward.normalize()
-  const speedFactor = Math.min(Math.abs(state.speed) / 280, 1)
-  const followDist = 8.5 + speedFactor * 2.0
-  const camHeight = 3.2 + speedFactor * 0.5
+  // V1.8.7: chase camera follows the player's ACTUAL movement direction
+  // (frame-to-frame world-space displacement), not player.quaternion's
+  // local -Z. The previous quaternion-based forward turned out to point
+  // in the OPPOSITE direction of motion in playing mode (measured:
+  // dot(cameraOffset, actualMovement) = +0.998 → camera was rendering
+  // in front of the car). Deriving direction from displacement is
+  // immune to whichever +Z/-Z convention the visual chain ends up at.
+  //
+  // Tunables (per spec):
+  const followDist = 7.5
+  const camHeight  = 3.4
+  const lookAhead  = 10.0
 
+  // 1) Update lastValidMoveDir from the frame-to-frame displacement.
+  if (_camLastPlayerPosInit) {
+    tmpVec.subVectors(player.position, _camLastPlayerPos)  // moveDelta
+    const len = tmpVec.length()
+    if (len > 0.05) {
+      _camLastValidMoveDir.copy(tmpVec).divideScalar(len)
+    }
+    // else: keep prior lastValidMoveDir, no overwrite on tiny / no motion
+  } else {
+    _camLastPlayerPosInit = true
+  }
+  _camLastPlayerPos.copy(player.position)
+
+  // 2) First-frame fallback: if lastValidMoveDir hasn't been seeded yet
+  // (or somehow degenerated to zero), use the spline tangent so the
+  // initial camera placement isn't undefined. Explicitly NOT visual
+  // model direction — keep the camera independent of any GLB axis.
+  if (_camLastValidMoveDir.lengthSq() < 0.0001) {
+    if (typeof Track !== "undefined" && Track && Track.curve) {
+      progressToWorld(Math.min(state.progress + 1, Track.length), state.lateral, state.y, tmpVec)
+      _camLastValidMoveDir.subVectors(tmpVec, player.position)
+      if (_camLastValidMoveDir.lengthSq() > 0.0001) {
+        _camLastValidMoveDir.normalize()
+      } else {
+        _camLastValidMoveDir.set(0, 0, -1)  // last-resort: world -Z
+      }
+    } else {
+      _camLastValidMoveDir.set(0, 0, -1)
+    }
+  }
+
+  // 3) Place the camera BEHIND the move direction at followDist.
+  //    targetPos = player.position - moveDir * followDist + (0, camHeight, 0)
   _camTargetPos.copy(player.position)
-    .addScaledVector(_forward, -followDist)
-    .add(new THREE.Vector3(0, camHeight, 0))
+    .addScaledVector(_camLastValidMoveDir, -followDist)
+  _camTargetPos.y += camHeight
 
+  // 4) Camera shake (preserved from prior camera). Decays state.shake
+  // and adds a small random offset to the target position.
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt)
     const k = state.shake
@@ -4723,17 +4772,16 @@ function updateCamera(dt) {
     _camTargetPos.z += (Math.random() - 0.5) * amp * 0.4
   }
 
-  const t = 1 - Math.exp(-8 * dt)
-  camera.position.lerp(_camTargetPos, t)
-  const actualDist = camera.position.distanceTo(player.position)
-  if (actualDist < 8 || actualDist > 12) {
-    tmpVec.copy(_camTargetPos).sub(player.position).normalize()
-    camera.position.copy(player.position).addScaledVector(tmpVec, clamp(actualDist, 8.5, 12))
-  }
+  // 5) Smooth chase via per-frame lerp(0.12) per spec. (Not framerate-
+  // independent; matches the spec exactly so the visual feel can be
+  // tuned by the human verifier without compounding maths.)
+  camera.position.lerp(_camTargetPos, 0.12)
 
+  // 6) Look ahead of the player along the same move direction.
+  //    targetLook = player.position + moveDir * lookAhead + (0, 1.0, 0)
   _camLookAt.copy(player.position)
-    .addScaledVector(_forward, 8)
-    .add(new THREE.Vector3(0, 1.0, 0))
+    .addScaledVector(_camLastValidMoveDir, lookAhead)
+  _camLookAt.y += 1.0
   camera.lookAt(_camLookAt)
 }
 
