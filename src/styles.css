@@ -439,7 +439,12 @@ canvas,
   align-items: center;
   gap: calc(var(--ui) * 1.5);
   z-index: 4;
-  background: linear-gradient(0deg, rgba(5, 10, 24, 0.92) 0%, rgba(5, 10, 24, 0.55) 80%, transparent 100%);
+  /* V1.8.9-2: opaque-bottom + blur on top edge so the start-tile glow
+     stops at the bar instead of bleeding through. */
+  background: linear-gradient(0deg, rgba(5, 10, 24, 0.96) 0%, rgba(5, 10, 24, 0.78) 70%, rgba(5, 10, 24, 0.18) 100%);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-top: 1px solid rgba(38, 214, 255, 0.18);
 }
 .player-level {
   display: flex;
@@ -777,7 +782,10 @@ canvas,
    * The tile-grid takes ~half the 1920px stage so the menu cover artwork
    * stays visible on the right at every device size. */
   top: calc(var(--ui) * 7);
-  bottom: calc(var(--ui) * 8);
+  /* V1.8.9-2: bottom raised from 8→9.6 so .start-tile's CTA clears the
+     menu-actionbar (height = 7 * --ui) by ~2.6 ui units instead of the
+     1 ui unit that read as overlap with the action-nav. */
+  bottom: calc(var(--ui) * 9.6);
   left: calc(var(--ui) * 2);
   width: 920px;
   display: grid;
