@@ -3550,6 +3550,131 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
 }
 
 /* ============================================================
+   V1.9.5-3: portrait mobile-full → scrollable stacked lobby
+   ============================================================
+   Pre-fix: portrait mobile-full inherited the landscape 58/42 grid,
+   then the 3D car compressed into a sliver column and the side-grid
+   stacked into a 4-tall column, while titles got squeezed to a
+   single-character vertical stack. Catastrophic.
+
+   New approach: in portrait, abandon the side-by-side grid entirely.
+   The page becomes a vertically-scrollable lobby:
+     [topbar — sticky chrome]
+     [hero-ui     — name + tier + 3 stats + 开始比赛 CTA]
+     [hero-visual — capped at 34vh / 280 px so it never crowds the CTA]
+     [side-grid   — 2×2]
+     [actionbar  — bottom nav]
+   The CTA is always above the 3D car; titles render horizontally; if
+   the screen is too short the whole page scrolls.
+
+   Allowing the menu to scroll requires lifting the global no-scroll
+   we inherited from .menu-screen { overflow: hidden }. We restrict
+   the change to portrait + mobile-full so other modes (desktop, ultra,
+   compact) keep their fixed full-stage layout. */
+@media (orientation: portrait) {
+  :root[data-layout-mode="mobile-full"] #menu.screen.active,
+  :root[data-layout-mode="mobile-full"] .menu-screen.active {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :root[data-layout-mode="mobile-full"] .home-stage,
+  :root[data-layout-mode="mobile-full"] .hero-stage {
+    /* Override the landscape 58/42 grid → flex column so we can use
+       `order` to put .hero-ui above .hero-visual without changing HTML
+       (the desktop-full + landscape layouts depend on the existing DOM
+       order — visual first, UI second — for absolute-positioned overlays
+       and 58/42 grid columns). */
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    padding: 12px;
+    gap: 0;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-stage .hero-ui     { order: 1; flex-shrink: 0; }
+  :root[data-layout-mode="mobile-full"] .hero-stage .hero-visual { order: 2; flex-shrink: 0; }
+  /* Within .home-stage, the side-grid sits below the entire hero. */
+  :root[data-layout-mode="mobile-full"] .home-stage .hero-stage { order: 1; flex-shrink: 0; }
+  :root[data-layout-mode="mobile-full"] .home-stage .side-grid  { order: 2; flex-shrink: 0; }
+  /* Hero UI: the top of the lobby. Buttons + text in normal flow. */
+  :root[data-layout-mode="mobile-full"] .hero-ui {
+    position: relative;
+    inset: auto;
+    grid-column: auto;
+    grid-row: auto;
+    margin-bottom: 12px;
+    padding: 12px;
+    z-index: 2;
+    background: linear-gradient(160deg, rgba(15, 22, 50, 0.9) 0%, rgba(8, 12, 32, 0.95) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(38, 214, 255, 0.18);
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-titlecard {
+    margin-bottom: 8px;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-car-name {
+    font-size: 22px;
+    letter-spacing: 2px;
+    /* Force horizontal — defeat any inherited writing-mode that might
+       try to render '一字一行'. */
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-stat-row {
+    margin-bottom: 12px;
+    justify-content: flex-start;
+    gap: 14px;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-stat b {
+    font-size: 18px;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-cta-btn {
+    height: 52px;
+    width: 100%;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-ui .hero-cta-btn .hero-cta-main {
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+  /* Hero Visual: bounded height block UNDER the UI, never over it. */
+  :root[data-layout-mode="mobile-full"] .hero-visual {
+    position: relative;
+    inset: auto;
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    height: min(34vh, 280px);
+    margin-bottom: 12px;
+    overflow: hidden;
+    border-radius: 12px;
+    z-index: 1;
+  }
+  :root[data-layout-mode="mobile-full"] #heroCarMount {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* Side-grid: 2×2 squarish tiles in normal flow under the hero. */
+  :root[data-layout-mode="mobile-full"] .side-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+  :root[data-layout-mode="mobile-full"] .side-grid .side-tile {
+    aspect-ratio: 1.4 / 1;
+    padding: 12px;
+  }
+  /* Pin the bottom nav so it floats above the scrolling lobby instead
+     of disappearing past the fold. */
+  :root[data-layout-mode="mobile-full"] #menu > .menu-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+  }
+}
+
+/* ============================================================
    V1.9.4-4: in-race HUD shrink for mobile-full / compact / ultra-compact
    ============================================================
    Class names verified against index.html so the rules actually bind:
