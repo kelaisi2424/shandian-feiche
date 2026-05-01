@@ -4574,7 +4574,22 @@ function updateDriving(dt, now) {
   const liveSteer = state.countdown > 0 ? 0 : state.steer
   state.steerVisual = lerp(state.steerVisual, liveSteer, dt * 6)
   const steerStrength = (CFG.carSteer ?? 6.5) + state.speed * 0.05
-  state.lateral = clamp(state.lateral + liveSteer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+  // V1.9.2: screen-space steering fix.
+  //
+  // Verified by reading the V1.8.7 chase camera math: the camera looks
+  // along moveDir from behind, so camera.right_world = cross(up, -moveDir)
+  // ≈ -Track._right. progressToWorld(...) shifts the player by
+  // +Track._right * lateral. Therefore +lateral renders on the SCREEN-LEFT,
+  // not screen-right.
+  //
+  // Before this fix, pressing LEFT (steer=-1) decreased lateral, which
+  // pushed the player along -Track._right = +camera.right = screen-RIGHT.
+  // Inverting the sign here makes left key → +lateral → screen-LEFT.
+  //
+  // We flip ONLY the steer→lateral conversion so all other lateral-based
+  // entities (rivals, pickups, hazards, ghost) keep their existing world
+  // placement; only the player's response to user input is corrected.
+  state.lateral = clamp(state.lateral - liveSteer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
 
   // gravity / jump
   state.vy -= 32 * dt
