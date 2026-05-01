@@ -244,8 +244,12 @@
         <div class="modal">
           <h2>暂停</h2>
           <p>休息一下眼睛，准备好了再继续。</p>
-          <button id="resumeBtn" class="primary">继续游戏</button>
-          <button id="homeBtn" class="secondary">返回菜单</button>
+          <div class="pause-actions">
+            <button id="resumeBtn" class="primary">继续游戏</button>
+            <button id="pauseRestartBtn" class="secondary">重新开始本关</button>
+            <button id="pauseLevelsBtn" class="secondary">返回选关</button>
+            <button id="homeBtn" class="secondary">返回首页</button>
+          </div>
         </div>
       </section>
 
@@ -270,9 +274,11 @@
           <p class="best-time">本地最佳: <b id="resBestTime">--</b></p>
           <ul class="leaderboard" id="resLeaderboard"></ul>
           <div class="result-actions">
+            <button id="resultNextBtn" class="primary" style="display:none">下一关</button>
             <button id="againBtn" class="primary">再玩一局</button>
+            <button id="resultLevelsBtn" class="secondary">返回选关</button>
+            <button id="resultHomeBtn" class="secondary">返回首页</button>
             <button id="shareBtn" class="ghost">分享</button>
-            <button id="resultHomeBtn" class="secondary">返回菜单</button>
           </div>
         </div>
       </section>

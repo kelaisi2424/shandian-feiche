@@ -3123,6 +3123,38 @@ function bindControls() {
   $("againBtn").addEventListener("click", startRace)
   $("resultHomeBtn").addEventListener("click", () => setMode("menu"))
   $("resetBtn").addEventListener("click", startRace)
+  // V1.8.8: in-pause restart / return-to-levels / return-home
+  if ($("pauseRestartBtn")) {
+    $("pauseRestartBtn").addEventListener("click", () => {
+      // resumeRace not needed — startRace flips mode to "playing"
+      // and clears all run state. We DO want pauseAcc reset.
+      startRace()
+    })
+  }
+  if ($("pauseLevelsBtn")) {
+    $("pauseLevelsBtn").addEventListener("click", () => {
+      setMode("menu")
+      openLevels()
+    })
+  }
+  // V1.8.8: result-page navigation buttons
+  if ($("resultNextBtn")) {
+    $("resultNextBtn").addEventListener("click", () => {
+      const lvl = state.level
+      const next = lvl ? nextLevelId(lvl.id) : null
+      const save = Save.get()
+      if (next && save.unlockedLevels.includes(next)) {
+        Save.set({ currentLevel: next })
+      }
+      startRace()
+    })
+  }
+  if ($("resultLevelsBtn")) {
+    $("resultLevelsBtn").addEventListener("click", () => {
+      setMode("menu")
+      openLevels()
+    })
+  }
   $("addCoins").addEventListener("click", () => {
     const v = (parseInt($("coinTotal").textContent) || 0) + 50
     $("coinTotal").textContent = String(v)
@@ -3967,6 +3999,14 @@ function runCountdown() {
 function pauseRace() {
   if (state.mode !== "playing") return
   state.pauseAt = performance.now()
+  // V1.8.8: zero out held inputs so a paused car is fully frozen — the
+  // loop already skips updateDriving in non-playing modes, but if the
+  // user pauses with gas held the value lingers in state.* and would
+  // pop on resume. Wind/engine SFX are gated on state.mode==="playing"
+  // by setEngineLoad / setSpeedFx.
+  state.steer = 0
+  state.gas = 0
+  state.brake = 0
   setMode("paused")
 }
 function resumeRace() {
@@ -4126,6 +4166,15 @@ function finishRace(success = true) {
       } else {
         unlockEl.style.display = "none"
       }
+    }
+    // V1.8.8: "下一关" button only shown when there's an unlocked next
+    // level the player can jump to. Drives off Save state so a level
+    // already unlocked from a previous run still shows the button.
+    const nextBtn = $("resultNextBtn")
+    if (nextBtn) {
+      const nextId = lvl ? nextLevelId(lvl.id) : null
+      const canGoNext = nextId && Save.get().unlockedLevels.includes(nextId)
+      nextBtn.style.display = canGoNext ? "" : "none"
     }
     // V1.8.3a-4: explain WHY the next level did or didn't unlock.
     // Always-visible checklist with ✓/✗ rows so the player can self-

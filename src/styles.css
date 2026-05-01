@@ -1740,6 +1740,16 @@ canvas,
   border: 1px solid rgba(255, 227, 90, 0.45);
 }
 .result-actions .secondary { flex: 1 1 100%; }
+/* V1.8.8: pause panel button stack — vertical column, slightly tighter
+   spacing than .modal default so 4 actions fit without overflowing on
+   short viewports. */
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: calc(var(--ui) * 0.3);
+}
+.pause-actions button { margin-top: 0; }
 .best-time {
   margin: calc(var(--ui) * 0.5) 0;
   color: #cfe0ff;
