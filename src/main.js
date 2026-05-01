@@ -4119,6 +4119,77 @@ function finishRace(success = true) {
         unlockEl.style.display = "none"
       }
     }
+    // V1.8.3a-4: explain WHY the next level did or didn't unlock.
+    // Always-visible checklist with ✓/✗ rows so the player can self-
+    // diagnose. Doesn't change unlock logic — this is read-only.
+    const detailEl = $("resUnlockDetail")
+    if (detailEl && lvl) {
+      const nextId = nextLevelId(lvl.id)
+      const nextLvl = nextId ? LEVEL_BY_ID[nextId] : null
+      const alreadyUnlockedNext = nextId && Save.get().unlockedLevels.includes(nextId)
+      // Build the criteria list. Order: must finish, then optional
+      // gates that vary by level (collision limit, time limit, ghost).
+      const rows = []
+      // 1. Reach the finish line
+      const reachedFinish = success && !state.timedOut
+      rows.push({
+        ok: reachedFinish,
+        label: "冲过终点线",
+        actual: reachedFinish ? "✓ 已完成" : (state.timedOut ? "✗ 时间到" : "✗ 未冲线")
+      })
+      // 2. Hits below the limit
+      const hitsOk = state.hits < CFG.hitLimit
+      rows.push({
+        ok: hitsOk,
+        label: `碰撞 ＜ ${CFG.hitLimit} 次`,
+        actual: `${hitsOk ? "✓" : "✗"} 本次 ${state.hits} 次`
+      })
+      // 3. Time limit (if level has one)
+      if (lvl.timeLimit && lvl.timeLimit > 0) {
+        const sec = ms / 1000
+        const timeOk = sec <= lvl.timeLimit
+        rows.push({
+          ok: timeOk,
+          label: `${lvl.timeLimit} 秒内完成`,
+          actual: `${timeOk ? "✓" : "✗"} 本次 ${sec.toFixed(1)}s`
+        })
+      }
+      // 4. Ghost (if level has one — for grade S, but shown as criteria)
+      if (lvl.ghost) {
+        rows.push({
+          ok: state.beatGhost,
+          label: "追上目标车",
+          actual: state.beatGhost ? "✓ 已追上" : "✗ 未追上"
+        })
+      }
+      // Title text depends on outcome:
+      let title
+      if (!nextId) {
+        title = "🏁 已经是最后一关 — 没有可解锁的下一关"
+      } else if (alreadyUnlockedNext && !unlocked) {
+        title = `📋 第 ${nextLvl.num} 关「${nextLvl.name}」此前已解锁`
+      } else if (unlocked) {
+        title = `📋 解锁第 ${nextLvl.num} 关「${nextLvl.name}」的条件（全部满足）`
+      } else {
+        title = `📋 解锁下一关需要满足以下全部条件：`
+      }
+      const rowsHtml = rows.map((r) => `
+        <div class="ud-row ${r.ok ? "ok" : "fail"}">
+          <span>${r.label}</span><b>${r.actual}</b>
+        </div>
+      `).join("")
+      // Extra hint when this run failed and there's still hope:
+      let hintHtml = ""
+      if (!win && nextId) {
+        hintHtml = `<div style="margin-top:6px;color:#93a8c8;font-size:calc(var(--ui)*0.88)">
+          点「再玩一局」继续挑战，把每一项 ✗ 变成 ✓ 就能解锁第 ${nextLvl.num} 关。
+        </div>`
+      }
+      detailEl.innerHTML = `<span class="ud-title">${title}</span>${rowsHtml}${hintHtml}`
+      detailEl.style.display = ""
+    } else if (detailEl) {
+      detailEl.style.display = "none"
+    }
     // final rank banner — only meaningful on a real finish, not the leaderboard view
     const rankEl = $("resFinalRank")
     if (rankEl) {

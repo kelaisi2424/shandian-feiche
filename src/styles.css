@@ -2156,6 +2156,36 @@ canvas,
   animation: rec-pop 0.45s ease-out;
 }
 
+/* V1.8.3a-4: per-criterion checklist (✓/✗ green/red rows) shown in
+ * the result modal so the player can see exactly why the next level
+ * did or didn't unlock. Lives directly under .unlock-banner. */
+.unlock-detail {
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  font-size: calc(var(--ui) * 0.95);
+  line-height: 1.6;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 211, 26, 0.25);
+  border-radius: 10px;
+  color: #cfe0ff;
+}
+.unlock-detail .ud-title {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 800;
+  color: #ffd31a;
+  letter-spacing: 0.5px;
+}
+.unlock-detail .ud-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.unlock-detail .ud-row.ok    { color: #5cf2a4; }
+.unlock-detail .ud-row.fail  { color: #ff7a8a; }
+.unlock-detail .ud-row b     { font-weight: 700; }
+
 /* ─── result coin reward ─── */
 .reward-line {
   margin: 4px 0 6px;
