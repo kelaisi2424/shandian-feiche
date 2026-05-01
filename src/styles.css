@@ -3548,3 +3548,65 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   font-size: 10px;
   letter-spacing: 2px;
 }
+
+/* ============================================================
+   V1.9.4-4: in-race HUD shrink for mobile-full / compact / ultra-compact
+   ============================================================
+   Class names verified against index.html so the rules actually bind:
+     .speed-box      large speed readout (top-left)
+     .hud-stats      RANK / TIME / COIN / TRACK chip row
+     .hud-chip       individual chip
+     .mission-box    objective banner with progress bar
+     .mission-bar    inner progress bar
+     .steer-controls / .pedals / .nitro-wrap   touch controls
+
+   Goal: keep the gameplay surface uncluttered on small screens. The
+   speed-box scales down at the origin (top-left) so it doesn't overlap
+   the chip row; chips lay out in a tighter row; mission box + steering
+   buttons all shrink uniformly. The HUD rules use the same selector
+   list for mobile-full + compact + ultra-compact so the same
+   constrained-viewport feel applies whenever vw < 1024 OR vh < 480. */
+:root[data-layout-mode="mobile-full"] .speed-box,
+:root[data-layout-mode="compact"] .speed-box,
+:root[data-layout-mode="ultra-compact"] .speed-box {
+  transform: scale(0.65);
+  transform-origin: top left;
+}
+
+:root[data-layout-mode="mobile-full"] .hud-stats,
+:root[data-layout-mode="compact"] .hud-stats,
+:root[data-layout-mode="ultra-compact"] .hud-stats {
+  transform: scale(0.78);
+  transform-origin: top right;
+  gap: 6px;
+}
+:root[data-layout-mode="mobile-full"] .hud-chip,
+:root[data-layout-mode="compact"] .hud-chip,
+:root[data-layout-mode="ultra-compact"] .hud-chip {
+  padding: 4px 8px;
+  border-radius: 14px;
+}
+
+:root[data-layout-mode="mobile-full"] .mission-box,
+:root[data-layout-mode="compact"] .mission-box {
+  transform: scale(0.85);
+  transform-origin: top right;
+}
+:root[data-layout-mode="mobile-full"] .mission-bar,
+:root[data-layout-mode="compact"] .mission-bar {
+  height: 4px;
+}
+
+/* Steering pad + nitro + reset all shrink slightly on mobile so they
+   don't dominate the bottom 1/3 of the screen. */
+:root[data-layout-mode="mobile-full"] .steer-controls button,
+:root[data-layout-mode="compact"] .steer-controls button,
+:root[data-layout-mode="mobile-full"] .pedals button,
+:root[data-layout-mode="compact"] .pedals button {
+  transform: scale(0.85);
+  opacity: 0.92;
+}
+:root[data-layout-mode="mobile-full"] .nitro-btn,
+:root[data-layout-mode="mobile-full"] .reset-btn {
+  transform: scale(0.85);
+}

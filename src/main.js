@@ -53,6 +53,10 @@ import { startHeroScene, stopHeroScene, refreshHeroCar } from "./utils/heroScene
 // V1.9.3-1: layout-mode picker — sets <html data-layout-mode> based on
 // real viewport height + content-overflow guard. Side-effect import.
 import "./utils/layoutMode.js"
+// V1.9.4-4: runtime tuning lever for the chase camera's lateral damping.
+// Side-effect import that mounts window.__camTune. updateCamera reads
+// it every frame so console edits take effect on the next tick.
+import "./utils/cameraTune.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -526,6 +530,17 @@ const _forward = new THREE.Vector3()
 const _camLastPlayerPos = new THREE.Vector3()
 const _camLastValidMoveDir = new THREE.Vector3()
 let _camLastPlayerPosInit = false
+// V1.9.4-4: lateral camera damping state. _camLatSmoothed is the
+// smoothed lateral offset (in metres) the camera applies to its target
+// each frame. Re-used across frames so the exp-approach actually
+// dampens. Reset on race start in startRace().
+const _camCenterTmp = new THREE.Vector3()
+const _camAheadTmp = new THREE.Vector3()
+const _camFwdTmp = new THREE.Vector3()
+const _camRightTmp = new THREE.Vector3()
+const _camOffsetTmp = new THREE.Vector3()
+const _camUp = new THREE.Vector3(0, 1, 0)
+let _camLatSmoothed = 0
 let auditFrame = 0
 let auditOverlay = null
 
@@ -4272,6 +4287,10 @@ function startRace() {
   state.speed = 0
   state.lateral = 0
   state.progress = 0       // start at the very beginning of the curve
+  // V1.9.4-4: reset camera lateral smoothing so a new race doesn't
+  // inherit the prior race's last damped offset.
+  _camLatSmoothed = 0
+  _camLastPlayerPosInit = false
   state.y = 0.22
   state.vy = 0
   state.steer = 0
@@ -5226,9 +5245,57 @@ function updateCamera(dt) {
   }
 
   // 3) Place the camera BEHIND the move direction at followDist.
-  //    targetPos = player.position - moveDir * followDist + (0, camHeight, 0)
-  _camTargetPos.copy(player.position)
-    .addScaledVector(_camLastValidMoveDir, -followDist)
+  //
+  // V1.9.4-4: instead of using player.position directly (which makes the
+  // camera glue 1:1 to the player's lateral wiggle), reconstruct the
+  // anchor as "spline centerline at this progress + a damped fraction
+  // of the player's lateral, projected on the spline-local right
+  // vector". The forward V1.8.7 chase math (subtract moveDir*followDist,
+  // add camHeight) is preserved; only the lateral component is filtered.
+  //
+  //   centerline = progressToWorld(progress, 0, y)
+  //   right      = normalise( (ahead - centerline) × up )
+  //   playerLat  = (player.position - centerline) · right
+  //   target     = sign * max(0, |playerLat| - deadzone) * followRatio
+  //   smoothed  +=  k * (target - smoothed),  k = 1 - exp(-rate*dt)
+  //   anchor     = centerline + right * smoothed
+  //
+  // Then the standard V1.8.7 backward-from-moveDir + camHeight stays.
+  const tune = (typeof window !== "undefined" && window.__camTune) || {}
+  const DEADZONE = tune.deadzone ?? 0.8
+  const FOLLOW_RATIO = tune.followRatio ?? 0.30
+  const DAMPING_RATE = tune.dampingRate ?? 6.0
+
+  // Centerline + 2 m ahead point (used to derive the local right vector).
+  if (typeof Track !== "undefined" && Track && Track.curve) {
+    progressToWorld(state.progress, 0, state.y, _camCenterTmp)
+    progressToWorld(Math.min(state.progress + 2.0, Track.length), 0, state.y, _camAheadTmp)
+    _camFwdTmp.subVectors(_camAheadTmp, _camCenterTmp)
+    if (_camFwdTmp.lengthSq() > 1e-6) {
+      _camFwdTmp.normalize()
+      _camRightTmp.crossVectors(_camFwdTmp, _camUp).normalize()
+      _camOffsetTmp.subVectors(player.position, _camCenterTmp)
+      const playerLat = _camOffsetTmp.dot(_camRightTmp)
+      let lateralTarget = 0
+      const absLat = Math.abs(playerLat)
+      if (absLat > DEADZONE) {
+        lateralTarget = Math.sign(playerLat) * (absLat - DEADZONE) * FOLLOW_RATIO
+      }
+      const k = 1 - Math.exp(-DAMPING_RATE * dt)
+      _camLatSmoothed += (lateralTarget - _camLatSmoothed) * k
+      // Anchor = centerline + right * smoothed-lateral.
+      _camTargetPos.copy(_camCenterTmp)
+        .addScaledVector(_camRightTmp, _camLatSmoothed)
+    } else {
+      // Degenerate spline (paused / very short remainder) — fall back
+      // to player.position so we don't lose the chase entirely.
+      _camTargetPos.copy(player.position)
+    }
+  } else {
+    _camTargetPos.copy(player.position)
+  }
+  // Standard V1.8.7 backward-from-moveDir + camHeight. Unchanged.
+  _camTargetPos.addScaledVector(_camLastValidMoveDir, -followDist)
   _camTargetPos.y += camHeight
 
   // 4) Camera shake (preserved from prior camera). Decays state.shake
@@ -5247,10 +5314,20 @@ function updateCamera(dt) {
   // tuned by the human verifier without compounding maths.)
   camera.position.lerp(_camTargetPos, 0.12)
 
-  // 6) Look ahead of the player along the same move direction.
-  //    targetLook = player.position + moveDir * lookAhead + (0, 1.0, 0)
-  _camLookAt.copy(player.position)
-    .addScaledVector(_camLastValidMoveDir, lookAhead)
+  // 6) Look ahead of the same damped anchor (centerline + smoothed
+  //    lateral) — using player.position here would make the camera yaw
+  //    fully to keep the player centred and defeat the deadzone. By
+  //    sharing the anchor with the position math, the player visibly
+  //    slides left/right inside the frame instead of dragging the
+  //    world around them.
+  if (typeof Track !== "undefined" && Track && Track.curve) {
+    _camLookAt.copy(_camCenterTmp)
+      .addScaledVector(_camRightTmp, _camLatSmoothed)
+      .addScaledVector(_camLastValidMoveDir, lookAhead)
+  } else {
+    _camLookAt.copy(player.position)
+      .addScaledVector(_camLastValidMoveDir, lookAhead)
+  }
   _camLookAt.y += 1.0
   camera.lookAt(_camLookAt)
 }
