@@ -50,6 +50,9 @@ import { captureBaseline, runAudit } from "./utils/audit.js"
 import "./utils/tune.js"
 // V1.8.9: independent hero scene for the home page car preview.
 import { startHeroScene, stopHeroScene, refreshHeroCar } from "./utils/heroScene.js"
+// V1.9.3-1: layout-mode picker — sets <html data-layout-mode> based on
+// real viewport height + content-overflow guard. Side-effect import.
+import "./utils/layoutMode.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
