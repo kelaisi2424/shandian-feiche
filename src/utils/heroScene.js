@@ -52,23 +52,40 @@ const STATE = {
 }
 
 // Camera orbit path (V1.9.0):
-//   – 4 hand-picked angle stops, evenly distributed, with a 4 second
-//     dwell + 2 second pan between each stop. Total cycle ~24 s.
+//   – 3 hand-picked angle stops, with a 1.25 s dwell + 1.25 s pan
+//     each. Total cycle 7.5 s — within a typical home-page glance.
 //   – Pitch is fixed at ~33° below "behind the car" — that puts the
 //     virtual camera at car-grille height (45° low-angle commercial
 //     framing reads as "looking up at a hero car").
 const CAMERA_RADIUS = 9.4
 const CAMERA_HEIGHT = 3.4   // metres above ground; car is ~1.5m tall, so we look up at it
 const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.0, 0)
+// V1.9.4-3: condensed to 3 stops with a tighter cycle so users who
+// only stay on the home for 5–10 s still see a full rotation instead
+// of catching one hold-and-pan.
 const STOP_ANGLES = [
-  0.55,                       // front-right
-  0.55 + Math.PI * 0.55,      // rear-right
-  0.55 + Math.PI * 1.05,      // rear-left
-  0.55 + Math.PI * 1.55,      // front-left
+  Math.PI * 0.25,
+  Math.PI * 0.85,
+  Math.PI * 1.45,
 ]
-const DWELL_S = 4.0
-const PAN_S = 2.0
+const DWELL_S = 1.25
+const PAN_S = 1.25
 const CYCLE_S = (DWELL_S + PAN_S) * STOP_ANGLES.length
+
+// V1.9.4-3: per-mode camera + car tuning. Read at runtime in
+// updateHeroLayout() so resize / orientationchange re-applies it.
+const HERO_LAYOUT = {
+  "mobile-full": {
+    fov: 28,
+    carScale: 0.78,
+    carPos: { x: 0.32, y: -0.42, z: 0 },
+  },
+  "default": {
+    fov: 35,
+    carScale: 1.0,
+    carPos: { x: 0, y: 0, z: 0 },
+  },
+}
 
 function ensureRendererForMount(mount) {
   if (STATE.renderer) return
@@ -341,6 +358,9 @@ function setCarFromGLB(srcScene) {
   wrap.position.y -= wrapBox.min.y
   // Drop the car a hair so the wheels touch the stage disc.
   wrap.position.y -= 0.02
+  // V1.9.4-3: stash the natural y so updateHeroLayout can rebase the
+  // per-mode y-offset from a known reference instead of compounding.
+  wrap.userData._baseY = wrap.position.y
   tuneCarMaterials(wrap)
   STATE.scene.add(wrap)
   STATE.carRoot = wrap
@@ -349,6 +369,39 @@ function setCarFromGLB(srcScene) {
   STATE.entryDone = false
   wrap.scale.multiplyScalar(0.92)   // start small, will scale up in tick()
   wrap.userData._baseScale = scale
+  // Apply current layout-mode tuning immediately so the first paint
+  // already reflects mobile-full overrides if applicable.
+  updateHeroLayout()
+}
+
+// V1.9.4-3: per-layoutMode camera FOV + car scale/position. Re-applied
+// on visualViewport.resize / orientationchange so a rotation between
+// portrait and landscape lands in the right framing.
+function updateHeroLayout() {
+  if (!STATE.camera) return
+  const mode = document.documentElement.dataset.layoutMode
+  const cfg = HERO_LAYOUT[mode] ?? HERO_LAYOUT.default
+  STATE.camera.fov = cfg.fov
+  STATE.camera.updateProjectionMatrix()
+  const car = STATE.carRoot
+  if (!car) return
+  const base = car.userData._baseScale ?? 1
+  // Save the per-mode scale so the entry animation can read it.
+  car.userData._modeScaleMul = cfg.carScale
+  // Don't clobber the entry-anim mid-grow — let tick() apply final scale.
+  if (STATE.entryDone) {
+    car.scale.setScalar(base * cfg.carScale)
+  }
+  const baseY = car.userData._baseY ?? 0
+  car.position.set(cfg.carPos.x, baseY + cfg.carPos.y, cfg.carPos.z)
+}
+
+if (typeof window !== "undefined") {
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateHeroLayout)
+  }
+  window.addEventListener("resize", updateHeroLayout)
+  window.addEventListener("orientationchange", () => setTimeout(updateHeroLayout, 200))
 }
 
 // V1.9.0: stop-pan-stop camera path.
@@ -387,7 +440,10 @@ function updateEntryAnimation(now) {
   // smoothstep for both opacity and scale-up.
   const e = u * u * (3 - 2 * u)
   const base = STATE.carRoot.userData._baseScale ?? 1
-  const s = base * (0.92 + 0.08 * e)
+  // V1.9.4-3: multiply by per-mode scale so mobile-full enters at 0.78×
+  // its natural size and stops there, instead of overshooting to 1.0.
+  const modeMul = STATE.carRoot.userData._modeScaleMul ?? 1
+  const s = base * modeMul * (0.92 + 0.08 * e)
   STATE.carRoot.scale.setScalar(s)
   if (u >= 1) STATE.entryDone = true
 }
