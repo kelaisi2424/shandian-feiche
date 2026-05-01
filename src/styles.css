@@ -3456,6 +3456,10 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   inset: auto;
   margin-top: 6px;
   gap: 6px;
+  /* V1.9.5-4: prevent the 3-stat row from wrapping or stretching past
+     the hero-ui column on tight mobile-full landscapes (e.g. 932×430). */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 :root[data-layout-mode="mobile-full"] .hero-ui .hero-stat b {
   font-size: 16px;
@@ -3530,6 +3534,11 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
   gap: 8px;
+  /* V1.9.5-4: explicitly force 4 children into 2x2 even if the parent
+     drops below the threshold the UA's auto-flow would tolerate.
+     auto-rows: 1fr keeps the rows even if the side-grid's parent grew. */
+  grid-auto-rows: 1fr;
+  grid-auto-flow: row;
 }
 :root[data-layout-mode="mobile-full"] .side-grid .side-tile {
   aspect-ratio: 1.15 / 1;
