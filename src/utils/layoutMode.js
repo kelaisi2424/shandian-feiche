@@ -32,13 +32,27 @@ const HERO_MIN_HEIGHT = 120
 function computeLayoutMode() {
   const vh = window.visualViewport?.height ?? window.innerHeight
   const vw = window.visualViewport?.width ?? window.innerWidth
-  // Stage 1 — height-band classification.
-  let mode =
-    vh < 240 ? "ultra-compact" :
-    vh < 480 ? "compact" :
-    "full"
-  // Stage 2 — content-overflow guard. Only check if we WOULD have
-  // rendered topbar+actionbar (i.e. not already ultra-compact).
+  // V1.9.4-1: 4-mode split.
+  //   ultra-compact   vh < 240        WeChat fullscreen, etc.
+  //   compact         240 ≤ vh < 480  small landscape with browser chrome
+  //   mobile-full     vh ≥ 480 AND vw < 1024
+  //                                     phones / tablets in landscape, or
+  //                                     any portrait device with a tall vh
+  //   desktop-full    vh ≥ 480 AND vw ≥ 1024
+  //                                     true desktop showroom width
+  //
+  // The vw < 1024 check is single-axis on purpose. Earlier ChatGPT
+  // proposals used (vh ≥ 600 && vw ≥ 1024) to gate desktop, but a 1920×500
+  // ultra-wide window (e.g. snapped split-screen) would then fall through
+  // to mobile-full and look awful. vw is the natural carrier of "is there
+  // room for the side-by-side showroom layout".
+  let mode
+  if (vh < 240) mode = "ultra-compact"
+  else if (vh < 480) mode = "compact"
+  else if (vw < 1024) mode = "mobile-full"
+  else mode = "desktop-full"
+  // Content-overflow guard. Only check when we WOULD have rendered the
+  // standard topbar + actionbar pair (i.e. not already ultra-compact).
   if (mode !== "ultra-compact") {
     const topEl = document.querySelector(".menu-topbar")
     const bottomEl = document.querySelector(".menu-actionbar")
