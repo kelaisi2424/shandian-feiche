@@ -5267,6 +5267,24 @@ function updateCamera(dt) {
   const DAMPING_RATE = tune.dampingRate ?? 6.0
 
   // Centerline + 2 m ahead point (used to derive the local right vector).
+  //
+  // V1.9.5-1: the moveDir-based extrapolation (-moveDir * followDist for
+  // the target, +moveDir * lookAhead for the look-at) was leaking the
+  // player's lateral wiggle into the camera's final X. moveDir is the
+  // unit vector of (player.position - lastPlayerPos); when the player
+  // wiggles laterally, moveDir tilts left/right, and (followDist=7.5,
+  // lookAhead=10) multipliers turn that small tilt into multi-metre lateral
+  // sway. So even though the anchor lateral was nicely damped, the final
+  // camera position and look-at were swung around. Net effect: 屏幕一晃一晃.
+  //
+  // Fix: project moveDir onto the (forward, vertical) plane — i.e. zero
+  // out the spline-local right component — BEFORE using it for the
+  // backward / look-ahead extrapolation. The chase still follows the
+  // player's actual forward motion (V1.8.7 invariant) but lateral wiggle
+  // can't reach the final camera frame except through _camLatSmoothed.
+  let _v95_haveTrack = false
+  let _v95_playerLat = 0
+  let _v95_lateralTarget = 0
   if (typeof Track !== "undefined" && Track && Track.curve) {
     progressToWorld(state.progress, 0, state.y, _camCenterTmp)
     progressToWorld(Math.min(state.progress + 2.0, Track.length), 0, state.y, _camAheadTmp)
@@ -5275,26 +5293,32 @@ function updateCamera(dt) {
       _camFwdTmp.normalize()
       _camRightTmp.crossVectors(_camFwdTmp, _camUp).normalize()
       _camOffsetTmp.subVectors(player.position, _camCenterTmp)
-      const playerLat = _camOffsetTmp.dot(_camRightTmp)
-      let lateralTarget = 0
-      const absLat = Math.abs(playerLat)
+      _v95_playerLat = _camOffsetTmp.dot(_camRightTmp)
+      const absLat = Math.abs(_v95_playerLat)
       if (absLat > DEADZONE) {
-        lateralTarget = Math.sign(playerLat) * (absLat - DEADZONE) * FOLLOW_RATIO
+        _v95_lateralTarget = Math.sign(_v95_playerLat) * (absLat - DEADZONE) * FOLLOW_RATIO
       }
       const k = 1 - Math.exp(-DAMPING_RATE * dt)
-      _camLatSmoothed += (lateralTarget - _camLatSmoothed) * k
+      _camLatSmoothed += (_v95_lateralTarget - _camLatSmoothed) * k
+      // V1.9.5-1: strip the lateral component out of _camLastValidMoveDir
+      // so backward / lookAhead extrapolation can't reintroduce sway.
+      const moveDirLat = _camLastValidMoveDir.dot(_camRightTmp)
+      _camLastValidMoveDir.addScaledVector(_camRightTmp, -moveDirLat)
+      const dlen = _camLastValidMoveDir.length()
+      if (dlen > 1e-6) _camLastValidMoveDir.divideScalar(dlen)
+      else _camLastValidMoveDir.copy(_camFwdTmp)   // degenerate → use spline forward
       // Anchor = centerline + right * smoothed-lateral.
       _camTargetPos.copy(_camCenterTmp)
         .addScaledVector(_camRightTmp, _camLatSmoothed)
+      _v95_haveTrack = true
     } else {
-      // Degenerate spline (paused / very short remainder) — fall back
-      // to player.position so we don't lose the chase entirely.
       _camTargetPos.copy(player.position)
     }
   } else {
     _camTargetPos.copy(player.position)
   }
-  // Standard V1.8.7 backward-from-moveDir + camHeight. Unchanged.
+  // Standard V1.8.7 backward-from-moveDir + camHeight. moveDir now has
+  // zero lateral component (or is the spline forward as a fallback).
   _camTargetPos.addScaledVector(_camLastValidMoveDir, -followDist)
   _camTargetPos.y += camHeight
 
@@ -5330,6 +5354,27 @@ function updateCamera(dt) {
   }
   _camLookAt.y += 1.0
   camera.lookAt(_camLookAt)
+
+  // V1.9.5-1: live debug snapshot. Read from DevTools as
+  //   window.__camDebug
+  // to verify the chain: latRaw → latTarget → latSmoothed → anchorX →
+  // camTargetX → lookTargetX. ratio_cam_to_lat at steady state should
+  // be ≤ followRatio (default 0.30).
+  if (_v95_haveTrack && typeof window !== "undefined") {
+    const anchorX = _camCenterTmp.x + _camRightTmp.x * _camLatSmoothed
+    window.__camDebug = {
+      latRaw: +_v95_playerLat.toFixed(3),
+      latTarget: +_v95_lateralTarget.toFixed(3),
+      latSmoothed: +_camLatSmoothed.toFixed(3),
+      anchorX: +anchorX.toFixed(3),
+      camTargetX: +_camTargetPos.x.toFixed(3),
+      lookTargetX: +_camLookAt.x.toFixed(3),
+      cameraX: +camera.position.x.toFixed(3),
+      ratio_cam_to_lat: _v95_playerLat !== 0
+        ? +Math.abs(_camLatSmoothed / _v95_playerLat).toFixed(3)
+        : 0,
+    }
+  }
 }
 
 function updateMenuCamera(now) {
