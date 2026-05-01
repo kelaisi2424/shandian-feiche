@@ -32,6 +32,7 @@ import {
   deriveCarPhysics,
   applyModelScale,
   rivalBaseSpeed,
+  rivalClassesForLevel,
   TIER_STYLE
 } from "./cars.js"
 import {
@@ -2665,7 +2666,16 @@ function spawnRivals() {
     ? levelCount
     : 3 + Math.floor(Math.random() * 3)
   if (fieldSize <= 0) return
-  const pool = [...OPPONENT_CARS]
+  // V1.8.8-3: filter the pool by carClass for the current level so lv1~5
+  // races only field formula cars (sport / utility silhouettes look out
+  // of place against a formula player car). Falls back to the full
+  // OPPONENT_CARS list if filtering would empty the pool — defensive,
+  // shouldn't trigger with the current cars.js data.
+  const lvNum = state.level?.num ?? 1
+  const allowedClasses = rivalClassesForLevel(lvNum)
+  let pool = OPPONENT_CARS.filter((o) => allowedClasses.includes(o.carClass))
+  if (pool.length === 0) pool = [...OPPONENT_CARS]
+  else pool = [...pool]
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
@@ -2761,6 +2771,11 @@ function addRival(cfg) {
   const car = cloneAsset(opp.asset, 6.5, "z")
     ?? makeProperCar({ body: opp.body ?? 0xe04040, accent: opp.accent ?? 0x300404 })
   car.rotation.y = Math.PI
+  // V1.8.8-3: per-opponent modelScale applied on top of cloneAsset's
+  // 6.5m bbox normalization. Used to pin off-spec silhouettes (trucks,
+  // hatches) within ~10–15% of the formula-car visual footprint.
+  const oppScale = opp.modelScale ?? 1.0
+  if (oppScale !== 1.0) car.scale.multiplyScalar(oppScale)
   if (opp.body !== undefined) {
     recolorCar(car, { body: opp.body, accent: opp.accent ?? 0x300404 })
   }

@@ -73,12 +73,22 @@ export const PLAYER_CARS = [
   }
 ]
 
+// V1.8.8-3: each rival now declares a `carClass`:
+//   - "formula"  → low-slung open-wheel / race silhouette; allowed in lv1+
+//   - "sport"    → sport / GT silhouette; only allowed from lv6 onward
+//   - "utility"  → trucks / hatch shapes that read odd in a race; never
+//                  used in race events (kept in the data so other modes
+//                  can still pull from the pool if we ever add them).
+// `modelScale` is calibrated so rivals stay within ~10–15% of the player
+// car's visible footprint — e.g. ironclad (truck) was visually oversized
+// at 1.0, scaled to 0.88 to match a formula silhouette.
 export const OPPONENT_CARS = [
   {
     id: "rival_one",
     name: "RIVAL ONE",
     tier: "A",
     asset: "rival_one",
+    carClass: "formula",
     modelScale: 1.0,
     topSpeed: 282,
     aiAggression: 6,
@@ -91,6 +101,7 @@ export const OPPONENT_CARS = [
     name: "STORMER",
     tier: "B",
     asset: "stormer",
+    carClass: "formula",
     modelScale: 1.0,
     topSpeed: 258,
     aiAggression: 5,
@@ -103,6 +114,7 @@ export const OPPONENT_CARS = [
     name: "NIGHTHAWK",
     tier: "A",
     asset: "nighthawk",
+    carClass: "sport",
     modelScale: 1.0,
     topSpeed: 295,
     aiAggression: 7,
@@ -115,6 +127,7 @@ export const OPPONENT_CARS = [
     name: "CRIMSON",
     tier: "B",
     asset: "crimson",
+    carClass: "formula",
     modelScale: 1.0,
     topSpeed: 266,
     aiAggression: 6,
@@ -127,6 +140,7 @@ export const OPPONENT_CARS = [
     name: "SILVER BULLET",
     tier: "A",
     asset: "silver_bullet",
+    carClass: "sport",
     modelScale: 1.0,
     topSpeed: 302,
     aiAggression: 5,
@@ -139,6 +153,7 @@ export const OPPONENT_CARS = [
     name: "GHOST",
     tier: "S",
     asset: "ghost",
+    carClass: "formula",
     modelScale: 1.0,
     topSpeed: 318,
     aiAggression: 8,
@@ -151,7 +166,10 @@ export const OPPONENT_CARS = [
     name: "IRONCLAD",
     tier: "B",
     asset: "ironclad",
-    modelScale: 1.0,
+    carClass: "utility",
+    // truck silhouette — clearly oversized at 1.0 next to a formula car;
+    // pin to 0.88 so the visual size sits within ~12% of the player.
+    modelScale: 0.88,
     topSpeed: 252,
     aiAggression: 8,
     cornering: 6,
@@ -163,6 +181,7 @@ export const OPPONENT_CARS = [
     name: "VELOCITY",
     tier: "A",
     asset: "velocity",
+    carClass: "sport",
     modelScale: 1.0,
     topSpeed: 288,
     aiAggression: 4,
@@ -175,6 +194,7 @@ export const OPPONENT_CARS = [
     name: "ONYX",
     tier: "S",
     asset: "onyx",
+    carClass: "sport",
     modelScale: 1.0,
     topSpeed: 315,
     aiAggression: 9,
@@ -183,6 +203,14 @@ export const OPPONENT_CARS = [
     accent: 0xc11a2a
   }
 ]
+
+// V1.8.8-3: which carClasses are allowed to spawn as rivals at a given
+// level number. Returns an array of class names; spawnRivals filters
+// OPPONENT_CARS through this. utility never enters competitive racing.
+export function rivalClassesForLevel(lvNum) {
+  if (!lvNum || lvNum <= 5) return ["formula"]
+  return ["formula", "sport"]
+}
 
 // Map id → entry for both pools, used everywhere in the game (rank lookups,
 // result modal, garage card etc.) so the rest of the code never has to know
