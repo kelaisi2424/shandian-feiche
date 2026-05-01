@@ -4226,6 +4226,8 @@ function startRace() {
   const startPos = progressToWorld(0, 0, state.y)
   player.position.copy(startPos)
   player.rotation.set(0, 0, 0)
+  // V1.9.2-4: clear the finish-fade class added by finishRace last race.
+  $("hud")?.classList.remove("hud-finishing")
   setMode("playing")
   runCountdown()
   maybeShowTutorial()
@@ -4357,6 +4359,12 @@ function finishRace(success = true) {
   state.finishedAt = performance.now()
   state._finalRank = computeRank()
   if (success) sfxCheckpoint()
+  // V1.9.2-4: drop the bottom controls (left/right/gas/brake/nitro)
+  // out of view immediately on finish so the 1.1 s grade-compute window
+  // doesn't leave them visible. The HUD chips/timer up top stay
+  // (they're informational), but the steering pad must not still look
+  // tappable while the result modal is on its way in.
+  $("hud")?.classList.add("hud-finishing")
   setTimeout(() => {
     const ms = state.finishedAt - state.startedAt - state.pauseAcc
     const win = success && state.hits < CFG.hitLimit && !state.timedOut

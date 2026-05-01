@@ -2034,15 +2034,45 @@ canvas,
 
 /* ============== overlay screens (modals) — neon-glass ============== */
 .overlay-screen {
-  z-index: 30;
+  /* V1.9.2-4: z-index lifted from 30 → 80 so a result/pause modal sits
+     above EVERY in-game element (HUD = 5, screen-fx = 70, etc.) without
+     ambiguity. Background also bumped to rgba 0.82 so anything that
+     happens to be repainting underneath gets fully masked. */
+  z-index: 80;
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(ellipse at 30% 30%, rgba(38, 214, 255, 0.08), transparent 55%),
-    radial-gradient(ellipse at 75% 70%, rgba(255, 211, 26, 0.06), transparent 55%),
-    rgba(5, 10, 24, 0.65);
-  backdrop-filter: blur(8px) saturate(140%);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
+    radial-gradient(ellipse at 30% 30%, rgba(38, 214, 255, 0.10), transparent 55%),
+    radial-gradient(ellipse at 75% 70%, rgba(255, 211, 26, 0.08), transparent 55%),
+    rgba(5, 10, 24, 0.82);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+/* V1.9.2-4: kill HUD entirely while a result/pause modal is up. setMode()
+   already removes .active from #hud when leaving "playing"/"paused" mode,
+   but during the 1.1 s pre-setMode delay inside finishRace() (sfx + grade
+   compute window) the HUD is still on screen. The :has() rule below
+   force-hides the entire HUD subtree the instant either overlay opens
+   so the bottom-row left/right/gas/brake buttons can't peek through.
+
+   pointer-events: none is a belt-and-braces — even if a child node
+   ignores display:none for any reason, taps still go to the overlay. */
+body:has(#resultScreen.active) #hud,
+body:has(#pauseScreen.active) #hud {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* V1.9.2-4: while finishRace() is in its 1.1 s pre-result delay, fade the
+   on-screen control pad out and disable taps so the player can't tap a
+   stale steer/gas/brake button into the about-to-spawn result modal. */
+.hud.hud-finishing .steer-controls,
+.hud.hud-finishing .pedals,
+.hud.hud-finishing .nitro-wrap {
+  opacity: 0;
+  pointer-events: none !important;
+  transition: opacity 0.35s ease-out;
 }
 .modal {
   position: relative;
