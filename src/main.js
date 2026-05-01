@@ -2245,6 +2245,17 @@ function applyLevel() {
   CFG.checkpointCount = lvl.checkpointCount ?? null
   CFG.checkpointSpread = lvl.checkpointSpread ?? "even"
   CFG.nitroRich = !!lvl.nitroRich
+  // V1.8.8-2: per-level default speed cap. Applied via the existing
+  // window.__tune.speedCapMultiplier knob in updateDriving — no physics
+  // or per-car stats touched. The user can still override at runtime
+  // via the console; we only set the default per level on race start.
+  // lv1~lv3 → 0.65, lv4~lv5 → 0.75, lv6+ → 1.0.
+  const lvNum = lvl.num ?? 1
+  const cap = lvNum <= 3 ? 0.65 : lvNum <= 5 ? 0.75 : 1.0
+  if (typeof window !== "undefined") {
+    window.__tune = window.__tune || {}
+    window.__tune.speedCapMultiplier = cap
+  }
 }
 
 // Apply the cosmetic backdrop (sky / sunset / neon). Called by applyLevel.
@@ -2960,20 +2971,60 @@ function makeHazard(index = 0) {
   const kind = sequence[index % sequence.length]
   if (kind === "cone") {
     const cone = cloneAsset("cone", 1.4, "y")
-    if (cone) return tagObstacle(cone, "cone", "cone")
+    if (cone) return tagObstacle(applyEarlyLevelContrast(cone, "cone"), "cone", "cone")
     return makeObstacleFallback("cone")
   }
   if (kind === "barrel") {
     const barrel = cloneAsset("box", 1.7, "y")
-    if (barrel) return tagObstacle(barrel, "barrel", "box")
+    if (barrel) return tagObstacle(applyEarlyLevelContrast(barrel, "barrier"), "barrel", "box")
     return makeObstacleFallback("barrel")
   }
   const barrier = cloneAsset(index % 2 === 0 ? "barrierRed" : "barrierWhite", 4.0)
   if (barrier) {
     barrier.rotation.y = Math.PI / 2
-    return tagObstacle(barrier, "barrier", index % 2 === 0 ? "barrierRed" : "barrierWhite")
+    return tagObstacle(applyEarlyLevelContrast(barrier, "barrier"), "barrier", index % 2 === 0 ? "barrierRed" : "barrierWhite")
   }
   return makeObstacleFallback("barrier")
+}
+
+// V1.8.8-2: high-contrast obstacle paint for lv1~lv5 only. The Kenney
+// GLBs ship in muted brand colors that read fine on neon backdrops but
+// disappear on the daylit lv1 sky. Repaint per kind:
+//   cone      → orange + white stripe band
+//   barrier   → yellow + black stripes
+//   gate      → red + white stripes (checkpoint overhead)
+// All other levels (6+) keep the original GLB paint.
+function applyEarlyLevelContrast(obj, kind) {
+  const lvNum = state.level?.num ?? 99
+  if (lvNum > 5) return obj
+  let primary = 0xffffff
+  let stripe  = 0xffffff
+  if (kind === "cone")    { primary = 0xff7a1a; stripe = 0xffffff }
+  if (kind === "barrier") { primary = 0xffd31a; stripe = 0x111111 }
+  if (kind === "gate")    { primary = 0xd61a2a; stripe = 0xffffff }
+  obj.traverse((c) => {
+    if (!c.isMesh || !c.material) return
+    const mats = Array.isArray(c.material) ? c.material : [c.material]
+    const repainted = mats.map((m) => {
+      if (!m) return m
+      const out = m.clone()
+      // alternating bands: pick stripe vs primary by approximate world Y
+      // position bucket so cones/barriers read with horizontal stripes.
+      const yBucket = Math.floor((c.position?.y ?? 0) * 4)
+      const useStripe = (yBucket & 1) === 1
+      const target = useStripe ? stripe : primary
+      if (out.color) out.color.setHex(target)
+      if (out.emissive) {
+        out.emissive.setHex(target)
+        out.emissiveIntensity = 0.18
+      }
+      out.metalness = 0.15
+      out.roughness = 0.55
+      return out
+    })
+    c.material = Array.isArray(c.material) ? repainted : repainted[0]
+  })
+  return obj
 }
 
 function spawnRamps() {
@@ -3096,7 +3147,7 @@ function spawnCheckpoints() {
         t = 0.25 * t + 0.75 * (t * t)
       }
       const s = start + span * t
-      const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
+      const m = applyEarlyLevelContrast(makeOverheadGantry(0x10c8ff, 0xfff15a, true), "gate")
       placeAlongTrack(m, s)
       dynamic.add(m)
       checkpoints.push({ mesh: m, progress: s, passed: false })
@@ -3104,7 +3155,7 @@ function spawnCheckpoints() {
   } else {
     const gap = CFG.checkpointGap ?? 260
     for (let s = 200; s < Track.length - 80; s += gap) {
-      const m = makeOverheadGantry(0x10c8ff, 0xfff15a, true)
+      const m = applyEarlyLevelContrast(makeOverheadGantry(0x10c8ff, 0xfff15a, true), "gate")
       placeAlongTrack(m, s)
       dynamic.add(m)
       checkpoints.push({ mesh: m, progress: s, passed: false })
