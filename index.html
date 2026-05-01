@@ -104,35 +104,43 @@
              Right 45% = 2×2 secondary entries (no "SOON" placeholder). -->
         <main class="home-stage">
           <section class="hero-stage" id="heroStage">
-            <!-- 3D hero car preview. heroScene.js mounts its own canvas. -->
-            <div id="heroCarMount" class="hero-car-mount" aria-hidden="true"></div>
-            <!-- Bottom-left: 3 core stats overlay (read-only, no buttons). -->
-            <div class="hero-stat-row">
-              <div class="hero-stat">
-                <b id="heroStatSpeed">248</b>
-                <small>最高速度 KM/H</small>
-              </div>
-              <div class="hero-stat-divider" aria-hidden="true"></div>
-              <div class="hero-stat">
-                <b id="heroStatAccel">4.6s</b>
-                <small>0-100 加速</small>
-              </div>
-              <div class="hero-stat-divider" aria-hidden="true"></div>
-              <div class="hero-stat">
-                <b id="heroStatHandling">8.1</b>
-                <small>操控</small>
-              </div>
+            <!-- V1.9.4-2: Hero split into two physical layers so mobile-full
+                 can lay them side-by-side without overlap. desktop-full
+                 keeps both layers absolutely positioned (V1.9.0 showroom). -->
+            <div class="hero-visual" id="heroVisual">
+              <!-- 3D hero car preview. heroScene.js mounts its own canvas
+                   inside #heroCarMount. -->
+              <div id="heroCarMount" class="hero-car-mount" aria-hidden="true"></div>
             </div>
-            <!-- Top-left: car name + tier (small, doesn't compete with the CTA). -->
-            <div class="hero-titlecard">
-              <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
-              <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
+            <div class="hero-ui" id="heroUI">
+              <!-- Top: car name + tier badge. -->
+              <div class="hero-titlecard">
+                <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
+                <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
+              </div>
+              <!-- Mid: 3 core stats. -->
+              <div class="hero-stat-row">
+                <div class="hero-stat">
+                  <b id="heroStatSpeed">248</b>
+                  <small>最高速度 KM/H</small>
+                </div>
+                <div class="hero-stat-divider" aria-hidden="true"></div>
+                <div class="hero-stat">
+                  <b id="heroStatAccel">4.6s</b>
+                  <small>0-100 加速</small>
+                </div>
+                <div class="hero-stat-divider" aria-hidden="true"></div>
+                <div class="hero-stat">
+                  <b id="heroStatHandling">8.1</b>
+                  <small>操控</small>
+                </div>
+              </div>
+              <!-- Bottom: single primary CTA. -->
+              <button id="startGame" class="hero-cta-btn" aria-label="start race">
+                <span class="hero-cta-main">开始比赛</span>
+                <span class="hero-cta-sub">START RACE</span>
+              </button>
             </div>
-            <!-- Single primary CTA — only "开始比赛" lives on the home page. -->
-            <button id="startGame" class="hero-cta-btn" aria-label="start race">
-              <span class="hero-cta-main">开始比赛</span>
-              <span class="hero-cta-sub">START RACE</span>
-            </button>
           </section>
 
           <section class="side-grid" aria-label="secondary entries">
