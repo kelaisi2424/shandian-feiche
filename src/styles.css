@@ -3027,21 +3027,26 @@ body:has(#pauseScreen.active) #hud {
    classic "let me shrink" escape hatch). The original absolute-position
    rules above are overridden — kept above so any overlay screen that
    reuses .menu-topbar styling still gets the visual chrome. */
-#menu, .menu-screen {
-  /* .screen already sets `position: absolute; top: var(--frame-h); bottom: 0`
-     so the vertical extent is "stage height minus frame-h". We just turn
-     it into a flex column so the topbar/actionbar/hero participate in
-     the same vertical flow instead of fighting via absolute positioning. */
-  display: flex;
+/* V1.9.3-hotfix: gate the flex column on .active.
+   The earlier `#menu, .menu-screen { display: flex }` rule was
+   unconditional, which beat the `.screen { display: none }` default
+   in the cascade. Result: after setMode("playing") removed `.active`
+   from #menu, the menu (and its ucBar child in ultra-compact mode)
+   STILL rendered on top of the game canvas — the player could see
+   the home strip but not the road. Limiting the rule to `.active`
+   restores the original "menu is hidden during gameplay" invariant
+   while keeping the V1.9.3-2 flex column layout when the menu IS up. */
+#menu.screen.active,
+.menu-screen.active {
+  display: flex !important;
   flex-direction: column;
   overflow: hidden;
 }
-#menu.menu-screen.active,
-.menu-screen.active {
-  /* .screen.active sets display:flex; reaffirm column direction so the
-     cascade order doesn't flip us back to row. */
-  display: flex !important;
-  flex-direction: column;
+/* Belt-and-braces: anything in #menu that isn't .active is hidden.
+   Prevents any future rule from accidentally turning the menu back on
+   when state.mode != "menu". */
+#menu.screen:not(.active) {
+  display: none !important;
 }
 
 #menu > .menu-topbar {
@@ -3241,6 +3246,18 @@ body:has(#pauseScreen.active) #hud {
   border-radius: 10px;
   font-size: 13px;
   cursor: pointer;
+}
+
+/* V1.9.3-hotfix: ucBar defensive hides — second line of defense.
+   The .active gate above already hides #menu (and therefore #ultraCompactBar
+   inside it) during gameplay. These rules add explicit "stop showing
+   ucBar if any non-menu screen is active" coverage in case the
+   `.menu.active` toggle ever races a layoutMode recompute. */
+:root[data-layout-mode="ultra-compact"] #menu:not(.active) .ultra-compact-bar,
+body:has(#hud.active) #ultraCompactBar,
+body:has(#resultScreen.active) #ultraCompactBar,
+body:has(#pauseScreen.active) #ultraCompactBar {
+  display: none !important;
 }
 
 /* ============================================================
