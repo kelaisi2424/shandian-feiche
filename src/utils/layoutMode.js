@@ -81,12 +81,27 @@ if (typeof window !== "undefined") {
     setTimeout(applyLayoutMode, 100)
   })
   // First run — must wait for #menu's topbar/actionbar to be in the DOM
-  // so Stage 2's offsetHeight reads return real values.
+  // so Stage 2's offsetHeight reads return real values. We schedule
+  // multiple staggered re-runs because the FIRST DOMContentLoaded fire
+  // can land before the stylesheet has fully resolved offsetHeight,
+  // leading to 0-height reads that mis-classify a tall viewport as
+  // ultra-compact. The follow-ups on requestAnimationFrame + load make
+  // sure the dataset reflects the post-layout truth.
+  const runLater = () => {
+    requestAnimationFrame(() => requestAnimationFrame(applyLayoutMode))
+  }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", applyLayoutMode, { once: true })
+    document.addEventListener("DOMContentLoaded", () => {
+      applyLayoutMode()
+      runLater()
+    }, { once: true })
   } else {
     applyLayoutMode()
+    runLater()
   }
+  // Final pass after all assets settle (covers any late-loading webfont
+  // or background image that nudges topbar/actionbar height).
+  window.addEventListener("load", applyLayoutMode, { once: true })
   // Diagnostic accessor — `window.__layoutMode()` in DevTools to read
   // the live state, or to verify a particular viewport size locally.
   window.__layoutMode = () => {

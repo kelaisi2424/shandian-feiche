@@ -3009,3 +3009,69 @@ body:has(#pauseScreen.active) #hud {
  * the .stage transform handles every aspect ratio uniformly. The only
  * orientation-aware rule lives at the top of this file (portrait gate
  * vs landscape stage). */
+
+/* ============================================================
+   V1.9.3-2: menu flex column to fix topbar/actionbar overlap
+   ============================================================
+   Real measurement (844 × 380 WeChat fullscreen, usable vh ≈ 195):
+     .menu-topbar    y=40, h=84 → bottom=124
+     .menu-actionbar y=97, h=98 → top=97
+     ⇒ actionbar.top (97) < topbar.bottom (124) — they OVERLAP.
+   Both bars were `position: absolute` anchored to opposite edges, with
+   no awareness of each other or the viewport floor. When sum-of-heights
+   > vh, they walked into each other.
+
+   Fix: turn #menu into a flex column so topbar and actionbar are
+   participants in the same vertical flow, and the middle (Hero stage)
+   absorbs whatever's left via flex: 1 1 auto + min-height: 0 (the
+   classic "let me shrink" escape hatch). The original absolute-position
+   rules above are overridden — kept above so any overlay screen that
+   reuses .menu-topbar styling still gets the visual chrome. */
+#menu, .menu-screen {
+  /* .screen already sets `position: absolute; top: var(--frame-h); bottom: 0`
+     so the vertical extent is "stage height minus frame-h". We just turn
+     it into a flex column so the topbar/actionbar/hero participate in
+     the same vertical flow instead of fighting via absolute positioning. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#menu.menu-screen.active,
+.menu-screen.active {
+  /* .screen.active sets display:flex; reaffirm column direction so the
+     cascade order doesn't flip us back to row. */
+  display: flex !important;
+  flex-direction: column;
+}
+
+#menu > .menu-topbar {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+  /* iOS notch / Android cutout — pad inside, not via outer margin. */
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+#menu > .home-stage,
+#menu > .hero-stage,
+#menu > main.tile-grid {
+  /* The Hero block is the flex middle: it consumes whatever vertical
+     space the topbar + actionbar leave behind. min-height: 0 is the
+     critical bit — without it, a flex item refuses to shrink below
+     its intrinsic content height, and a 432 px Hero pushes the
+     actionbar off-screen on a 195 px viewport. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  /* Override the V1.9.1 absolute positioning so the flex flow drives. */
+  top: auto;
+  bottom: auto;
+  left: auto;
+  right: auto;
+}
+#menu > .menu-actionbar {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
