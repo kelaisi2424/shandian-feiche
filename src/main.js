@@ -3547,6 +3547,7 @@ function setMode(mode) {
     startHeroScene({ carId: car.id, assetName: car.asset })
     refreshTopPlayerInfo()
     refreshHeroCard()
+    refreshUltraCompactStrip()
   } else {
     stopHeroScene()
   }
@@ -3670,6 +3671,81 @@ function bindMetaControls() {
   if (navDaily) navDaily.addEventListener("click", () => maybeShowDailyBonus(true))
   const navShare = document.getElementById("navShare")
   if (navShare) navShare.addEventListener("click", shareCurrentBest)
+
+  // V1.9.3-3: ultra-compact strip buttons. Only visible on
+  // :root[data-layout-mode="ultra-compact"] but always wired so a layout
+  // mode change while the page is open Just Works.
+  const ucStart = document.getElementById("ucStartBtn")
+  if (ucStart) ucStart.addEventListener("click", () => {
+    // Reuse the main #startGame click (which calls startRace) so the
+    // entire pre-race flow (rebuildPlayerCar / applyLevel / spawn …) runs
+    // through one path.
+    document.getElementById("startGame")?.click()
+  })
+  const ucMenu = document.getElementById("ucMenuBtn")
+  if (ucMenu) ucMenu.addEventListener("click", showCompactMenuOverlay)
+}
+
+// V1.9.3-3: lazy-built secondary menu overlay for the ultra-compact strip.
+// Built once on first ☰ tap then re-shown by toggling .active. Each grid
+// button's data-jump key maps to an existing main-page button so we don't
+// duplicate routing logic — clicking "关卡" here does the same as tapping
+// the #tracksTile in the full layout.
+function showCompactMenuOverlay() {
+  let overlay = document.getElementById("compactMenuOverlay")
+  if (!overlay) {
+    overlay = document.createElement("div")
+    overlay.id = "compactMenuOverlay"
+    overlay.className = "screen overlay-screen compact-menu-overlay"
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>更多</h3>
+        <div class="compact-menu-grid">
+          <button data-jump="levels">关卡</button>
+          <button data-jump="garage">车库</button>
+          <button data-jump="ranking">排行榜</button>
+          <button data-jump="daily">每日</button>
+          <button data-jump="missions">任务</button>
+          <button data-jump="settings">设置</button>
+        </div>
+        <button class="modal-close" data-jump="close">关闭</button>
+      </div>
+    `
+    document.body.appendChild(overlay)
+    overlay.addEventListener("click", (e) => {
+      const jump = e.target?.dataset?.jump
+      if (!jump) return
+      overlay.classList.remove("active")
+      // Map data-jump → existing main-menu entry. Order matters: route
+      // to the side-grid tile first (which has the V1.9.1 wiring), then
+      // fall back to bottom-nav nav-btn, finally to direct id lookup.
+      const route = {
+        levels: "tracksTile",
+        garage: "garageTile",
+        missions: "dailyTile",
+        ranking: "navRanking",
+        daily: "navDaily",
+        settings: "gearBtn",
+        close: null,
+      }
+      const targetId = route[jump]
+      if (targetId) document.getElementById(targetId)?.click()
+    })
+  }
+  overlay.classList.add("active")
+}
+
+// V1.9.3-3: keep the ultra-compact strip in sync with selectedCar +
+// currentLevel so the player sees the right name + tier whenever the
+// strip is rendered. Mirrors refreshHeroCard / refreshTopPlayerInfo.
+function refreshUltraCompactStrip() {
+  const save = Save.get()
+  const car = CAR_BY_ID[save.selectedCar] ?? PLAYER_CARS[0]
+  const lvl = LEVEL_BY_ID[save.currentLevel] ?? LEVELS[0]
+  const nm = $("ucCarName")
+  if (nm) nm.textContent = car.name
+  const tr = $("ucCarTier")
+  if (tr) tr.textContent = `TIER ${car.tier ?? "C"} · LV.${lvl?.num ?? 1}`
 }
 
 // Show the per-level leaderboard: each level row carries its grade + best
@@ -3861,6 +3937,7 @@ function openGarage() {
         // helpers only touch the menu DOM, not the modal.
         refreshHeroCard()
         refreshTopPlayerInfo()
+        refreshUltraCompactStrip()
         openGarage()
       } else {
         const cur = Save.get()
@@ -3872,6 +3949,7 @@ function openGarage() {
           refreshCurrencyHud()
           refreshHeroCard()
           refreshTopPlayerInfo()
+          refreshUltraCompactStrip()
           openGarage()
         } else {
           toast(`金币不足 (${cur.coins}/${c.price})`, 1200)
@@ -3919,6 +3997,7 @@ function openLevels() {
       }
       Save.set({ currentLevel: lvl.id })
       refreshTopPlayerInfo()
+      refreshUltraCompactStrip()
       openLevels()
     })
     list.appendChild(card)

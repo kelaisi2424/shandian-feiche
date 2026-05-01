@@ -31,6 +31,22 @@
         <div class="menu-cover" aria-hidden="true"></div>
         <div class="menu-overlay" aria-hidden="true"></div>
 
+        <!-- V1.9.3-3: ultra-compact single-row strip. Activated only when
+             :root[data-layout-mode="ultra-compact"] is set by layoutMode.js
+             (vh < 240, e.g. WeChat fullscreen on iPhone landscape ≈ 195 px).
+             Default hidden via .ultra-compact-bar { display: none }. -->
+        <div class="ultra-compact-bar" id="ultraCompactBar" aria-hidden="true">
+          <div class="uc-left">
+            <span class="uc-bolt">⚡</span>
+            <div class="uc-car">
+              <span class="uc-car-name" id="ucCarName">LIGHTNING S1</span>
+              <span class="uc-car-tier" id="ucCarTier">TIER C · LV.1</span>
+            </div>
+          </div>
+          <button class="uc-cta" id="ucStartBtn">开始比赛</button>
+          <button class="uc-menu" id="ucMenuBtn" aria-label="更多">☰</button>
+        </div>
+
         <!-- V1.9.1: top bar trimmed to coin / gem / car-info / gear.
              The legacy "addCoins" cheat button + decorative ring were
              removed from the visible row (kept hidden so debug paths
