@@ -2900,14 +2900,90 @@ function spawnHeroPickups() {
   }
 }
 
+// V1.9.2-3: 3D rotating gold coin (replaces the V1.8 torus + circle
+// sprite-look). Built from a thin cylinder with a beveled rim:
+//   – body : ø1.0 × 0.14 m thick, brushed-gold material with high
+//             metalness + low roughness so it catches the env map.
+//   – rim  : narrow torus around the equator giving a visible edge
+//             thickness when seen edge-on (sells "real coin").
+//   – face : two thin coin-face cylinders (front + back) sitting flush
+//             with the body, slightly brighter so the head/tail reads
+//             distinct from the rim band.
+//   – emboss : a small ⚡ embossed motif rendered as raised + recessed
+//             box ribs on each face — enough silhouette to read as
+//             "decorated coin" without needing a texture.
+//
+// updatePickups already rotates the group on Y at dt*4, so a coin
+// in-world spins; the cylinder is laid flat (rotation.x = π/2) so its
+// face points sideways and visibly flashes as it rotates.
 function makeCoin() {
   const g = new THREE.Group()
-  const coin = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.16, 12, 28), mats.gold)
-  coin.rotation.x = Math.PI / 2
-  g.add(coin)
-  const inner = new THREE.Mesh(new THREE.CircleGeometry(0.4, 16), new THREE.MeshStandardMaterial({ color: 0xfff2a8, roughness: 0.18, metalness: 0.5 }))
-  inner.rotation.x = Math.PI / 2
-  g.add(inner)
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xffc52b,
+    emissive: 0xff8a16,
+    emissiveIntensity: 0.42,
+    roughness: 0.22,
+    metalness: 0.85,
+  })
+  const goldFaceMat = new THREE.MeshStandardMaterial({
+    color: 0xffe45a,
+    emissive: 0xffb01c,
+    emissiveIntensity: 0.55,
+    roughness: 0.18,
+    metalness: 0.9,
+  })
+  // Coin body — short cylinder with the disc face along Y. We lay it on
+  // its side so the disc faces the camera as the group rotates around Y.
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 0.14, 36, 1),
+    goldMat
+  )
+  body.rotation.x = Math.PI / 2
+  g.add(body)
+  // Edge ring — torus snapped to the equator for visible coin thickness.
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.5, 0.045, 10, 36),
+    goldMat
+  )
+  // Torus default lies in XY plane; rotate so the ring matches the
+  // cylinder's edge (cylinder is now oriented with its axis = world Z
+  // after the rotation.x = π/2 above).
+  // No further rotation needed — torus in XY plane = ring around Z axis.
+  g.add(rim)
+  // Two coin faces — slightly brighter discs that sit just outside the
+  // body's flat caps. Adds a "polished face" highlight.
+  for (const sign of [-1, 1]) {
+    const face = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.42, 0.02, 36, 1),
+      goldFaceMat
+    )
+    face.rotation.x = Math.PI / 2
+    face.position.z = sign * 0.072
+    g.add(face)
+    // Embossed "⚡" motif: 4 small box ribs forming a stylized lightning
+    // bolt. Placed slightly proud of the face so they catch a highlight.
+    const embossMat = new THREE.MeshStandardMaterial({
+      color: 0xfff7c4,
+      emissive: 0xffb01c,
+      emissiveIntensity: 0.6,
+      roughness: 0.18,
+      metalness: 0.92,
+    })
+    const ribs = [
+      { x: 0.06, y: 0.18, w: 0.12, h: 0.08 },
+      { x: -0.04, y: 0.06, w: 0.10, h: 0.08 },
+      { x: 0.04, y: -0.06, w: 0.10, h: 0.08 },
+      { x: -0.06, y: -0.18, w: 0.12, h: 0.08 },
+    ]
+    for (const r of ribs) {
+      const rib = new THREE.Mesh(
+        new THREE.BoxGeometry(r.w, r.h, 0.022),
+        embossMat
+      )
+      rib.position.set(r.x, r.y, sign * (0.072 + 0.015))
+      g.add(rib)
+    }
+  }
   return g
 }
 
