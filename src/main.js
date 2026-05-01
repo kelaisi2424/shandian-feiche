@@ -2983,25 +2983,138 @@ function makeHazardFallback() {
   return tagObstacle(g, "fallback-barrel", "fallback")
 }
 
+// V1.9.2-2: hazard meshes are now procedural three.js geometry instead
+// of cloned Kenney GLBs. The GLBs read as toy props; the proc versions
+// look like real construction equipment. Same naming + tagging keeps
+// collision detection and __scrollCheck happy.
+//
+// Two kinds:
+//   "cone"     → traffic cone (black base + orange body + 2 yellow bands)
+//   "barrier"/"barrel" → concrete jersey barrier (grey trapezoid body
+//                        + yellow/black warning stripe on top)
 function makeHazard(index = 0) {
   const sequence = ["cone", "barrier", "barrel"]
   const kind = sequence[index % sequence.length]
   if (kind === "cone") {
-    const cone = cloneAsset("cone", 1.4, "y")
-    if (cone) return tagObstacle(applyEarlyLevelContrast(cone, "cone"), "cone", "cone")
-    return makeObstacleFallback("cone")
+    return tagObstacle(makeProcTrafficCone(), "cone", "proc-cone")
   }
-  if (kind === "barrel") {
-    const barrel = cloneAsset("box", 1.7, "y")
-    if (barrel) return tagObstacle(applyEarlyLevelContrast(barrel, "barrier"), "barrel", "box")
-    return makeObstacleFallback("barrel")
+  // Both barrel + barrier slots render as a concrete jersey barrier so
+  // the road furniture reads as one consistent obstacle family.
+  return tagObstacle(makeProcConcreteBarrier(), "barrier", "proc-barrier")
+}
+
+// Programmatic traffic cone: a 4-tier cone is more readable than a
+// single sloped surface. Layers (bottom-up):
+//   – flat black square base (0.8 × 0.8 × 0.06)
+//   – orange truncated cone, base radius 0.42 → tip radius 0.06, h=1.05
+//   – two reflective yellow bands at ⅓ and ⅔ height
+function makeProcTrafficCone() {
+  const g = new THREE.Group()
+  const baseMat = new THREE.MeshStandardMaterial({
+    color: 0x111111, roughness: 0.92, metalness: 0.05,
+  })
+  const orangeMat = new THREE.MeshStandardMaterial({
+    color: 0xff6a14,
+    emissive: 0xff6a14, emissiveIntensity: 0.18,
+    roughness: 0.55, metalness: 0.1,
+  })
+  const yellowMat = new THREE.MeshStandardMaterial({
+    color: 0xfff04a,
+    emissive: 0xfff04a, emissiveIntensity: 0.32,
+    roughness: 0.4, metalness: 0.05,
+  })
+  // Square base.
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.06, 0.84), baseMat)
+  base.position.y = 0.03
+  g.add(base)
+  // Truncated cone body, sitting on the base.
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.42, 1.05, 18, 1, true),
+    orangeMat
+  )
+  body.position.y = 0.06 + 1.05 / 2
+  g.add(body)
+  // Two reflective bands: thin cylinders just outside the body's surface
+  // at heights 0.36 (lower) and 0.72 (upper). Use slightly larger radii
+  // so they don't z-fight with the body.
+  const lowerBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.305, 0.305, 0.10, 18, 1, true),
+    yellowMat
+  )
+  lowerBand.position.y = 0.06 + 0.36
+  g.add(lowerBand)
+  const upperBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 0.08, 18, 1, true),
+    yellowMat
+  )
+  upperBand.position.y = 0.06 + 0.72
+  g.add(upperBand)
+  // Cap the top so it doesn't read as hollow.
+  const tip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 0.02, 12),
+    orangeMat
+  )
+  tip.position.y = 0.06 + 1.04
+  g.add(tip)
+  return g
+}
+
+// Programmatic concrete jersey barrier. A real jersey barrier has a
+// slope-then-vertical wall profile. We approximate with two stacked
+// boxes: a wider trapezoidal lower base and a narrow vertical top, then
+// add a yellow/black diagonal warning stripe along the upper-front face.
+function makeProcConcreteBarrier() {
+  const g = new THREE.Group()
+  const concreteMat = new THREE.MeshStandardMaterial({
+    color: 0xb8b8b4,
+    roughness: 0.88, metalness: 0.05,
+  })
+  const concreteDarkMat = new THREE.MeshStandardMaterial({
+    color: 0x807c76,
+    roughness: 0.92, metalness: 0.05,
+  })
+  const stripeMat = new THREE.MeshStandardMaterial({
+    map: hazardStripeTexture(),
+    emissive: 0x222200, emissiveIntensity: 0.06,
+    roughness: 0.6, metalness: 0.1,
+  })
+  // Lower base: wider, trapezoidal feel via a slightly tilted box.
+  // Length 1.6 m along the road, 0.7 m tall, 0.6 m deep at base.
+  const lowerLen = 1.6
+  const lower = new THREE.Mesh(
+    new THREE.BoxGeometry(lowerLen, 0.55, 0.6),
+    concreteMat
+  )
+  lower.position.y = 0.275
+  g.add(lower)
+  // Upper wall: narrower, straight on top of the lower.
+  const upper = new THREE.Mesh(
+    new THREE.BoxGeometry(lowerLen, 0.4, 0.32),
+    concreteDarkMat
+  )
+  upper.position.y = 0.55 + 0.2
+  g.add(upper)
+  // Yellow/black warning stripe panel pasted to the front face of the
+  // upper wall. Use the existing hazardStripeTexture canvas which has
+  // diagonal yellow stripes on a dark ground.
+  for (const side of [-1, 1]) {
+    const stripe = new THREE.Mesh(
+      new THREE.PlaneGeometry(lowerLen - 0.06, 0.34),
+      stripeMat
+    )
+    stripe.position.set(0, 0.55 + 0.2, side * 0.161)
+    if (side === -1) stripe.rotation.y = Math.PI
+    g.add(stripe)
   }
-  const barrier = cloneAsset(index % 2 === 0 ? "barrierRed" : "barrierWhite", 4.0)
-  if (barrier) {
-    barrier.rotation.y = Math.PI / 2
-    return tagObstacle(applyEarlyLevelContrast(barrier, "barrier"), "barrier", index % 2 === 0 ? "barrierRed" : "barrierWhite")
-  }
-  return makeObstacleFallback("barrier")
+  // Cap the top with a thin black-ish strip to read as a poured-concrete
+  // crown rather than open-top.
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(lowerLen + 0.04, 0.04, 0.36),
+    concreteDarkMat
+  )
+  cap.position.y = 0.55 + 0.4 + 0.02
+  g.add(cap)
+  return g
 }
 
 // V1.8.8-2: high-contrast obstacle paint for lv1~lv5 only. The Kenney
