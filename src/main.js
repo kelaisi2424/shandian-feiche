@@ -43,6 +43,10 @@ import {
   TUTORIAL_HINT
 } from "./levels.js"
 import { captureBaseline, runAudit } from "./utils/audit.js"
+// V1.8.3a-2: side-effect import that mounts window.__tune.speedCapMultiplier.
+// No values consumed at import time; updateDriving reads window.__tune
+// per-frame so console adjustments take effect on the next loop tick.
+import "./utils/tune.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -4290,6 +4294,19 @@ function updateDriving(dt, now) {
     if (state.brake) state.speed = Math.max(0, state.speed - 200 * dt)
   } else {
     state.speed = lerp(state.speed, 35, dt * 1.2)
+  }
+  // V1.8.3a-2: post-lerp speed cap multiplier (debug lever).
+  // Default window.__tune.speedCapMultiplier = 1.0 → no-op. Set in
+  // browser console to 0.55 / 0.65 / 0.75 etc. to test what feels
+  // right. Cap is applied AFTER the lerp, so the 0-3s acceleration
+  // rate is identical to the un-capped run; speed just plateaus
+  // earlier when mul < 1.0. lerp `target` is unchanged (the kick
+  // at gas-mash time is preserved). Per-car stats / per-level
+  // fields / CFG.carAccel all untouched.
+  const _capMul = window.__tune?.speedCapMultiplier ?? 1.0
+  if (_capMul < 1.0) {
+    const _baseCap = state.nitroTime > 0 ? CFG.nitroSpeed : CFG.maxSpeed
+    state.speed = Math.min(state.speed, _baseCap * _capMul)
   }
   if (state.nitroTime > 0) state.nitroTime = Math.max(0, state.nitroTime - dt)
 
