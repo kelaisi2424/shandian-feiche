@@ -3242,3 +3242,133 @@ body:has(#pauseScreen.active) #hud {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ============================================================
+   V1.9.3-4: compact mode (240 ≤ vh < 480)
+   ============================================================
+   Mid-aspect viewports — typical phone landscape with the URL bar still
+   visible. Hero stage stays but the chrome shrinks: smaller topbar +
+   actionbar, English subtitles trimmed, low-priority nav (排行榜/分享)
+   moves into the more menu (kept reachable via the gear → settings or
+   side-grid). */
+:root[data-layout-mode="compact"] .menu-topbar {
+  height: calc(var(--ui) * 4);
+  padding: 0 calc(var(--ui) * 1.4);
+  padding-top: max(6px, env(safe-area-inset-top));
+}
+:root[data-layout-mode="compact"] .brand small,
+:root[data-layout-mode="compact"] .brand-text small {
+  display: none;
+}
+:root[data-layout-mode="compact"] .menu-actionbar {
+  height: calc(var(--ui) * 4.5);
+  padding: 0 calc(var(--ui) * 1.4);
+}
+:root[data-layout-mode="compact"] .nav-btn em {
+  display: none;
+}
+:root[data-layout-mode="compact"] #navRanking,
+:root[data-layout-mode="compact"] #navShare {
+  display: none;
+}
+/* Side grid is too tall for compact — collapse to a 1×4 strip. */
+:root[data-layout-mode="compact"] .side-grid {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+:root[data-layout-mode="compact"] .side-tile {
+  padding: calc(var(--ui) * 0.9);
+}
+:root[data-layout-mode="compact"] .side-tile-text em {
+  display: none;
+}
+
+/* ============================================================
+   V1.9.3-4: portrait orientation soft toast
+   ============================================================
+   Old behaviour: on portrait, #app + #game + .screen-fx had display:none
+   and a fullscreen .rotate-gate card blocked the entire UI until the
+   user tapped "我知道了". That hard-block kept users out of the menu on
+   any portrait device, even when the WebView could have rendered a
+   compact home in portrait just fine.
+
+   New behaviour: the menu is allowed to render in portrait (subject to
+   layoutMode's normal classification) and the rotate-gate becomes a
+   thin top-of-screen toast that just hints "横屏体验更佳". The user can
+   dismiss the toast and keep playing.
+
+   Implementation: override the legacy rules so #game / #app stay
+   visible in portrait, restyle .rotate-gate as a 36 px hint strip, and
+   keep the existing safety-net script in index.html unchanged
+   (gate-dismissed still hides the toast). */
+body.is-portrait:not(.gate-dismissed) #game,
+body.is-portrait:not(.gate-dismissed) #app.stage,
+body.is-portrait:not(.gate-dismissed) .screen-fx,
+body.is-portrait:not(.gate-dismissed) .speed-lines {
+  /* Cancel the legacy hide-everything rule from the orientation block. */
+  display: revert !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Repurpose .rotate-gate as a thin top-of-screen hint. */
+body.is-portrait:not(.gate-dismissed) .rotate-gate {
+  position: fixed;
+  /* Note: do NOT set `inset: auto` here — it's a shorthand that resets
+     top/left/right we just set above. Just specify the four edges. */
+  top: max(8px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  bottom: auto;
+  height: 36px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  border: 1px solid rgba(255, 212, 0, 0.4);
+  border-radius: 18px;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+/* Hide the heavy fullscreen artwork inside the old card. */
+body.is-portrait:not(.gate-dismissed) .rotate-gate .rotate-bg,
+body.is-portrait:not(.gate-dismissed) .rotate-gate .rotate-bolt,
+body.is-portrait:not(.gate-dismissed) .rotate-gate h1,
+body.is-portrait:not(.gate-dismissed) .rotate-gate .rotate-tagline {
+  display: none !important;
+}
+body.is-portrait:not(.gate-dismissed) .rotate-gate .rotate-card {
+  position: static;
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: contents;
+  backdrop-filter: none;
+}
+body.is-portrait:not(.gate-dismissed) .rotate-gate .rotate-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  color: #fff;
+  letter-spacing: 0;
+}
+body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck {
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  background: transparent;
+  color: #ffd400;
+  border: 0;
+  box-shadow: none;
+}
+body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
+  content: " ✕";
+  opacity: 0.6;
+}

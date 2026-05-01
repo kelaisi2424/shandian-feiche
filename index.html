@@ -478,18 +478,24 @@
       <button id="challengeBannerClose" aria-label="close">×</button>
     </div>
 
-    <!-- Portrait gate: in portrait the entire #app stage + 3D canvas are
-         hidden, and ONLY this card is rendered. Hard-toggled by the
-         orientation media query in styles.css — never coexists with
-         the game shell in the same render. -->
+    <!-- V1.9.3-4: portrait orientation hint.
+         Old behaviour was a fullscreen card that hard-blocked the menu
+         until the user tapped through. New behaviour: this element
+         renders as a thin 36 px toast at the top of the screen in
+         portrait (see CSS at the end of styles.css). The menu is
+         allowed to render in portrait so users on phones who can't
+         rotate (lap top devices, accessibility setups) can still play.
+         The fullscreen card markup is preserved so the safety-net
+         <script> at the bottom of this file (which dispatches
+         gate-dismissed before main.js loads) keeps working unchanged. -->
     <div id="rotateGate" class="rotate-gate" aria-hidden="true">
       <div class="rotate-bg" aria-hidden="true"></div>
       <div class="rotate-card">
         <span class="rotate-bolt">⚡</span>
         <h1>闪电飞车</h1>
         <p class="rotate-tagline">LIGHTNING RACER</p>
-        <p class="rotate-hint">请横屏试玩<br/>横屏后画面和按钮会更接近原游戏</p>
-        <button id="rotateAck" class="primary">我知道了</button>
+        <p class="rotate-hint">📱 横屏体验更佳</p>
+        <button id="rotateAck" class="primary">继续</button>
       </div>
     </div>
 
