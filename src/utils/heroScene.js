@@ -397,10 +397,16 @@ function updateHeroLayout() {
 }
 
 if (typeof window !== "undefined") {
+  // V1.9.4-3: defer to a microtask via setTimeout 0 so layoutMode.js's
+  // resize listener (registered later in module-import order) gets a
+  // chance to update <html data-layout-mode> BEFORE heroScene reads it.
+  // Otherwise heroScene picks up the stale mode and applies the wrong
+  // FOV / car scale.
+  const _scheduleHeroLayout = () => setTimeout(updateHeroLayout, 0)
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", updateHeroLayout)
+    window.visualViewport.addEventListener("resize", _scheduleHeroLayout)
   }
-  window.addEventListener("resize", updateHeroLayout)
+  window.addEventListener("resize", _scheduleHeroLayout)
   window.addEventListener("orientationchange", () => setTimeout(updateHeroLayout, 200))
 }
 
