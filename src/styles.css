@@ -921,6 +921,133 @@ canvas,
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ============ V1.8.9: hero 3D car preview inside .start-tile ============
+   Layered layout (bottom-up):
+     .tile::before      — top sheen
+     .tile::after       — corner glow
+     .hero-car-mount    — full canvas
+     .hero-info         — car name + tier + stats
+     .hero-cta          — main "开始游戏" button text
+   Heights tuned so info+cta stay clear of the action-nav at the bottom of
+   the menu (see also tile-grid bottom in V1.8.9-2 fix). */
+.hero-car-mount {
+  position: absolute;
+  inset: calc(var(--ui) * 1) calc(var(--ui) * 1) calc(var(--ui) * 13) calc(var(--ui) * 1);
+  z-index: 1;
+  pointer-events: none;
+}
+.hero-car-mount canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+}
+.hero-info {
+  position: absolute;
+  bottom: calc(var(--ui) * 7);
+  left: calc(var(--ui) * 1.4);
+  right: calc(var(--ui) * 1.4);
+  text-align: center;
+  z-index: 2;
+  pointer-events: none;
+}
+.hero-car-name {
+  font-size: clamp(18px, calc(var(--ui) * 2), 26px);
+  font-weight: 900;
+  color: #ffd400;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px rgba(255, 212, 0, 0.5);
+}
+.hero-tier-badge {
+  display: inline-block;
+  margin: 4px 0 8px;
+  padding: 2px 10px;
+  background: rgba(255, 212, 0, 0.15);
+  border: 1px solid #ffd400;
+  border-radius: 4px;
+  color: #ffd400;
+  font-size: clamp(10px, calc(var(--ui) * 0.85), 13px);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.hero-stats {
+  display: flex;
+  justify-content: space-around;
+  font-size: clamp(10px, calc(var(--ui) * 0.85), 13px);
+  color: rgba(255, 255, 255, 0.7);
+}
+.hero-stats span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.hero-stats b {
+  display: block;
+  font-size: clamp(14px, calc(var(--ui) * 1.4), 18px);
+  color: #fff;
+  font-weight: 800;
+}
+.hero-stats small {
+  font-size: clamp(9px, calc(var(--ui) * 0.78), 12px);
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+}
+.hero-cta {
+  position: absolute;
+  bottom: calc(var(--ui) * 1.4);
+  left: calc(var(--ui) * 1.4);
+  right: calc(var(--ui) * 1.4);
+  text-align: center;
+  z-index: 3;
+  pointer-events: none;
+}
+.hero-cta-main {
+  display: block;
+  font-size: clamp(20px, calc(var(--ui) * 2.2), 28px);
+  font-weight: 900;
+  color: #ffd400;
+  letter-spacing: 2px;
+  background: linear-gradient(180deg, #fff 30%, #ffd31a 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(255, 138, 22, 0.45));
+}
+.hero-cta-sub {
+  display: block;
+  font-size: clamp(10px, calc(var(--ui) * 0.85), 13px);
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* V1.8.9: top-bar player-info strip — sits between currency-bar and
+   gear-tile. Two-line tiny strip with car name + best result. */
+.player-info-strip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 calc(var(--ui) * 0.6);
+  line-height: 1.25;
+  text-align: right;
+  pointer-events: none;
+}
+.player-info-strip small {
+  font-size: clamp(9px, calc(var(--ui) * 0.85), 12px);
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+}
+.player-info-strip small:first-child {
+  color: #ffd400;
+  font-weight: 800;
+}
 .wide-tile {
   grid-column: span 2;
   border-color: rgba(38, 214, 255, 0.5);

@@ -70,6 +70,12 @@
             </span>
             <span class="ring" aria-hidden="true"></span>
           </div>
+          <!-- V1.8.9: lightweight player-info strip — selected car +
+               best result. Populated by refreshTopPlayerInfo() in main.js. -->
+          <div class="player-info-strip" id="topPlayerInfo">
+            <small id="topCarName">LIGHTNING S1 · LV.1</small>
+            <small id="topBestRow">Best —</small>
+          </div>
           <button class="gear-tile" id="gearBtn" aria-label="settings">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1A7.5 7.5 0 0 0 14.7 5l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2.3 1.4l-2.5-1-2 3.5L5.2 11a7.4 7.4 0 0 0 0 2L3 14.6l2 3.5 2.5-1a7.5 7.5 0 0 0 2.3 1.4l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.3-1.4l2.5 1 2-3.5L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
           </button>
@@ -77,18 +83,22 @@
 
         <main class="tile-grid">
           <button id="startGame" class="tile start-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <defs>
-                  <linearGradient id="bolt-g" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#ffd31a"/>
-                  </linearGradient>
-                </defs>
-                <path d="M36 6 L18 36 L30 36 L24 58 L48 28 L36 28 Z" fill="url(#bolt-g)" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <strong>开始游戏</strong>
-            <em class="tile-sub">START RACE</em>
+            <!-- V1.8.9: 3D hero car preview. heroScene.js mounts an
+                 independent THREE.Renderer canvas inside this div. -->
+            <div id="heroCarMount" class="hero-car-mount" aria-hidden="true"></div>
+            <div class="hero-info">
+              <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
+              <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
+              <div class="hero-stats">
+                <span><b id="heroStatSpeed">248</b><small>最高速度</small></span>
+                <span><b id="heroStatAccel">4.6s</b><small>0-100</small></span>
+                <span><b id="heroStatHandling">8.1</b><small>操控</small></span>
+              </div>
+            </div>
+            <div class="hero-cta">
+              <span class="hero-cta-main">开始游戏</span>
+              <span class="hero-cta-sub">START RACE</span>
+            </div>
           </button>
           <button id="tracksTile" class="tile small-tile">
             <span class="tile-icon">

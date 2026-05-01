@@ -48,6 +48,8 @@ import { captureBaseline, runAudit } from "./utils/audit.js"
 // No values consumed at import time; updateDriving reads window.__tune
 // per-frame so console adjustments take effect on the next loop tick.
 import "./utils/tune.js"
+// V1.8.9: independent hero scene for the home page car preview.
+import { startHeroScene, stopHeroScene, refreshHeroCar } from "./utils/heroScene.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -3345,6 +3347,52 @@ function setMode(mode) {
   }
   // music: switch loop based on mode
   setMusicMode(mode === "playing" ? "race" : "menu")
+  // V1.8.9: hero 3D scene runs only on the home screen so the GPU
+  // returns to idle inside a race (the game's main renderer is the
+  // dominant cost). startHeroScene is idempotent.
+  if (mode === "menu" || mode === "boot") {
+    const car = CAR_BY_ID[Save.get().selectedCar] ?? PLAYER_CARS[0]
+    startHeroScene({ carId: car.id, assetName: car.asset })
+    refreshTopPlayerInfo()
+    refreshHeroCard()
+  } else {
+    stopHeroScene()
+  }
+}
+
+// V1.8.9: keep the menu's hero card + topbar strip in sync with the
+// currently-selected car and best-result data. Cheap — just a few DOM
+// writes; called from setMode() and from car-swap handlers in the garage.
+function refreshHeroCard() {
+  const car = CAR_BY_ID[Save.get().selectedCar] ?? PLAYER_CARS[0]
+  const nm = $("heroCarName")
+  if (nm) nm.textContent = car.name
+  const tb = $("heroTierBadge")
+  if (tb) tb.textContent = `TIER ${car.tier ?? "C"}`
+  const sp = $("heroStatSpeed")
+  if (sp) sp.textContent = String(car.topSpeed ?? 0)
+  const ac = $("heroStatAccel")
+  if (ac) ac.textContent = `${(car.accel0to100 ?? 0).toFixed(1)}s`
+  const hd = $("heroStatHandling")
+  if (hd) hd.textContent = String(car.handling ?? 0)
+  refreshHeroCar({ carId: car.id, assetName: car.asset })
+}
+
+function refreshTopPlayerInfo() {
+  const save = Save.get()
+  const car = CAR_BY_ID[save.selectedCar] ?? PLAYER_CARS[0]
+  const lvl = LEVEL_BY_ID[save.currentLevel] ?? LEVELS[0]
+  const carNameEl = $("topCarName")
+  if (carNameEl) carNameEl.textContent = `${car.name} · LV.${lvl?.num ?? 1}`
+  const bestRow = $("topBestRow")
+  if (bestRow) {
+    const best = lvl ? save.bestPerLevel?.[lvl.id] : null
+    if (best?.ms) {
+      bestRow.textContent = `Best ${mmss(best.ms)} · 第 ${lvl.num} 关`
+    } else {
+      bestRow.textContent = `第 ${lvl?.num ?? 1} 关 · 暂无成绩`
+    }
+  }
 }
 
 function showOverlay(id) {
@@ -3611,6 +3659,11 @@ function openGarage() {
       if (unlocked) {
         Save.set({ selectedCar: c.id })
         rebuildPlayerCar()
+        // V1.8.9: refresh the home hero (3D preview + stats) and topbar
+        // strip. Safe to call while the garage overlay is open — both
+        // helpers only touch the menu DOM, not the modal.
+        refreshHeroCard()
+        refreshTopPlayerInfo()
         openGarage()
       } else {
         const cur = Save.get()
@@ -3620,6 +3673,8 @@ function openGarage() {
           Save.set({ selectedCar: c.id })
           rebuildPlayerCar()
           refreshCurrencyHud()
+          refreshHeroCard()
+          refreshTopPlayerInfo()
           openGarage()
         } else {
           toast(`金币不足 (${cur.coins}/${c.price})`, 1200)
@@ -3666,6 +3721,7 @@ function openLevels() {
         return
       }
       Save.set({ currentLevel: lvl.id })
+      refreshTopPlayerInfo()
       openLevels()
     })
     list.appendChild(card)
