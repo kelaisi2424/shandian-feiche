@@ -4961,6 +4961,14 @@ function updateDriving(dt, now) {
 }
 
 function updateRivals(dt, now) {
+  // V1.9.5-2: rivals freeze on the start grid until GO. Pre-fix the
+  // player was locked during countdown but rivals kept advancing
+  // progress + drifting lanes, so the start-grid render read as
+  // "the field is already racing while I sit still". This also keeps
+  // computeRank() stable so the HUD doesn't show 4TH before the green
+  // light. The frame after countdown reaches 0 lets all rivals tick
+  // again from their spawn positions.
+  if (state.countdown > 0) return
   for (const r of rivals) {
     // gap to player along the track (positive = rival ahead)
     const dProgress = r.progress - state.progress
@@ -5418,7 +5426,16 @@ function rankClass(rank) {
 function updateRankBadge() {
   const badge = $("rankBadge")
   if (!badge) return
-  const rank = state.finished && state._finalRank != null ? state._finalRank : computeRank()
+  // V1.9.5-2: during countdown, force rank to 1ST. Rivals are frozen
+  // at their spawn positions (some staggered ahead at progress 100+),
+  // so a raw computeRank() reads "last place" before the green light —
+  // misleading. We only show the real rank from GO onward.
+  let rank
+  if (state.countdown > 0) {
+    rank = 1
+  } else {
+    rank = state.finished && state._finalRank != null ? state._finalRank : computeRank()
+  }
   $("hudRank").textContent = String(rank)
   $("hudRankSuffix").textContent = ordinalSuffix(rank)
   badge.classList.remove("gold", "silver", "bronze")
@@ -5427,7 +5444,12 @@ function updateRankBadge() {
   // ── overtake / overtaken toast ──
   // Throttle to one toast per 1.2s so a brief rank flicker doesn't spam.
   const now = performance.now()
-  if (state._lastRank == null) {
+  // V1.9.5-2: never seed or compare _lastRank while countdown > 0. The
+  // forced-1ST during countdown would otherwise compare against the
+  // real rank at GO and fire a spurious '被超车' toast on race start.
+  if (state.countdown > 0) {
+    // hold; first post-GO call will seed _lastRank from the real rank.
+  } else if (state._lastRank == null) {
     state._lastRank = rank
   } else if (rank !== state._lastRank && !state.finished && state.countdown === 0) {
     if (now - state._lastOvertakeAt > 1200) {
