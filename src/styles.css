@@ -795,6 +795,280 @@ canvas,
   box-sizing: border-box;
 }
 
+/* ============ V1.9.1: showroom home layout =================
+   Replaces the .tile-grid 3×2 cell layout with a two-column
+   "stage + side-grid" composition so the hero car has room to breathe.
+   The .tile-grid block above is kept for any overlay screen that still
+   uses it; the home page uses .home-stage exclusively now. */
+.home-stage {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--ui) * 7);
+  bottom: calc(var(--ui) * 9.6);
+  left: calc(var(--ui) * 2);
+  right: calc(var(--ui) * 2);
+  display: grid;
+  grid-template-columns: 1.18fr 1fr;     /* ≈ 55% / 45% */
+  gap: calc(var(--ui) * 1.4);
+  box-sizing: border-box;
+}
+
+.hero-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: calc(var(--ui) * 1.4);
+  border: 1px solid rgba(38, 214, 255, 0.22);
+  /* Showroom backdrop: deep navy → indigo → violet, with a soft
+     spotlight glow centred on the car. Lighter blur than the old
+     glassmorphic tiles so the 3D car reads sharply. */
+  background:
+    radial-gradient(ellipse at 38% 60%, rgba(60, 100, 200, 0.32) 0%, transparent 55%),
+    radial-gradient(ellipse at 70% 25%, rgba(150, 80, 220, 0.20) 0%, transparent 60%),
+    linear-gradient(160deg, #0a1330 0%, #15173a 55%, #1a0f3a 100%);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 80px rgba(40, 120, 255, 0.10);
+}
+/* Subtle scanline veneer for product feel — very faint, doesn't
+   compete with the car. */
+.hero-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 30%);
+  pointer-events: none;
+}
+/* Bottom vignette so the CTA reads cleanly. */
+.hero-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(5, 8, 22, 0.6) 0%, transparent 35%);
+  pointer-events: none;
+}
+
+/* 3D mount fills the stage; padding-bottom reserves CTA + stat strip. */
+.hero-stage .hero-car-mount {
+  position: absolute;
+  inset: calc(var(--ui) * 1) calc(var(--ui) * 1) calc(var(--ui) * 9) calc(var(--ui) * 1);
+  z-index: 1;
+}
+.hero-stage .hero-car-mount canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+}
+
+/* Top-left titlecard: car name + tier — small, doesn't fight the CTA. */
+.hero-titlecard {
+  position: absolute;
+  top: calc(var(--ui) * 1.6);
+  left: calc(var(--ui) * 1.8);
+  z-index: 3;
+  pointer-events: none;
+}
+.hero-titlecard .hero-car-name {
+  font-size: clamp(20px, calc(var(--ui) * 2.2), 28px);
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ffe35a;
+  text-shadow: 0 2px 12px rgba(255, 138, 22, 0.5);
+  background: linear-gradient(180deg, #fff 30%, #ffd31a 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero-titlecard .hero-tier-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 12px;
+  background: rgba(255, 212, 0, 0.18);
+  border: 1px solid rgba(255, 212, 0, 0.6);
+  border-radius: 4px;
+  color: #ffd400;
+  font-size: clamp(10px, calc(var(--ui) * 0.9), 13px);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* Bottom-left stat strip: 3 core numbers, dividers between. */
+.hero-stat-row {
+  position: absolute;
+  bottom: calc(var(--ui) * 5.4);
+  left: calc(var(--ui) * 1.8);
+  display: flex;
+  align-items: stretch;
+  gap: calc(var(--ui) * 1);
+  z-index: 3;
+  pointer-events: none;
+}
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.hero-stat b {
+  font-size: clamp(20px, calc(var(--ui) * 2.4), 30px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.hero-stat small {
+  margin-top: 2px;
+  font-size: clamp(9px, calc(var(--ui) * 0.78), 12px);
+  letter-spacing: 1.5px;
+  color: rgba(207, 224, 255, 0.78);
+}
+.hero-stat-divider {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(180deg, transparent 10%, rgba(255, 255, 255, 0.18) 50%, transparent 90%);
+  margin: 0 calc(var(--ui) * 0.4);
+}
+
+/* Single primary CTA at the bottom of the hero stage. Wide, gold-orange
+   gradient with active-pulse — same style as in-game primary buttons. */
+.hero-cta-btn {
+  position: absolute;
+  bottom: calc(var(--ui) * 1.4);
+  left: calc(var(--ui) * 1.8);
+  right: calc(var(--ui) * 1.8);
+  height: calc(var(--ui) * 3.4);
+  z-index: 4;
+  border: 0;
+  border-radius: calc(var(--ui) * 0.8);
+  background: linear-gradient(180deg, #ffe45a 0%, #ffd31a 50%, #ff8a16 100%);
+  color: #2c1500;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  box-shadow:
+    0 10px 28px rgba(255, 138, 22, 0.55),
+    0 0 0 1px rgba(255, 212, 26, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+  animation: hero-cta-pulse 2.4s ease-in-out infinite alternate;
+}
+.hero-cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 34px rgba(255, 138, 22, 0.7),
+    0 0 28px rgba(255, 212, 26, 0.45),
+    0 0 0 1px rgba(255, 212, 26, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.hero-cta-btn:active { transform: translateY(0); }
+.hero-cta-btn .hero-cta-main {
+  font-size: clamp(20px, calc(var(--ui) * 2.2), 28px);
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+.hero-cta-btn .hero-cta-sub {
+  font-size: clamp(9px, calc(var(--ui) * 0.78), 12px);
+  letter-spacing: 4px;
+  opacity: 0.7;
+}
+@keyframes hero-cta-pulse {
+  0% {
+    box-shadow:
+      0 10px 28px rgba(255, 138, 22, 0.45),
+      0 0 0 1px rgba(255, 212, 26, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  100% {
+    box-shadow:
+      0 12px 36px rgba(255, 138, 22, 0.7),
+      0 0 36px rgba(255, 212, 26, 0.55),
+      0 0 0 1px rgba(255, 212, 26, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+}
+
+/* Right side: 2×2 grid of secondary entries. Glass blur dropped from
+   14 → 6 px so the icons + text read crisply. */
+.side-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: calc(var(--ui) * 1);
+}
+.side-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: calc(var(--ui) * 1.6) calc(var(--ui) * 1.6);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: calc(var(--ui) * 1.1);
+  background:
+    linear-gradient(150deg, rgba(20, 30, 60, 0.7) 0%, rgba(12, 18, 40, 0.85) 100%);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  color: #fff;
+  cursor: pointer;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.side-tile:hover, .side-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(38, 214, 255, 0.55);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(38, 214, 255, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.side-tile:active { transform: translateY(0); }
+.side-tile::after {
+  content: "";
+  position: absolute;
+  top: -25%;
+  right: -25%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(38, 214, 255, 0.25) 0%, transparent 70%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+.side-tile-icon {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--ui) * 4.4);
+  height: calc(var(--ui) * 4.4);
+  border-radius: calc(var(--ui) * 0.8);
+  background: rgba(38, 214, 255, 0.08);
+  border: 1px solid rgba(38, 214, 255, 0.22);
+  filter: drop-shadow(0 0 8px rgba(38, 214, 255, 0.25));
+}
+.side-tile-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.side-tile-text b {
+  font-size: clamp(16px, calc(var(--ui) * 1.7), 22px);
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+}
+.side-tile-text em {
+  font-style: normal;
+  margin-top: 2px;
+  font-size: clamp(10px, calc(var(--ui) * 0.85), 13px);
+  letter-spacing: 3px;
+  color: rgba(207, 224, 255, 0.7);
+}
+
 /* ============ glassmorphic neon tile ============ */
 .tile {
   position: relative;

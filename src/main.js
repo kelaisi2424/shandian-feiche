@@ -3437,6 +3437,11 @@ function bindMetaControls() {
   $("trackCloseBtn").addEventListener("click", () => hideOverlay("trackScreen"))
   // missions tile (the "任务 / MISSIONS" tile) → achievements board
   $("dailyTile").addEventListener("click", openMissions)
+  // V1.9.1: side-grid "每日 / 活动" tile pulls up the daily bonus modal
+  // (same UX as the bottom-nav "每日" button — intentional dual entry).
+  if ($("navDailyTile")) {
+    $("navDailyTile").addEventListener("click", () => maybeShowDailyBonus(true))
+  }
   if ($("missionsCloseBtn")) {
     $("missionsCloseBtn").addEventListener("click", () => hideOverlay("missionsScreen"))
   }

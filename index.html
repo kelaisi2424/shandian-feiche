@@ -31,6 +31,10 @@
         <div class="menu-cover" aria-hidden="true"></div>
         <div class="menu-overlay" aria-hidden="true"></div>
 
+        <!-- V1.9.1: top bar trimmed to coin / gem / car-info / gear.
+             The legacy "addCoins" cheat button + decorative ring were
+             removed from the visible row (kept hidden so debug paths
+             that bump them via JS don't break). -->
         <header class="menu-topbar">
           <div class="brand">
             <span class="brand-bolt">⚡</span>
@@ -54,7 +58,7 @@
               </svg>
               <b id="coinTotal">0</b>
             </span>
-            <button id="addCoins" class="plus-btn">＋</button>
+            <button id="addCoins" class="plus-btn" hidden aria-hidden="true">＋</button>
             <span class="cash">
               <svg class="cur-icon" viewBox="0 0 28 28" aria-hidden="true">
                 <polygon points="14,2 22,10 18,24 10,24 6,10" fill="url(#gemG)" stroke="#7a5a00" stroke-width="1.4" stroke-linejoin="round"/>
@@ -68,10 +72,8 @@
               </svg>
               <b id="cashTotal">0</b>
             </span>
-            <span class="ring" aria-hidden="true"></span>
           </div>
-          <!-- V1.8.9: lightweight player-info strip — selected car +
-               best result. Populated by refreshTopPlayerInfo() in main.js. -->
+          <!-- V1.8.9: car name + best result. Populated by refreshTopPlayerInfo. -->
           <div class="player-info-strip" id="topPlayerInfo">
             <small id="topCarName">LIGHTNING S1 · LV.1</small>
             <small id="topBestRow">Best —</small>
@@ -81,76 +83,106 @@
           </button>
         </header>
 
-        <main class="tile-grid">
-          <button id="startGame" class="tile start-tile">
-            <!-- V1.8.9: 3D hero car preview. heroScene.js mounts an
-                 independent THREE.Renderer canvas inside this div. -->
+        <!-- V1.9.1: showroom-style home layout.
+             Left 55% = hero stage (3D car + 3 stats + single CTA).
+             Right 45% = 2×2 secondary entries (no "SOON" placeholder). -->
+        <main class="home-stage">
+          <section class="hero-stage" id="heroStage">
+            <!-- 3D hero car preview. heroScene.js mounts its own canvas. -->
             <div id="heroCarMount" class="hero-car-mount" aria-hidden="true"></div>
-            <div class="hero-info">
-              <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
-              <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
-              <div class="hero-stats">
-                <span><b id="heroStatSpeed">248</b><small>最高速度</small></span>
-                <span><b id="heroStatAccel">4.6s</b><small>0-100</small></span>
-                <span><b id="heroStatHandling">8.1</b><small>操控</small></span>
+            <!-- Bottom-left: 3 core stats overlay (read-only, no buttons). -->
+            <div class="hero-stat-row">
+              <div class="hero-stat">
+                <b id="heroStatSpeed">248</b>
+                <small>最高速度 KM/H</small>
+              </div>
+              <div class="hero-stat-divider" aria-hidden="true"></div>
+              <div class="hero-stat">
+                <b id="heroStatAccel">4.6s</b>
+                <small>0-100 加速</small>
+              </div>
+              <div class="hero-stat-divider" aria-hidden="true"></div>
+              <div class="hero-stat">
+                <b id="heroStatHandling">8.1</b>
+                <small>操控</small>
               </div>
             </div>
-            <div class="hero-cta">
-              <span class="hero-cta-main">开始游戏</span>
-              <span class="hero-cta-sub">START RACE</span>
+            <!-- Top-left: car name + tier (small, doesn't compete with the CTA). -->
+            <div class="hero-titlecard">
+              <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
+              <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
             </div>
-          </button>
-          <button id="tracksTile" class="tile small-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <path d="M14 50 L20 14 L32 14 L26 50 Z" fill="#26d6ff" opacity="0.85"/>
-                <path d="M30 50 L36 14 L48 14 L42 50 Z" fill="#ffd31a" opacity="0.85"/>
-                <text x="22" y="42" font-family="Arial Black" font-size="14" font-weight="900" fill="#0a1428">1</text>
-                <text x="38" y="42" font-family="Arial Black" font-size="14" font-weight="900" fill="#0a1428">5</text>
-              </svg>
-            </span>
-            <strong>关卡</strong>
-            <em class="tile-sub">LEVELS</em>
-          </button>
-          <button id="garageTile" class="tile small-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <path d="M14 36 L18 24 Q22 18 30 18 L42 18 Q50 18 54 24 L58 36 L58 46 L14 46 Z" fill="none" stroke="#ffd31a" stroke-width="3" stroke-linejoin="round"/>
-                <rect x="22" y="26" width="20" height="6" fill="none" stroke="#ffd31a" stroke-width="2"/>
-                <circle cx="22" cy="46" r="4" fill="#ffd31a"/>
-                <circle cx="50" cy="46" r="4" fill="#ffd31a"/>
-              </svg>
-            </span>
-            <strong>车库</strong>
-            <em class="tile-sub">GARAGE</em>
-          </button>
-          <button id="dailyTile" class="tile small-tile">
-            <span class="tile-icon">
-              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <rect x="14" y="16" width="36" height="32" rx="4" fill="none" stroke="#26d6ff" stroke-width="3"/>
-                <line x1="20" y1="26" x2="44" y2="26" stroke="#26d6ff" stroke-width="2.5" stroke-linecap="round"/>
-                <line x1="20" y1="34" x2="38" y2="34" stroke="#26d6ff" stroke-width="2"/>
-                <line x1="20" y1="42" x2="34" y2="42" stroke="#26d6ff" stroke-width="2"/>
-                <circle cx="48" cy="44" r="6" fill="#ffd31a" stroke="#fff" stroke-width="2"/>
-              </svg>
-            </span>
-            <strong>任务</strong>
-            <em class="tile-sub">MISSIONS</em>
-          </button>
-          <button class="tile small-tile muted">
-            <span class="tile-icon">
-              <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-                <rect x="14" y="22" width="36" height="26" rx="4" fill="none" stroke="#888" stroke-width="3"/>
-                <path d="M22 22 V16 a10 10 0 0 1 20 0 V22" fill="none" stroke="#888" stroke-width="3"/>
-              </svg>
-            </span>
-            <strong>开发中</strong>
-            <em class="tile-sub">SOON</em>
-          </button>
+            <!-- Single primary CTA — only "开始比赛" lives on the home page. -->
+            <button id="startGame" class="hero-cta-btn" aria-label="start race">
+              <span class="hero-cta-main">开始比赛</span>
+              <span class="hero-cta-sub">START RACE</span>
+            </button>
+          </section>
+
+          <section class="side-grid" aria-label="secondary entries">
+            <button id="tracksTile" class="side-tile">
+              <span class="side-tile-icon">
+                <svg viewBox="0 0 64 64" width="38" height="38" aria-hidden="true">
+                  <path d="M14 50 L20 14 L32 14 L26 50 Z" fill="#26d6ff" opacity="0.92"/>
+                  <path d="M30 50 L36 14 L48 14 L42 50 Z" fill="#ffd31a" opacity="0.92"/>
+                </svg>
+              </span>
+              <div class="side-tile-text">
+                <b>关卡</b>
+                <em>LEVELS</em>
+              </div>
+            </button>
+            <button id="garageTile" class="side-tile">
+              <span class="side-tile-icon">
+                <svg viewBox="0 0 64 64" width="38" height="38" aria-hidden="true">
+                  <path d="M14 36 L18 24 Q22 18 30 18 L42 18 Q50 18 54 24 L58 36 L58 46 L14 46 Z" fill="none" stroke="#ffd31a" stroke-width="3" stroke-linejoin="round"/>
+                  <rect x="22" y="26" width="20" height="6" fill="none" stroke="#ffd31a" stroke-width="2"/>
+                  <circle cx="22" cy="46" r="4" fill="#ffd31a"/>
+                  <circle cx="50" cy="46" r="4" fill="#ffd31a"/>
+                </svg>
+              </span>
+              <div class="side-tile-text">
+                <b>车库</b>
+                <em>GARAGE</em>
+              </div>
+            </button>
+            <button id="dailyTile" class="side-tile">
+              <span class="side-tile-icon">
+                <svg viewBox="0 0 64 64" width="38" height="38" aria-hidden="true">
+                  <rect x="14" y="16" width="36" height="32" rx="4" fill="none" stroke="#26d6ff" stroke-width="3"/>
+                  <line x1="20" y1="26" x2="44" y2="26" stroke="#26d6ff" stroke-width="2.5" stroke-linecap="round"/>
+                  <line x1="20" y1="34" x2="38" y2="34" stroke="#26d6ff" stroke-width="2"/>
+                  <line x1="20" y1="42" x2="34" y2="42" stroke="#26d6ff" stroke-width="2"/>
+                </svg>
+              </span>
+              <div class="side-tile-text">
+                <b>任务</b>
+                <em>MISSIONS</em>
+              </div>
+            </button>
+            <button id="navDailyTile" class="side-tile">
+              <span class="side-tile-icon">
+                <svg viewBox="0 0 64 64" width="38" height="38" aria-hidden="true">
+                  <circle cx="32" cy="32" r="20" fill="none" stroke="#ffd31a" stroke-width="3"/>
+                  <path d="M32 18 V32 L42 38" stroke="#ffd31a" stroke-width="3" fill="none" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <div class="side-tile-text">
+                <b>每日 / 活动</b>
+                <em>EVENTS</em>
+              </div>
+            </button>
+          </section>
         </main>
 
+        <!-- V1.9.1: action bar slimmed to a single nav row of 4 items.
+             首页 / 排行榜 / 每日 / 分享 — no "开始游戏" duplicate, no
+             second player-level chip (the topbar already shows the car
+             + best result). The legacy player-level / playerLevel /
+             playerTitle nodes are kept hidden so save.js + main.js
+             paths that read them don't crash. -->
         <footer class="menu-actionbar">
-          <div class="player-level">
+          <div class="player-level" hidden aria-hidden="true">
             <span class="crown">👑</span>
             <div class="player-text">
               <b>LV. <span id="playerLevel">1</span></b>
@@ -159,31 +191,26 @@
           </div>
           <nav class="action-nav">
             <button class="nav-btn active" data-nav="home">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 3 4 10v11h6v-7h4v7h6V10z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 3 4 10v11h6v-7h4v7h6V10z"/></svg>
               <span>首页</span>
               <em>HOME</em>
             </button>
             <button class="nav-btn" id="navRanking">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 4h10v3a5 5 0 0 1-4 4.9V14h2v2H9v-2h2v-2.1A5 5 0 0 1 7 7zm-3 1h2v2a3 3 0 0 1-2 2.8zm14 0h2v4.8a3 3 0 0 1-2-2.8zM6 18h12v3H6z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 4h10v3a5 5 0 0 1-4 4.9V14h2v2H9v-2h2v-2.1A5 5 0 0 1 7 7zm-3 1h2v2a3 3 0 0 1-2 2.8zm14 0h2v4.8a3 3 0 0 1-2-2.8zM6 18h12v3H6z"/></svg>
               <span>排行榜</span>
               <em>RANKING</em>
             </button>
             <button class="nav-btn" id="navDaily">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6zm2 2v2h2v-2zm4 0v2h2v-2zm4 0v2h2v-2zm-8 4v2h2v-2zm4 0v2h2v-2z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6zm2 2v2h2v-2zm4 0v2h2v-2zm4 0v2h2v-2zm-8 4v2h2v-2zm4 0v2h2v-2z"/></svg>
               <span>每日</span>
               <em>DAILY</em>
             </button>
             <button class="nav-btn" id="navShare">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.5-3.7a3 3 0 0 0 0-2.9l6.5-3.7a3 3 0 1 0-1-1.7l-6.5 3.7a3 3 0 1 0 0 6l6.5 3.7A3 3 0 1 0 18 16z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.5-3.7a3 3 0 0 0 0-2.9l6.5-3.7a3 3 0 1 0-1-1.7l-6.5 3.7a3 3 0 1 0 0 6l6.5 3.7A3 3 0 1 0 18 16z"/></svg>
               <span>分享</span>
               <em>SHARE</em>
             </button>
           </nav>
-          <!-- V1.8.1: removed `<button id="ctaStartRace">` — it was a
-               duplicate of the big `#startGame` tile (both said
-               "开始游戏 START RACE" and both ran startRace on click).
-               main.js wires this id with `if (ctaBtn) ctaBtn.addEvent…`
-               so the missing element is a no-op there. -->
         </footer>
       </section>
 
