@@ -27,28 +27,39 @@ if (typeof window !== "undefined") {
     window.__tune.speedCapMultiplier = 1.0
   }
 
-  // V1.8.3a-3: A/B knob for the player car's visual yaw.
+  // V1.8.6: A/B knob for the player car's visual yaw — DEFAULT NOW 0.
   //
-  // Background: V1.8.2 introduced cars.js modelYawOffset (default 0)
-  // intending to "use the GLB's natural facing". In practice many
-  // testers reported the car still looked reversed at certain camera
-  // angles. Rather than continuing to argue the theoretical "correct"
-  // axis, this knob layers a SECOND yaw offset on top of modelYawOffset
-  // — defaulting to Math.PI — that can be flipped live in the browser
-  // console without rebuilding.
+  // V1.8.3a-3 set the default to Math.PI on the assumption that the
+  // pre-V1.8.2 baseline ("looks right") needed a 180° flip. V1.8.6
+  // playing-mode geometry measurements falsified that:
+  //
+  //   GLB nose direction (verified):
+  //     wheel-front-* mesh world z ≈ +0.93   (front of car)
+  //     wheel-back-*  mesh world z ≈ -0.59   (rear of car)
+  //   ⇒ GLB native nose points along local +Z.
+  //
+  //   With visualYawOffset = Math.PI in playing mode:
+  //     visual head direction in world (0, -1)
+  //     actual movement direction      (0, +1)
+  //     dot = -1.000   ← precisely reversed
+  //
+  //   With visualYawOffset = 0:
+  //     visual head direction = +Z = movement direction
+  //     dot = +1.000   ← aligned
+  //
+  // So the correct default is 0. The knob stays in place and stays
+  // flippable via window.__tryFlipVisual() so a future regression
+  // can be checked live without a rebuild.
   //
   // Net rotation applied to the player's GLB visual root:
   //   playerBody.rotation.y = modelYawOffset + visualYawOffset - steerTilt
   //
   // Defaults:
-  //   modelYawOffset    = 0       (cars.js, untouched here)
-  //   visualYawOffset   = Math.PI (this file)
-  //   ⇒ same net rotation as the pre-V1.8.2 hard-coded `Math.PI` baseline.
-  //
-  // To live-test the alternative (no rotation, GLB natural facing):
-  //   window.__tryFlipVisual()   // toggles visualYawOffset 0 ↔ Math.PI
+  //   modelYawOffset    = 0   (cars.js, untouched here)
+  //   visualYawOffset   = 0   (this file)
+  //   ⇒ GLB native facing, which IS the forward direction.
   if (typeof window.__tune.visualYawOffset !== "number") {
-    window.__tune.visualYawOffset = Math.PI
+    window.__tune.visualYawOffset = 0
   }
 
   window.__tryFlipVisual = () => {
