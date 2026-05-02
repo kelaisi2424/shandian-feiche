@@ -66,14 +66,21 @@ export function App(): JSX.Element {
             New: deep navy-purple fog matching a city-night vibe + lower
             sun so the dome trends violet/blue. Heightmap geometry is
             still the canyon mesh — full city-building swap is D3 work. */}
-        <fog attach="fog" args={['#1a1633', 60, 380]} />
+        {/* V3 D3 (C): cooler grading. fog start pulled in 60 → 25 so the
+            warm-canyon foreground actually gets blue-shifted by fog;
+            directional light tinted cold-blue (#7ea0d0) with dimmer
+            intensity, so even the lit faces of rocks read cool instead
+            of orange-desert. Ambient bumped slightly so shadow side
+            doesn't go pitch black. */}
+        <fog attach="fog" args={['#1a1633', 25, 320]} />
         <Sky sunPosition={[-80, -5, 120]} distance={1000} mieCoefficient={0.005} mieDirectionalG={0.9} rayleigh={3} turbidity={12} />
-        <ambientLight layers={layers} intensity={0.18} color="#7090c0" />
+        <ambientLight layers={layers} intensity={0.28} color="#90a8c8" />
         <directionalLight
           ref={setLight}
           layers={layers}
           position={[0, 50, 150]}
-          intensity={1}
+          intensity={0.78}
+          color="#7ea0d0"
           shadow-bias={-0.001}
           shadow-mapSize={[4096, 4096]}
           shadow-camera-left={-150}

@@ -229,7 +229,12 @@ export function TouchControls(): JSX.Element | null {
         <HoldButton testid="touch-right" label="→" action="right" style={baseTurn} />
       </div>
 
-      {/* RIGHT — DRIFT (primary) + NITRO (secondary, top-right of DRIFT) */}
+      {/* RIGHT — DRIFT (primary) + NITRO (secondary, top-right of DRIFT)
+          V3 D3 (C): de-saturate. Pre-D3 was a glowing orange + glowing
+          neon-cyan kart-game pair. Adult-racer wants the same hierarchy
+          (DRIFT bigger, primary; NITRO smaller, secondary) but in a
+          neutral steel-glass treatment so the buttons read as tools,
+          not toys. */}
       <div data-testid="touch-drift-wrap" style={{ ...containerBase, top: driftY, left: driftX }}>
         <HoldButton
           testid="touch-drift"
@@ -239,18 +244,18 @@ export function TouchControls(): JSX.Element | null {
             width: DRIFT_SIZE,
             height: DRIFT_SIZE,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 30% 30%, rgba(255,180,80,0.88), rgba(120,50,0,0.95) 70%)',
-            border: '2px solid rgba(255,200,100,0.95)',
-            color: '#fff7e0',
-            fontSize: 20,
-            fontWeight: 900,
-            letterSpacing: 2,
+            background: 'rgba(20, 28, 48, 0.62)',
+            border: '1.5px solid rgba(207, 224, 255, 0.55)',
+            color: 'rgba(220, 232, 250, 0.95)',
+            fontSize: 19,
+            fontWeight: 600,
+            letterSpacing: 3,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             userSelect: 'none',
             touchAction: 'none',
-            boxShadow: '0 6px 18px rgba(0,0,0,0.55), 0 0 28px rgba(255,180,60,0.4), inset 0 2px 0 rgba(255,255,255,0.2)',
+            boxShadow: '0 6px 16px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14)',
             WebkitTapHighlightColor: 'transparent',
           }}
         />
@@ -264,18 +269,18 @@ export function TouchControls(): JSX.Element | null {
             width: SMALL_SIZE,
             height: SMALL_SIZE,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 30% 30%, rgba(120,220,255,0.9), rgba(0,60,140,0.95) 70%)',
-            border: '2px solid rgba(150,230,255,0.95)',
-            color: '#eafaff',
-            fontSize: 16,
-            fontWeight: 900,
-            letterSpacing: 1.5,
+            background: 'rgba(14, 22, 40, 0.6)',
+            border: '1.5px solid rgba(160, 196, 232, 0.5)',
+            color: 'rgba(196, 220, 248, 0.92)',
+            fontSize: 15,
+            fontWeight: 600,
+            letterSpacing: 2,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             userSelect: 'none',
             touchAction: 'none',
-            boxShadow: '0 5px 14px rgba(0,0,0,0.5), 0 0 22px rgba(80,200,255,0.35), inset 0 2px 0 rgba(255,255,255,0.18)',
+            boxShadow: '0 5px 14px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
             WebkitTapHighlightColor: 'transparent',
           }}
         />

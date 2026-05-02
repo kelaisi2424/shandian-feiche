@@ -9,7 +9,7 @@
 //     position/rotation via store.api after Vehicle has mounted)
 //   - secondary CTA "重新开始" clears the snap and starts fresh
 // Otherwise the splash shows the normal "点击开始" CTA.
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useProgress } from '@react-three/drei'
 
 import type { ReactNode } from 'react'
@@ -24,12 +24,28 @@ export function Intro({ children }: { children: ReactNode }): JSX.Element {
   const [resumeSnap, setResumeSnap] = useState<ResumeSnap | null>(null)
   const [resumeMode, setResumeMode] = useState(false)
   const { progress } = useProgress()
-  const [set, actions] = useStore((state) => [state.set, state.actions])
+  const [set, actions, ready] = useStore((state) => [state.set, state.actions, state.ready])
 
   // On mount, look for a valid snapshot (TTL/parse handled by readResumeSnapshot).
   useEffect(() => {
     setResumeSnap(readResumeSnapshot())
   }, [])
+
+  // V3 D3 (B): when Hud's pause button drops ready=false (mid-race exit),
+  // bring the splash back. We track wasReady via a ref so we only fire
+  // on the true→false edge (Hud.pause). The startup transition is
+  // false→true, which must NOT bounce clicked back to false.
+  const wasReadyRef = useRef(false)
+  useEffect(() => {
+    const wasReady = wasReadyRef.current
+    wasReadyRef.current = ready
+    if (wasReady && !ready) {
+      // Mid-race exit. Re-show splash with the just-written snapshot.
+      setClicked(false)
+      setResumeMode(false)
+      setResumeSnap(readResumeSnapshot())
+    }
+  }, [ready])
 
   // When the user taps the CTA → ready=true + auto-throttle.
   // If they took the "继续本局" path, restore chassis position once
