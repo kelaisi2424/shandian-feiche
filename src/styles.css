@@ -519,7 +519,7 @@ button {
    The rules below restyle the splash for portrait phones and resize
    the in-race HUD so the touch buttons (added by TouchControls) own
    the bottom 25% of the screen unobstructed. */
-@media (max-width: 768px), (pointer: coarse) {
+@media (max-width: 1024px), (pointer: coarse) {
   /* Splash: hide the desktop "Forward / Backward / Left / …" key
      table (no keyboard on phone), keep the loading text + start CTA. */
   .fullscreen .intro-keys > div:first-child {
@@ -576,7 +576,7 @@ button {
 
 /* Landscape mobile: D-pad eats the left edge. Pull gauge to top-right
    so it doesn't fight the touch surfaces at the bottom. */
-@media (max-width: 768px) and (orientation: landscape),
+@media (max-width: 1024px) and (orientation: landscape),
        (pointer: coarse) and (orientation: landscape) {
   .clock {
     top: 8px;
