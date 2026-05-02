@@ -4017,7 +4017,7 @@ const ACHIEVEMENTS = [
   { id: "first_race",   icon: "🏁", name: "起步",       desc: "完成你的第一场比赛",         reward: 100 },
   { id: "no_hit_clear", icon: "💎", name: "完美车技",   desc: "任意关卡零碰撞通关",         reward: 200 },
   { id: "speed_demon",  icon: "⚡", name: "速度狂魔",   desc: "最高速度突破 300 KM/H",      reward: 150 },
-  { id: "coin_baron",   icon: "🪙", name: "金币大亨",   desc: "累计获得 1000 金币",         reward: 300 },
+  { id: "coin_baron",   icon: "CR", name: "高额车手",   desc: "累计获得 1000 信用点",         reward: 300 },
   { id: "all_S",        icon: "🏆", name: "全 S 通关", desc: "所有关卡评级都达到 S",        reward: 500 },
   { id: "collector",    icon: "🚗", name: "收藏家",     desc: "解锁所有 3 辆车",           reward: 200 }
 ]
@@ -4103,7 +4103,7 @@ function openMissions() {
     li.innerHTML = `
       <div class="ach-icon">${a.icon}</div>
       <div class="ach-meta"><b>${a.name}</b><span>${a.desc}</span></div>
-      <div class="ach-status">${done ? "已完成" : `+${a.reward} 🪙`}</div>
+      <div class="ach-status">${done ? "已解锁" : `+${a.reward} CR`}</div>
     `
     list.appendChild(li)
   }
@@ -4164,7 +4164,7 @@ function openGarage() {
         <div class="stat-bar"><b>操控</b><i style="--gap:${100 - handlePct}%"></i><u>${c.handling}</u></div>
         <div class="stat-bar"><b>氮气</b><i style="--gap:${100 - nitroPct}%"></i><u>${c.nitro}</u></div>
       </div>
-      ${unlocked ? (selected ? `<small class="badge-owned">已选定</small>` : `<small class="badge-owned">已拥有</small>`) : `<small class="badge-lock">🔒 ${c.price.toLocaleString()} 金币</small>`}
+      ${unlocked ? (selected ? `<small class="badge-owned">EQUIPPED</small>` : `<small class="badge-owned">OWNED</small>`) : `<small class="badge-lock">🔒 ${c.price.toLocaleString()} CR</small>`}
     `
     card.addEventListener("click", () => {
       if (unlocked) {
@@ -4190,7 +4190,7 @@ function openGarage() {
           refreshUltraCompactStrip()
           openGarage()
         } else {
-          toast(`金币不足 (${cur.coins}/${c.price})`, 1200)
+          toast(`INSUFFICIENT CREDITS (${cur.coins}/${c.price})`, 1200)
         }
       }
     })
@@ -4225,7 +4225,7 @@ function openLevels() {
       <b>${lvl.name}</b>
       <em class="lvl-sub">${lvl.sub}</em>
       <small class="lvl-desc">${lvl.desc}</small>
-      ${best ? `<small class="lvl-best">最佳: ${mmss(best.ms)} · ${best.coins} 金币</small>` : ""}
+      ${best ? `<small class="lvl-best">BEST ${mmss(best.ms)} · ${best.coins} CR</small>` : ""}
       ${unlocked ? "" : `<small class="lvl-lock">🔒 通关上一关解锁</small>`}
     `
     card.addEventListener("click", () => {
@@ -4899,8 +4899,8 @@ function finishRace(success = true) {
     if (rewardEl) {
       const totalReward = state.coins + gradeBonus
       if (win && totalReward > 0) {
-        rewardEl.innerHTML = `🪙 奖励 +<b>${totalReward}</b> 金币` +
-          (gradeBonus > 0 ? ` <span class="reward-bonus">(基础 ${state.coins} + ${grade ?? ""} 评分 ${gradeBonus})</span>` : "")
+        rewardEl.innerHTML = `CREDITS +<b>${totalReward}</b>` +
+          (gradeBonus > 0 ? ` <span class="reward-bonus">(${state.coins} BASE + ${gradeBonus} ${grade ?? ""}-RANK BONUS)</span>` : "")
         rewardEl.style.display = ""
       } else {
         rewardEl.style.display = "none"
@@ -5442,16 +5442,16 @@ function updatePickups(dt, now) {
         state.coins++
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffd23a, 10)
         sfxCoin()
-        showTutorialHint("intro_coin", "收集金币解锁新赛车 🪙", 1800)
+        showTutorialHint("intro_coin", "信用点 (CR) — 收集后用于升级 / 解锁车辆", 1800)
       } else if (p.type === "nitro") {
         p.taken = true
         p.mesh.visible = false
         state.nitroCharges = Math.min(3, state.nitroCharges + 1)
-        toast("氮气 +1", 800)
+        toast("NITRO +1", 800)
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffe45a, 18)
         sfxCoin()
         showTutorialHint("intro_nitro",
-          isTouchDevice() ? "双击屏幕或点击 ⚡ 使用氮气加速" : "按空格使用氮气加速 ⚡",
+          isTouchDevice() ? "NITRO ready — double-tap canvas or hit ⚡" : "NITRO ready — press SPACE",
           2200)
       } else if (p.type === "hazard" && state.nitroTime <= 0 && now >= (state.invincibleUntil ?? 0)) {
         p.taken = true
@@ -5948,7 +5948,7 @@ function updateHUD() {
   $("nitroCount").textContent = state.nitroCharges
   const progress = clamp(state.progress / Track.length, 0, 1)
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
-  $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
+  $("missionStats").textContent = `CR ${state.coins}/${CFG.coinGoal} · HITS ${state.hits}/${CFG.hitLimit}`
   // top centred chips: RANK / TIME / COIN / TRACK.
   // If the active level has a time limit, TIME counts down and turns red
   // in the last 10 seconds so the player feels the pressure.

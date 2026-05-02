@@ -146,21 +146,22 @@
                 <div class="hero-car-name" id="heroCarName">LIGHTNING S1</div>
                 <div class="hero-tier-badge" id="heroTierBadge">TIER C</div>
               </div>
-              <!-- V1.9.7-6: progress banner — three small chips that read
-                   straight from save.v1 so a returning player sees the
-                   game remembered them. Read-only, no schema change. -->
+              <!-- V2.0.0: progress strip — neutral noir-spec chips
+                   (no emoji, monospaced labels) reading from save.v1.
+                   Replaces the V1.9.7-6 emoji-decorated banner that
+                   read as casual / arcade-mascot. -->
               <div class="hero-progress-banner" id="heroProgressBanner">
                 <span class="hpb-chip">
-                  <span class="hpb-emoji">👑</span>
-                  <span class="hpb-text">已解锁：第 <b id="hpbLevel">1</b> 关</span>
+                  <span class="hpb-key">CAMPAIGN</span>
+                  <span class="hpb-text"><b id="hpbLevel">1</b><span class="hpb-unit">/5</span></span>
                 </span>
                 <span class="hpb-chip">
-                  <span class="hpb-emoji">⏱</span>
-                  <span class="hpb-text">最佳：<b id="hpbBest">--</b></span>
+                  <span class="hpb-key">BEST</span>
+                  <span class="hpb-text"><b id="hpbBest">—</b></span>
                 </span>
                 <span class="hpb-chip">
-                  <span class="hpb-emoji">💰</span>
-                  <span class="hpb-text">总金币：<b id="hpbCoins">0</b></span>
+                  <span class="hpb-key">CR</span>
+                  <span class="hpb-text"><b id="hpbCoins">0</b></span>
                 </span>
               </div>
               <!-- Mid: 3 core stats. -->
@@ -256,10 +257,10 @@
              paths that read them don't crash. -->
         <footer class="menu-actionbar">
           <div class="player-level" hidden aria-hidden="true">
-            <span class="crown">👑</span>
+            <span class="crown" aria-hidden="true">★</span>
             <div class="player-text">
               <b>LV. <span id="playerLevel">1</span></b>
-              <small id="playerTitle">新手车手</small>
+              <small id="playerTitle">DRIVER</small>
             </div>
           </div>
           <nav class="action-nav">
@@ -321,12 +322,12 @@
         <button id="resetBtn" class="reset-btn" aria-label="重来">↻</button>
 
         <div class="mission-box">
-          <b id="missionTitle">冲到终点</b>
+          <b id="missionTitle">FINISH</b>
           <div class="mission-bar"><span id="missionFill"></span></div>
           <small id="missionStats">金币 0/18 · 碰撞 0/10</small>
         </div>
 
-        <div class="mission-toast" id="missionToast">冲到终点！</div>
+        <div class="mission-toast" id="missionToast">RACE</div>
 
         <div class="nitro-wrap">
           <button id="nitroBtn" class="nitro-btn" aria-label="nitro">
@@ -375,7 +376,7 @@
             <div><b id="resStatHits">0</b><span>碰撞</span></div>
           </div>
           <p class="final-rank" id="resFinalRank">第 <b>1</b> 名</p>
-          <p class="reward-line" id="resReward" style="display:none">🪙 奖励 +<b>0</b> 金币</p>
+          <p class="reward-line" id="resReward" style="display:none">CREDITS +<b>0</b></p>
           <p class="unlock-banner" id="resUnlock" style="display:none">🔓 解锁下一关</p>
           <!-- V1.8.3a-4: explain WHY the next level did/didn't unlock so
                the player isn't left wondering. Populated by finishRace. -->
