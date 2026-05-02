@@ -3979,3 +3979,25 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   font-weight: 800;
   text-shadow: 0 0 12px rgba(255, 212, 0, 0.5);
 }
+
+/* ============================================================
+   V1.9.7-2: 380 ms env cross-fade between races / level changes
+   ============================================================
+   applyTrack() adds .env-fade-in to #app each time it sets up a new
+   environment. The class triggers a brief opacity dip on a full-bleed
+   ::after layer so the colour shift between e.g. dusk → neon-night
+   doesn't snap. animation-fill-mode: forwards so it ends back at
+   transparent and doesn't block subsequent input. */
+#app.env-fade-in::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 8, 22, 1);
+  pointer-events: none;
+  z-index: 25;
+  animation: env-fade-in 380ms ease forwards;
+}
+@keyframes env-fade-in {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}

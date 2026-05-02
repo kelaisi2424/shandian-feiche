@@ -2279,7 +2279,29 @@ function applyLevel() {
   }
 }
 
-// Apply the cosmetic backdrop (sky / sunset / neon). Called by applyLevel.
+// V1.9.7-2: locked environment themes per race.
+//
+// Contract: applyTrack() is the ONLY function that may mutate
+// scene.background / scene.fog / skyDome.material. The main loop —
+// updateDriving / updateRivals / updateCamera / animateScenery — never
+// touches these. We snapshot the post-applyTrack state into
+// state._envSnapshot so a future regression that adds per-frame env
+// writes can be caught by the tripwire below.
+//
+// The user-visible "图3紫夜 → 图4橙天" jump was a level-to-level
+// abruptness, not within-race drift: applyTrack runs at race start,
+// and instant background/fog swaps look snap. We add a 380 ms CSS
+// cross-fade overlay that briefly tints the canvas during the race
+// transition so the colour change is intentional rather than abrupt.
+const LOCKED_THEMES = {
+  // Documented theme set per spec — actual sky textures + fog colours
+  // come from TRACKS / LEVEL_SKY tables; this array just records the
+  // canonical names the rest of the code will refer to.
+  dusk:      { id: "dusk",      label: "DUSK"      },
+  neonNight: { id: "neonNight", label: "NEON_NIGHT" },
+  sunrise:   { id: "sunrise",   label: "SUNRISE"   },
+}
+
 function applyTrack() {
   const lvl = state.level
   const trackId = lvl?.trackStyle ?? Save.get().selectedTrack
@@ -2310,6 +2332,60 @@ function applyTrack() {
   // Rain particles only exist on lv5 — clear them otherwise so leaving
   // the wet-chase track returns to a dry race.
   setRainEnabled(!!lvl?.rainShader)
+
+  // V1.9.7-2: lock the env. Snapshot for tripwire + flag that the loop
+  // can read to refuse any per-frame env writes.
+  state._envSnapshot = {
+    bgHex: scene.background.getHex(),
+    fogHex: scene.fog.color.getHex(),
+    fogNear: scene.fog.near,
+    fogFar: scene.fog.far,
+    setAt: performance.now(),
+  }
+  state._envLocked = true
+  // Trigger the cross-fade overlay so the level-to-level transition
+  // doesn't snap. The CSS class auto-removes via animation-fill: both;
+  // re-adding it on the next race re-runs the keyframes.
+  if (typeof document !== "undefined") {
+    const stage = document.getElementById("app") || document.body
+    if (stage) {
+      stage.classList.remove("env-fade-in")
+      void stage.offsetWidth                  // restart the keyframes
+      stage.classList.add("env-fade-in")
+    }
+  }
+}
+
+// V1.9.7-2: tripwire. If a future code path mutates scene.fog or
+// scene.background mid-race we want a console.warn so the regression
+// shows up in playtest. Cheap — runs once per second, not per frame.
+function checkEnvironmentLock(now) {
+  if (!state._envLocked || !state._envSnapshot) return
+  if (state.mode !== "playing") return
+  // Throttle to 1 Hz.
+  if (now - (state._envCheckLast ?? 0) < 1000) return
+  state._envCheckLast = now
+  const snap = state._envSnapshot
+  if (!scene.fog || !scene.background) return
+  const drift =
+    scene.background.getHex() !== snap.bgHex ||
+    scene.fog.color.getHex() !== snap.fogHex ||
+    scene.fog.near !== snap.fogNear ||
+    scene.fog.far !== snap.fogFar
+  if (drift) {
+    console.warn("[envLock] scene env mutated during race — should never happen", {
+      bgWas: snap.bgHex.toString(16), bgNow: scene.background.getHex().toString(16),
+      fogWas: snap.fogHex.toString(16), fogNow: scene.fog.color.getHex().toString(16),
+    })
+    // Re-snapshot so we don't spam the warning every second.
+    state._envSnapshot = {
+      bgHex: scene.background.getHex(),
+      fogHex: scene.fog.color.getHex(),
+      fogNear: scene.fog.near,
+      fogFar: scene.fog.far,
+      setAt: now,
+    }
+  }
 }
 
 // Build (or tear down) the falling-rain particle system. 320 short
@@ -4735,6 +4811,7 @@ function loop(now) {
     updatePlayerCarLights()
     updateNitroFlames()
     updateAuditGuard()
+    checkEnvironmentLock(now)
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {
