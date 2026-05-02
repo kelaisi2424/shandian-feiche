@@ -5184,12 +5184,33 @@ function flashWhite() {
 }
 
 function updateDriving(dt, now) {
-  // throttle / brake (uses currently-selected car's stats)
+  // V2.0.1: 3-stage acceleration curve replaces the V1.8 linear lerp.
+  // Pre-V2.0.1 the speed approached maxSpeed at a constant rate, which
+  // read as "toy car gradually getting up to speed" — the user feedback
+  // was 没有起步、拉升、极速区 的层次感.
+  // New curve:
+  //   stage 1  (0 ≤ v < 80)        accel × 1.65   "PUNCH" — fast launch
+  //   stage 2  (80 ≤ v < 180)      accel × 1.00   "PULL"  — mid-band
+  //   stage 3  (180 ≤ v < max)     accel × 0.50   "COAST" — top-end plateau
+  // Nitro overrides all three to a flat × 1.40 (still relative to base
+  // accel) so the punch is consistent regardless of where in the curve
+  // the player triggers it.
   if (state.countdown > 0) {
     state.speed = lerp(state.speed, 0, dt * 4)
   } else if (!state.finished) {
     const target = state.brake ? 0 : (state.nitroTime > 0 ? CFG.nitroSpeed : (state.gas ? CFG.maxSpeed : 95))
-    const accel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
+    const baseAccel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
+    let stageMul
+    if (state.nitroTime > 0) {
+      stageMul = 1.40
+    } else if (state.speed < 80) {
+      stageMul = 1.65
+    } else if (state.speed < 180) {
+      stageMul = 1.00
+    } else {
+      stageMul = 0.50
+    }
+    const accel = baseAccel * stageMul
     state.speed = lerp(state.speed, target, dt * accel)
     if (state.brake) state.speed = Math.max(0, state.speed - 200 * dt)
   } else {
@@ -5213,23 +5234,65 @@ function updateDriving(dt, now) {
   // steering — locked during countdown
   const liveSteer = state.countdown > 0 ? 0 : state.steer
   state.steerVisual = lerp(state.steerVisual, liveSteer, dt * 6)
-  const steerStrength = (CFG.carSteer ?? 6.5) + state.speed * 0.05
-  // V1.9.2: screen-space steering fix.
-  //
-  // Verified by reading the V1.8.7 chase camera math: the camera looks
-  // along moveDir from behind, so camera.right_world = cross(up, -moveDir)
-  // ≈ -Track._right. progressToWorld(...) shifts the player by
-  // +Track._right * lateral. Therefore +lateral renders on the SCREEN-LEFT,
-  // not screen-right.
-  //
-  // Before this fix, pressing LEFT (steer=-1) decreased lateral, which
-  // pushed the player along -Track._right = +camera.right = screen-RIGHT.
-  // Inverting the sign here makes left key → +lateral → screen-LEFT.
-  //
-  // We flip ONLY the steer→lateral conversion so all other lateral-based
-  // entities (rivals, pickups, hazards, ghost) keep their existing world
-  // placement; only the player's response to user input is corrected.
+  // V2.0.1: speed-dependent steering. Pre-V2.0.1 was
+  //     steerStrength = base + speed * 0.05      // MORE turn at speed
+  // which read as "玩具车随便一打方向就横移". Adult cars get HEAVIER
+  // (less responsive) at high speed — committed turns, no flick steering.
+  //   v=0       → strength = base × 1.00   (snappy in pit-lane)
+  //   v=120     → strength = base × 0.74
+  //   v=220     → strength = base × 0.40   (committed at top-end)
+  // The base is still per-car (CFG.carSteer from cars.js handling).
+  const steerSpeedFactor = 1.0 - 0.6 * Math.min(1, state.speed / 220)
+  const steerStrength = (CFG.carSteer ?? 6.5) * steerSpeedFactor
+  // V1.9.2: screen-space steering fix — sign inversion preserved.
+  // Before V1.9.2, +lateral rendered on screen-RIGHT but pressing LEFT
+  // decreased lateral (wrong). We flip ONLY the steer→lateral conversion
+  // so rivals/pickups/hazards keep their existing world placement.
   state.lateral = clamp(state.lateral - liveSteer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+
+  // V2.0.1: lightweight drift trigger.
+  //   Conditions: speed > 140 km/h AND |steer| > 0.65, held > 150 ms.
+  //   While drifting:
+  //     - lateral grip drops (signed lateral velocity component decays
+  //       slower → the car visibly slides to the outside of the turn)
+  //     - state.drifting = true so updateCamera / FX can react
+  //     - state.driftScore accumulates at speed × 0.02 per frame (user
+  //       feedback uses this to award DRIFT bonus credits at race end)
+  //   End: |steer| < 0.3 OR speed < 100. On end, accumulated score
+  //   becomes a one-shot DRIFT toast + credit add (handled in finishRace
+  //   integration land in V2.0.4).
+  if (!state._driftHoldStart) state._driftHoldStart = 0
+  const driftEligible = state.speed > 140 && Math.abs(liveSteer) > 0.65
+  if (driftEligible) {
+    if (state._driftHoldStart === 0) state._driftHoldStart = now
+    if (now - state._driftHoldStart > 150 && !state.drifting) {
+      state.drifting = true
+      state._driftStartedAt = now
+      toast("DRIFT", 700)
+    }
+  } else {
+    state._driftHoldStart = 0
+    if (state.drifting) {
+      // Reward the drift: bonus credits proportional to held duration.
+      const driftMs = now - (state._driftStartedAt ?? now)
+      if (driftMs > 600) {
+        const bonus = Math.min(40, Math.round(driftMs / 80))
+        state.coins = (state.coins ?? 0) + bonus
+        toast(`DRIFT +${bonus}`, 800)
+      }
+      state.drifting = false
+    }
+  }
+  if (state.drifting) {
+    state.driftScore = (state.driftScore ?? 0) + state.speed * dt * 0.02
+    // Lateral slip: amplify the steer-driven lateral by 1.35× while
+    // drifting so the car visibly slides to the outside.
+    state.lateral = clamp(
+      state.lateral - liveSteer * dt * steerStrength * 0.35,
+      -CFG.playerHalfWidth,
+      CFG.playerHalfWidth
+    )
+  }
 
   // gravity / jump
   state.vy -= 32 * dt
