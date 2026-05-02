@@ -200,14 +200,17 @@ body {
 
 /* --------------- SPEEDOMETER --------------- */
 
+/* V3 D3 (C): speedometer — cool-blue numerals, slimmer typography. */
 .speed {
   position: absolute;
   bottom: 60px;
   right: 60px;
-  font-size: 2.5em;
+  font-size: 2.2em;
   font-weight: 200;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -2px;
+  letter-spacing: -1px;
+  color: rgba(220, 232, 250, 0.88);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .speed span {
@@ -561,32 +564,57 @@ button {
   .fullscreen .intro-keys > div:first-child {
     display: none;
   }
+  /* V3 D3 (C): UI restraint — drop the yellow-gold kart-game border
+     for a cool steel-blue glass chip that matches the navy fog
+     palette. Same tap target, lower visual key. */
   .fullscreen .start-link {
     width: auto;
-    font-size: 22px;
-    padding: 14px 28px;
-    border: 1.5px solid rgba(255, 212, 26, 0.65);
-    border-radius: 24px;
-    background: rgba(8, 14, 28, 0.6);
-    letter-spacing: 2px;
+    font-size: 20px;
+    padding: 13px 30px;
+    border: 1px solid rgba(160, 196, 232, 0.45);
+    border-radius: 4px;
+    background: rgba(10, 16, 30, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    letter-spacing: 4px;
+    color: rgba(220, 232, 250, 0.92);
+    font-weight: 300;
   }
   .fullscreen .intro-hint {
-    margin-top: 14px;
-    font-size: 12px;
-    letter-spacing: 4px;
-    color: rgba(207, 224, 255, 0.55);
+    margin-top: 18px;
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: rgba(160, 188, 224, 0.45);
+    font-weight: 300;
+  }
+  /* V3 D3 (B): "重新开始" CTA when a resume snapshot is detected.
+     Sits below 继续本局, smaller, ghost-style so the resume primary
+     keeps the visual lead. */
+  .fullscreen .start-link.start-link-secondary {
+    margin-top: 10px;
+    padding: 8px 22px;
+    font-size: 13px;
+    letter-spacing: 3px;
+    border: 1px solid rgba(207, 224, 255, 0.32);
+    background: rgba(8, 14, 28, 0.45);
+    color: rgba(207, 224, 255, 0.7);
   }
   /* Stack the splash columns vertically so Auth doesn't push the CTA off-screen. */
   .fullscreen .stack {
     flex-direction: column;
     gap: 24px;
   }
-  /* In-race HUD: shrink clock so it doesn't dominate the road view. */
+  /* V3 D3 (C): in-race clock — slimmer and lower-contrast so it
+     stops shouting from the corner. The race-time HUD should be
+     readable, not decorative. */
   .clock {
-    top: 16px;
-    left: 16px;
-    font-size: 2.6em;
-    letter-spacing: -2px;
+    top: 14px;
+    left: 14px;
+    font-size: 2.1em;
+    font-weight: 200;
+    letter-spacing: -1px;
+    color: rgba(220, 232, 250, 0.78);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
   }
   /* Speedometer: pmndrs places the gauge bottom-left; with our touch
      D-pad in the same corner they collide. Move gauge up a bit. */

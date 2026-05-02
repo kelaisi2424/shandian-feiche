@@ -1,4 +1,5 @@
 export * from './audio'
+export * from './AutoRecover'
 export * from './Cameras'
 export * from './Dust'
 export * from './Boost'

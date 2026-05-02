@@ -67,7 +67,12 @@ const gears = 10
 const c = new Color()
 const v = new Vector3()
 
-export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = [2, 1.1, 4.7], mass = 500, children, ...props }, ref) => {
+// V3 D3 (C): mass 500 → 820. See store.ts vehicleConfig comment for
+// the matching engine-force/brake bumps. Heavier chassis settles
+// faster on suspension and resists tipping at speed — it also makes
+// AutoRecover's tilt threshold less hair-trigger because the car's
+// own inertia keeps it upright through small bumps.
+export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = [2, 1.1, 4.7], mass = 820, children, ...props }, ref) => {
   const glass = useRef<MaterialMesh>(null!)
   const brake = useRef<MaterialMesh>(null!)
   const wheel = useRef<Group>(null)

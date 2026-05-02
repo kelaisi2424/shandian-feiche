@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Layers } from 'three'
 import { Canvas } from '@react-three/fiber'
 import { Physics, Debug } from '@react-three/cannon'
@@ -7,19 +7,48 @@ import { Sky, Environment, PerspectiveCamera, OrbitControls, Stats } from '@reac
 import type { DirectionalLight } from 'three'
 
 import { HideMouse, Keyboard, TouchControls } from './controls'
-import { Cameras } from './effects'
+import { AutoRecover, Cameras } from './effects'
 import { BoundingBox, Ramp, Track, Vehicle, Goal, Train, Heightmap } from './models'
-import { angularVelocity, levelLayer, position, rotation, useStore } from './store'
-import { Checkpoint, Clock, Speed, Minimap, Intro, Help, Editor, LeaderBoard, Finished, PickColor } from './ui'
+import { angularVelocity, getState, levelLayer, mutation, position, rotation, useStore } from './store'
+import { Checkpoint, Clock, Speed, Minimap, Intro, Help, Editor, LeaderBoard, Finished, PickColor, Hud } from './ui'
 import { useToggle } from './useToggle'
+import { clearResumeSnapshot, saveResumeSnapshot } from './utils/resume'
 
 const layers = new Layers()
 layers.enable(levelLayer)
 
 export function App(): JSX.Element {
   const [light, setLight] = useState<DirectionalLight | null>(null)
-  const [actions, dpr, editor, shadows] = useStore((s) => [s.actions, s.dpr, s.editor, s.shadows])
-  const { onCheckpoint, onFinish, onStart } = actions
+  const [actions, dpr, editor, shadows, ready, finished] = useStore((s) => [s.actions, s.dpr, s.editor, s.shadows, s.ready, s.finished])
+  const { onCheckpoint, onFinish: rawOnFinish, onStart } = actions
+
+  // V3 D3 (B): wrap onFinish so clearing the resume snapshot is part
+  // of the official "race ended" path. Goal.tsx already calls
+  // actions.onFinish on collide; we just augment.
+  const onFinish = () => {
+    rawOnFinish()
+    clearResumeSnapshot()
+  }
+
+  // V3 D3 (B): periodic 1500 ms snapshot writer. Active only while
+  // ready=true and !finished. Reads chassis position via the store
+  // refs, plus mutation.speed / mutation.boost for live values.
+  useEffect(() => {
+    if (!ready || finished) return
+    const id = setInterval(() => {
+      const s = getState()
+      const chassis = s.chassisBody?.current
+      if (!chassis) return
+      saveResumeSnapshot({
+        pos: [chassis.position.x, chassis.position.y, chassis.position.z],
+        rot: [chassis.rotation.x, chassis.rotation.y, chassis.rotation.z],
+        speed: mutation.speed,
+        boost: mutation.boost,
+        elapsedMs: s.start ? Math.max(0, Date.now() - s.start) : 0,
+      })
+    }, 1500)
+    return () => clearInterval(id)
+  }, [ready, finished])
 
   const ToggledCheckpoint = useToggle(Checkpoint, 'checkpoint')
   const ToggledDebug = useToggle(Debug, 'debug')
@@ -86,6 +115,8 @@ export function App(): JSX.Element {
       <HideMouse />
       <Keyboard />
       <TouchControls />
+      <AutoRecover />
+      <Hud />
     </Intro>
   )
 }

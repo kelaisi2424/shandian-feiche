@@ -18,14 +18,22 @@ export const maxBoost = 100 as const
 export const position = [-110, 0.75, 220] as const
 export const rotation = [0, Math.PI / 2 + 0.35, 0] as const
 
+// V3 D3 (C): vehicle weight feel.
+// Pre-D3 was the pmndrs default — too light, the chassis floats and
+// flips on every wall. Adult-racer wants planted weight:
+//   - mass 500 → 820 in Chassis.tsx (heavier inertia)
+//   - force 1800 → 2600 to keep acceleration usable with that mass
+//   - maxBrake 65 → 90 because heavier needs more brake
+//   - steer 0.3 → 0.28 so a 60kg-heavier car doesn't snap-turn
+// Wheel-side: see wheelInfo below for stiffer suspension + more grip.
 export const vehicleConfig = {
   width: 1.7,
   height: -0.3,
   front: 1.35,
   back: -1.3,
-  steer: 0.3,
-  force: 1800,
-  maxBrake: 65,
+  steer: 0.28,
+  force: 2600,
+  maxBrake: 90,
   maxSpeed: 88,
 } as const
 
@@ -47,16 +55,21 @@ export type WheelInfo = Required<
   >
 >
 
+// V3 D3 (C): suspension tuning to match the heavier mass.
+//   - frictionSlip 1.5 → 2.0 — more grip, less floppy slide
+//   - suspensionStiffness 30 → 42 — firmer, less body roll
+//   - suspensionRestLength 0.35 → 0.30 — lower stance
+//   - sideAcceleration 3 → 2.4 — tames the sideways snap
 export const wheelInfo: WheelInfo = {
   axleLocal: [-1, 0, 0],
   customSlidingRotationalSpeed: -0.01,
   directionLocal: [0, -1, 0],
-  frictionSlip: 1.5,
+  frictionSlip: 2.0,
   radius: 0.38,
   rollInfluence: 0,
-  sideAcceleration: 3,
-  suspensionRestLength: 0.35,
-  suspensionStiffness: 30,
+  sideAcceleration: 2.4,
+  suspensionRestLength: 0.3,
+  suspensionStiffness: 42,
   useCustomSlidingRotationalSpeed: true,
 }
 
@@ -77,10 +90,10 @@ export const booleans = {
 type Booleans = keyof typeof booleans
 
 const exclusiveBooleans = ['help', 'leaderboard', 'pickcolor'] as const
-type ExclusiveBoolean = typeof exclusiveBooleans[number]
+type ExclusiveBoolean = (typeof exclusiveBooleans)[number]
 const isExclusiveBoolean = (v: unknown): v is ExclusiveBoolean => exclusiveBooleans.includes(v as ExclusiveBoolean)
 
-export type Camera = typeof cameras[number]
+export type Camera = (typeof cameras)[number]
 
 const controls = {
   backward: false,
