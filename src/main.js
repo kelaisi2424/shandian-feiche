@@ -5630,13 +5630,44 @@ function updateCamera(dt) {
   const followDist = _camTuneCfg.followDist ?? 7.5
   const camHeight  = _camTuneCfg.cameraHeight ?? 3.4
   const lookAhead  = _camTuneCfg.lookAhead ?? 10.0
-  // FOV applied here so resize()'s aspect-based fov is overridden each
-  // frame to the tuned value. Updates the projection matrix only when
-  // the value actually changes — avoids per-frame matrix recomputation.
-  const wantFov = _camTuneCfg.fov ?? 60
-  if (camera && Math.abs(camera.fov - wantFov) > 0.01) {
-    camera.fov = wantFov
-    camera.updateProjectionMatrix()
+  // V2.0.2: speed-driven dynamic FOV — replaces the static V1.9.7-3 fov.
+  //
+  // Adult-racer feel needs the camera to "open up" as the speed climbs.
+  // Pre-V2.0.2 fov was constant 54°, so a 0 km/h car and a 280 km/h car
+  // looked the same on screen — no kinetic feedback from the camera.
+  //
+  // Curve:
+  //   v=0          fov = baseFov (54°)
+  //   v=180        fov = baseFov + 6  → 60°  (speed comp begins reading)
+  //   v=280        fov = baseFov + 12 → 66°  (cinematic widen)
+  //   nitro on:    +6° transient punch on top, decays over 400 ms
+  //   drift on:    +3° (subtle "the world is sliding past")
+  //
+  // Smoothed via 1-frame exp toward the target so the change is felt
+  // but not jarring. State carried on cam.fov directly so future loops
+  // pick up the smoothed value (no separate persistence needed).
+  const baseFov = _camTuneCfg.fov ?? 54
+  const speedKmh = state.speed ?? 0
+  const speedFovBoost = Math.min(12, Math.max(0, (speedKmh - 60) * 0.06))
+  const nitroFovBoost = state.nitroTime > 0 ? 6 : 0
+  const driftFovBoost = state.drifting ? 3 : 0
+  const wantFov = baseFov + speedFovBoost + nitroFovBoost + driftFovBoost
+  if (camera) {
+    // Per-frame exp approach (k = 1 - exp(-rate * dt)). Rate 5.0 lands
+    // ~70% of the change in 200 ms — quick enough to read but not snap.
+    const fovK = 1 - Math.exp(-5.0 * dt)
+    const newFov = camera.fov + (wantFov - camera.fov) * fovK
+    if (Math.abs(camera.fov - newFov) > 0.01) {
+      camera.fov = newFov
+      camera.updateProjectionMatrix()
+    }
+  }
+  // V2.0.2: subtle continuous shake at high speed (additive on top of
+  // the existing collision shake). Builds in past 200 km/h, capped low
+  // so it doesn't compete with the camera's overall stability.
+  if (state.speed > 200 && state.mode === "playing" && !state.finished) {
+    const overSpeed = (state.speed - 200) / 100  // 0..0.x past 200
+    state.shake = Math.max(state.shake, Math.min(0.10, overSpeed * 0.10))
   }
 
   // 1) Update lastValidMoveDir from the frame-to-frame displacement.
