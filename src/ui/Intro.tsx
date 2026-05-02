@@ -1,7 +1,8 @@
-// V3 D1: stripped of login UI and pmndrs branding for a standalone
-// adult-racer voice. Auth + setupSession imports left in main.tsx for
-// any backend-side code paths that still reference them, but the
-// splash UI no longer offers Google / GitHub sign-in entry points.
+// V3 D1 + D2 (P0-1, P0-5): WeChat-H5 racing voice splash.
+// 点击开始 → ready=true + auto-throttle ON (the car drives itself
+// forward; the player only steers + drifts + boosts). No GAS button
+// on the in-game HUD because of this. See Touch.tsx for the 4-button
+// layout (← / → / 漂移 / 氮气).
 import { Suspense, useEffect, useState } from 'react'
 import { useProgress } from '@react-three/drei'
 
@@ -13,10 +14,17 @@ export function Intro({ children }: { children: ReactNode }): JSX.Element {
   const [clicked, setClicked] = useState(false)
   const [loading, setLoading] = useState(true)
   const { progress } = useProgress()
-  const set = useStore((state) => state.set)
+  const [set, actions] = useStore((state) => [state.set, state.actions])
 
   useEffect(() => {
-    if (clicked && !loading) set({ ready: true })
+    if (clicked && !loading) {
+      set({ ready: true })
+      // V3 D2: auto-throttle. The forward control is set true and never
+      // released — release-throttle decay isn't a thing the player has
+      // to manage. DRIFT (cannon brake) is the only way to slow down,
+      // matching the "tap-and-go" voice the spec asks for.
+      actions.forward(true)
+    }
   }, [clicked, loading])
 
   useEffect(() => {
@@ -32,6 +40,7 @@ export function Intro({ children }: { children: ReactNode }): JSX.Element {
             <a className="start-link" href="#" onClick={() => setClicked(true)}>
               {loading ? `载入 ${progress.toFixed()} %` : '点击开始'}
             </a>
+            {!loading && <div className="intro-hint">左转 · 右转 · 漂移 · 氮气</div>}
           </div>
         </div>
       </div>

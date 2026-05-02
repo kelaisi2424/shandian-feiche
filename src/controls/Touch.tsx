@@ -173,21 +173,25 @@ export function TouchControls(): JSX.Element | null {
   if (!isTouch) return null
   if (!ready) return null
 
-  // V3 D1 (T2): simplified to 5 buttons total.
-  //   LEFT bottom: ← / →   each 84×84
-  //   RIGHT bottom stack: GAS (110×110) + DRIFT (74×74) + NITRO (74×74)
-  // No brake button — release-throttle decay + DRIFT (cannon brake) cover it.
-  // No backward button — pmndrs's reverse is rarely useful and adds clutter.
+  // V3 D2 (P0-1): auto-throttle + 4 buttons.
+  //   LEFT bottom:   ← / →   each 84×84 turn buttons
+  //   RIGHT bottom:  漂移   100×100 (DRIFT, doubles as light brake)
+  //                  氮气   74×74 (NITRO, above DRIFT)
+  // No GAS button — the car drives forward automatically (set by Intro
+  // when the user taps "点击开始"; see Intro.tsx). The user only steers
+  // and times their drift / nitro. This matches WeChat H5 racing conv.
+  // No backward / brake — DRIFT is also a soft slowdown.
+  // Safe-area insets honoured via env(safe-area-inset-*).
   const TURN_SIZE = 84
-  const GAS_SIZE = 110
+  const DRIFT_SIZE = 100
   const SMALL_SIZE = 74
   const SAFE = 16
   const turnGap = 14
   const turnY = Math.max(0, vh - TURN_SIZE - SAFE)
-  const gasY = Math.max(0, vh - GAS_SIZE - SAFE)
-  const driftX = Math.max(0, vw - GAS_SIZE - SAFE - 12 - SMALL_SIZE)
-  const driftY = Math.max(0, vh - GAS_SIZE - SAFE - 8) // align bottom roughly with gas
-  const nitroY = Math.max(0, driftY - SMALL_SIZE - 12)
+  const driftX = Math.max(0, vw - DRIFT_SIZE - SAFE)
+  const driftY = Math.max(0, vh - DRIFT_SIZE - SAFE)
+  const nitroX = Math.max(0, driftX - SMALL_SIZE - 14)
+  const nitroY = Math.max(0, driftY - 4) // align with DRIFT vertically a hair higher
 
   const containerBase: React.CSSProperties = {
     position: 'fixed',
@@ -225,20 +229,20 @@ export function TouchControls(): JSX.Element | null {
         <HoldButton testid="touch-right" label="→" action="right" style={baseTurn} />
       </div>
 
-      {/* RIGHT — GAS (big) + NITRO + DRIFT */}
-      <div data-testid="touch-gas-wrap" style={{ ...containerBase, top: gasY, left: Math.max(0, vw - GAS_SIZE - SAFE) }}>
+      {/* RIGHT — DRIFT (primary) + NITRO (secondary, top-right of DRIFT) */}
+      <div data-testid="touch-drift-wrap" style={{ ...containerBase, top: driftY, left: driftX }}>
         <HoldButton
-          testid="touch-gas"
-          label="油门"
-          action="forward"
+          testid="touch-drift"
+          label="漂移"
+          action="brake"
           style={{
-            width: GAS_SIZE,
-            height: GAS_SIZE,
+            width: DRIFT_SIZE,
+            height: DRIFT_SIZE,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 30% 30%, rgba(120,255,200,0.85), rgba(12,80,60,0.95) 70%)',
-            border: '2px solid rgba(150,255,200,0.95)',
-            color: '#eafff5',
-            fontSize: 22,
+            background: 'radial-gradient(circle at 30% 30%, rgba(255,180,80,0.88), rgba(120,50,0,0.95) 70%)',
+            border: '2px solid rgba(255,200,100,0.95)',
+            color: '#fff7e0',
+            fontSize: 20,
             fontWeight: 900,
             letterSpacing: 2,
             display: 'flex',
@@ -246,37 +250,12 @@ export function TouchControls(): JSX.Element | null {
             justifyContent: 'center',
             userSelect: 'none',
             touchAction: 'none',
-            boxShadow: '0 6px 18px rgba(0,0,0,0.5), 0 0 28px rgba(80,255,180,0.35), inset 0 2px 0 rgba(255,255,255,0.2)',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.55), 0 0 28px rgba(255,180,60,0.4), inset 0 2px 0 rgba(255,255,255,0.2)',
             WebkitTapHighlightColor: 'transparent',
           }}
         />
       </div>
-      <div data-testid="touch-drift-wrap" style={{ ...containerBase, top: driftY, left: driftX }}>
-        <HoldButton
-          testid="touch-drift"
-          label="漂移"
-          action="brake"
-          style={{
-            width: SMALL_SIZE,
-            height: SMALL_SIZE,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle at 30% 30%, rgba(255,180,80,0.85), rgba(120,50,0,0.95) 70%)',
-            border: '2px solid rgba(255,200,100,0.95)',
-            color: '#fff7e0',
-            fontSize: 16,
-            fontWeight: 900,
-            letterSpacing: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            userSelect: 'none',
-            touchAction: 'none',
-            boxShadow: '0 5px 14px rgba(0,0,0,0.5), 0 0 22px rgba(255,180,60,0.3), inset 0 2px 0 rgba(255,255,255,0.18)',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        />
-      </div>
-      <div data-testid="touch-nitro-wrap" style={{ ...containerBase, top: nitroY, left: driftX }}>
+      <div data-testid="touch-nitro-wrap" style={{ ...containerBase, top: nitroY, left: nitroX }}>
         <HoldButton
           testid="touch-nitro"
           label="氮气"

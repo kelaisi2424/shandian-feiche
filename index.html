@@ -1,9 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@pmndrs/racing-game</title>
+    <!-- V3 D2 (P0-3): iOS / Android viewport hardening.
+         viewport-fit=cover         lets safe-area-inset-* expose the notch/home-indicator zones
+         maximum-scale=1.0          blocks pinch-zoom on Chrome
+         user-scalable=no           ditto on older browsers (Safari ignores this on accessibility-overridden devices, hence the JS guards in disableSelection.ts)
+         minimum-scale=1.0          stops Android from shrinking when keyboard appears (irrelevant here but defensive) -->
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- iOS web-app meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="夜街赛车" />
+
+    <!-- Android web-app + Chrome meta -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0a1024" />
+
+    <!-- Disable Safari's auto-detection of phone numbers / addresses
+         which can wrap UI text in tappable links. -->
+    <meta name="format-detection" content="telephone=no, email=no, address=no, date=no" />
+
+    <title>夜街赛车 · Adult Racer</title>
   </head>
   <body>
     <div id="root"></div>
