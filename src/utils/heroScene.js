@@ -475,17 +475,30 @@ function updateEntryAnimation(now) {
   if (u >= 1) STATE.entryDone = true
 }
 
+// V1.9.7-1: portrait viewport falls back to a stable poster (CSS-only).
+// We early-return tick() without rendering so the GPU never burns
+// cycles drawing a canvas that's display:none anyway. The poster CSS
+// handles its own visibility under @media (orientation: portrait).
+function shouldRenderHero3D() {
+  if (typeof window === "undefined") return true
+  if (!window.matchMedia) return true
+  return !window.matchMedia("(orientation: portrait)").matches
+}
+
 function tick(now) {
   if (!STATE.running) return
+  // Schedule the next frame regardless so we resume rendering when the
+  // user rotates back to landscape — but skip the render itself in
+  // portrait so we don't burn GPU on a hidden canvas.
+  STATE.rafId = requestAnimationFrame(tick)
+  if (!shouldRenderHero3D()) return
   const t = now / 1000
   const last = STATE.lastTime || t
   STATE.lastTime = t
-  // suppress unused-var lint without needing dt anymore
   void last
   updateCameraOrbit(now)
   updateEntryAnimation(now)
   STATE.renderer.render(STATE.scene, STATE.camera)
-  STATE.rafId = requestAnimationFrame(tick)
 }
 
 export function startHeroScene({ mountId = "heroCarMount", carId, assetName } = {}) {

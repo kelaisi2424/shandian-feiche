@@ -3674,6 +3674,25 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
     width: 100% !important;
     height: 100% !important;
   }
+  /* V1.9.7-1: portrait — pure poster mode.
+     Real-phone testing showed the canvas could land at opacity 0 or
+     fail to mount on some WebView paths even after V1.9.6-4's poster
+     fallback was added (race condition between the 600 ms timer and
+     the GLB load on slow paths). Stability over fidelity: in portrait
+     we just hide the canvas entirely and pin the poster on. The 3D
+     hero stays in landscape + garage where the timing isn't fragile. */
+  :root[data-layout-mode="mobile-full"] #heroCarMount,
+  :root[data-layout-mode="mobile-full"] #heroCarMount canvas {
+    display: none !important;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-poster {
+    display: flex !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    height: min(34vh, 280px) !important;
+    z-index: 2 !important;
+    transition: none !important;          /* no fade — show immediately */
+  }
   /* Side-grid: 2×2 squarish tiles in normal flow under the hero. */
   :root[data-layout-mode="mobile-full"] .side-grid {
     display: grid;
