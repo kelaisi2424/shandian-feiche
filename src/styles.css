@@ -3442,6 +3442,11 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   padding: 8px;
   min-width: 0;
   pointer-events: auto;
+  /* V1.9.6-2: explicit overflow hidden so a long car name (e.g. a
+     20-character localised string) can't push the hero-visual out of
+     the right column. text-overflow ellipsis on the title handles
+     the visual truncation. */
+  overflow: hidden;
 }
 :root[data-layout-mode="mobile-full"] .hero-ui .hero-titlecard {
   position: static;
@@ -3541,10 +3546,17 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
   grid-auto-flow: row;
 }
 :root[data-layout-mode="mobile-full"] .side-grid .side-tile {
+  /* V1.9.6-2: aspect-ratio loosened to a range so tight 932×430
+     phone-fullscreen viewports don't clip the icons. The grid is
+     still 2×2; only the cell shape relaxes. */
   aspect-ratio: 1.15 / 1;
-  min-height: 0;
+  min-height: 88px;
   min-width: 0;
   padding: 10px 12px;
+  /* When the parent has plenty of height (e.g. iPad mini 1133×744),
+     cap the tile so it doesn't grow to a giant square that makes the
+     icons look lost. */
+  max-height: 200px;
 }
 :root[data-layout-mode="mobile-full"] .side-grid .side-tile-icon {
   width: 36px;
