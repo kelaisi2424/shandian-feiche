@@ -3687,11 +3687,22 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
     padding: 12px;
   }
   /* Pin the bottom nav so it floats above the scrolling lobby instead
-     of disappearing past the fold. */
+     of disappearing past the fold. V1.9.6-3: heavier opaque background
+     + drop shadow so scrolling content underneath doesn't bleed through
+     and the bar reads as a fixed chrome layer. */
   :root[data-layout-mode="mobile-full"] #menu > .menu-actionbar {
     position: sticky;
     bottom: 0;
     z-index: 6;
+    background: linear-gradient(0deg, rgba(5, 10, 24, 0.98) 0%, rgba(5, 10, 24, 0.92) 70%, rgba(5, 10, 24, 0.7) 100%);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  }
+  /* V1.9.6-3: scroll padding-top so the topbar (which is also sticky-ish
+     at z-5) doesn't cover the first item when the user scrolls back to
+     top via anchor / intersection observer. */
+  :root[data-layout-mode="mobile-full"] #menu.screen.active {
+    scroll-padding-top: 60px;
+    scroll-padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
 }
 
