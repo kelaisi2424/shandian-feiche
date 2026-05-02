@@ -1857,6 +1857,52 @@ canvas,
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(38, 214, 255, 0.4);
 }
+
+/* V1.9.7-6: home progress banner — three small inline chips inside
+   .hero-ui showing unlocked level / best time / total coins. Read-only;
+   refreshHomeProgressBanner pulls from save.v1 with no mutations. */
+.hero-progress-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.hero-progress-banner .hpb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  font-size: 11px;
+  color: rgba(207, 224, 255, 0.85);
+  white-space: nowrap;
+}
+.hero-progress-banner .hpb-emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+.hero-progress-banner .hpb-text {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.hero-progress-banner .hpb-text b {
+  color: #ffd400;
+  font-weight: 900;
+}
+
+/* Portrait scrollable lobby: banner reflows tightly. */
+@media (orientation: portrait) {
+  :root[data-layout-mode="mobile-full"] .hero-progress-banner {
+    margin-top: 8px;
+    margin-bottom: 4px;
+  }
+  :root[data-layout-mode="mobile-full"] .hero-progress-banner .hpb-chip {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+}
 .nitro-wrap.empty .nitro-btn {
   filter: grayscale(0.65) brightness(0.6);
   animation: none;

@@ -3718,6 +3718,7 @@ function setMode(mode) {
     refreshHeroCard()
     refreshUltraCompactStrip()
     refreshHomeResumeUI()
+    refreshHomeProgressBanner()
   } else {
     stopHeroScene()
   }
@@ -3769,6 +3770,43 @@ function refreshHeroCard() {
   const pl = $("heroPosterLabel")
   if (pl) pl.textContent = car.name
   refreshHeroCar({ carId: car.id, assetName: car.asset })
+}
+
+// V1.9.7-6: read save.v1 progress fields and paint the home progress
+// banner. The three chips: highest unlocked level, best level time,
+// lifetime coin count. Read-only — no save mutations, no schema change.
+function refreshHomeProgressBanner() {
+  const banner = $("heroProgressBanner")
+  if (!banner) return
+  const save = Save.get()
+  // Highest unlocked level number from save.unlockedLevels (e.g.
+  // ["lv1","lv2","lv3"] → 3). Falls back to 1 if the array is empty.
+  let highestLv = 1
+  if (Array.isArray(save.unlockedLevels)) {
+    for (const id of save.unlockedLevels) {
+      const lvl = LEVEL_BY_ID[id]
+      if (lvl && lvl.num > highestLv) highestLv = lvl.num
+    }
+  }
+  const lvEl = $("hpbLevel")
+  if (lvEl) lvEl.textContent = String(highestLv)
+  // Best time across all levels from save.bestPerLevel — show the
+  // best (smallest ms) across whichever levels have been recorded.
+  let bestMs = null
+  const bp = save.bestPerLevel || {}
+  for (const id of Object.keys(bp)) {
+    const e = bp[id]
+    if (e && typeof e.ms === "number" && (bestMs == null || e.ms < bestMs)) {
+      bestMs = e.ms
+    }
+  }
+  const bestEl = $("hpbBest")
+  if (bestEl) bestEl.textContent = bestMs != null ? mmss(bestMs) : "--"
+  // Lifetime coins — V1.8 added save.coins (current bank). Use that
+  // for the read-friendly "总金币" line.
+  const coins = save.coins ?? 0
+  const coinEl = $("hpbCoins")
+  if (coinEl) coinEl.textContent = String(coins)
 }
 
 function refreshTopPlayerInfo() {
