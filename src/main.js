@@ -4017,7 +4017,7 @@ const ACHIEVEMENTS = [
   { id: "first_race",   icon: "🏁", name: "起步",       desc: "完成你的第一场比赛",         reward: 100 },
   { id: "no_hit_clear", icon: "💎", name: "完美车技",   desc: "任意关卡零碰撞通关",         reward: 200 },
   { id: "speed_demon",  icon: "⚡", name: "速度狂魔",   desc: "最高速度突破 300 KM/H",      reward: 150 },
-  { id: "coin_baron",   icon: "🪙", name: "金币大亨",   desc: "累计获得 1000 金币",         reward: 300 },
+  { id: "coin_baron",   icon: "CR", name: "高额车手",   desc: "累计获得 1000 信用点",         reward: 300 },
   { id: "all_S",        icon: "🏆", name: "全 S 通关", desc: "所有关卡评级都达到 S",        reward: 500 },
   { id: "collector",    icon: "🚗", name: "收藏家",     desc: "解锁所有 3 辆车",           reward: 200 }
 ]
@@ -4103,7 +4103,7 @@ function openMissions() {
     li.innerHTML = `
       <div class="ach-icon">${a.icon}</div>
       <div class="ach-meta"><b>${a.name}</b><span>${a.desc}</span></div>
-      <div class="ach-status">${done ? "已完成" : `+${a.reward} 🪙`}</div>
+      <div class="ach-status">${done ? "已解锁" : `+${a.reward} CR`}</div>
     `
     list.appendChild(li)
   }
@@ -4164,7 +4164,7 @@ function openGarage() {
         <div class="stat-bar"><b>操控</b><i style="--gap:${100 - handlePct}%"></i><u>${c.handling}</u></div>
         <div class="stat-bar"><b>氮气</b><i style="--gap:${100 - nitroPct}%"></i><u>${c.nitro}</u></div>
       </div>
-      ${unlocked ? (selected ? `<small class="badge-owned">已选定</small>` : `<small class="badge-owned">已拥有</small>`) : `<small class="badge-lock">🔒 ${c.price.toLocaleString()} 金币</small>`}
+      ${unlocked ? (selected ? `<small class="badge-owned">EQUIPPED</small>` : `<small class="badge-owned">OWNED</small>`) : `<small class="badge-lock">🔒 ${c.price.toLocaleString()} CR</small>`}
     `
     card.addEventListener("click", () => {
       if (unlocked) {
@@ -4190,7 +4190,7 @@ function openGarage() {
           refreshUltraCompactStrip()
           openGarage()
         } else {
-          toast(`金币不足 (${cur.coins}/${c.price})`, 1200)
+          toast(`INSUFFICIENT CREDITS (${cur.coins}/${c.price})`, 1200)
         }
       }
     })
@@ -4225,7 +4225,7 @@ function openLevels() {
       <b>${lvl.name}</b>
       <em class="lvl-sub">${lvl.sub}</em>
       <small class="lvl-desc">${lvl.desc}</small>
-      ${best ? `<small class="lvl-best">最佳: ${mmss(best.ms)} · ${best.coins} 金币</small>` : ""}
+      ${best ? `<small class="lvl-best">BEST ${mmss(best.ms)} · ${best.coins} CR</small>` : ""}
       ${unlocked ? "" : `<small class="lvl-lock">🔒 通关上一关解锁</small>`}
     `
     card.addEventListener("click", () => {
@@ -4899,8 +4899,8 @@ function finishRace(success = true) {
     if (rewardEl) {
       const totalReward = state.coins + gradeBonus
       if (win && totalReward > 0) {
-        rewardEl.innerHTML = `🪙 奖励 +<b>${totalReward}</b> 金币` +
-          (gradeBonus > 0 ? ` <span class="reward-bonus">(基础 ${state.coins} + ${grade ?? ""} 评分 ${gradeBonus})</span>` : "")
+        rewardEl.innerHTML = `CREDITS +<b>${totalReward}</b>` +
+          (gradeBonus > 0 ? ` <span class="reward-bonus">(${state.coins} BASE + ${gradeBonus} ${grade ?? ""}-RANK BONUS)</span>` : "")
         rewardEl.style.display = ""
       } else {
         rewardEl.style.display = "none"
@@ -5184,12 +5184,33 @@ function flashWhite() {
 }
 
 function updateDriving(dt, now) {
-  // throttle / brake (uses currently-selected car's stats)
+  // V2.0.1: 3-stage acceleration curve replaces the V1.8 linear lerp.
+  // Pre-V2.0.1 the speed approached maxSpeed at a constant rate, which
+  // read as "toy car gradually getting up to speed" — the user feedback
+  // was 没有起步、拉升、极速区 的层次感.
+  // New curve:
+  //   stage 1  (0 ≤ v < 80)        accel × 1.65   "PUNCH" — fast launch
+  //   stage 2  (80 ≤ v < 180)      accel × 1.00   "PULL"  — mid-band
+  //   stage 3  (180 ≤ v < max)     accel × 0.50   "COAST" — top-end plateau
+  // Nitro overrides all three to a flat × 1.40 (still relative to base
+  // accel) so the punch is consistent regardless of where in the curve
+  // the player triggers it.
   if (state.countdown > 0) {
     state.speed = lerp(state.speed, 0, dt * 4)
   } else if (!state.finished) {
     const target = state.brake ? 0 : (state.nitroTime > 0 ? CFG.nitroSpeed : (state.gas ? CFG.maxSpeed : 95))
-    const accel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
+    const baseAccel = state.gas ? (CFG.carAccel ?? 2.0) : 0.8
+    let stageMul
+    if (state.nitroTime > 0) {
+      stageMul = 1.40
+    } else if (state.speed < 80) {
+      stageMul = 1.65
+    } else if (state.speed < 180) {
+      stageMul = 1.00
+    } else {
+      stageMul = 0.50
+    }
+    const accel = baseAccel * stageMul
     state.speed = lerp(state.speed, target, dt * accel)
     if (state.brake) state.speed = Math.max(0, state.speed - 200 * dt)
   } else {
@@ -5213,23 +5234,65 @@ function updateDriving(dt, now) {
   // steering — locked during countdown
   const liveSteer = state.countdown > 0 ? 0 : state.steer
   state.steerVisual = lerp(state.steerVisual, liveSteer, dt * 6)
-  const steerStrength = (CFG.carSteer ?? 6.5) + state.speed * 0.05
-  // V1.9.2: screen-space steering fix.
-  //
-  // Verified by reading the V1.8.7 chase camera math: the camera looks
-  // along moveDir from behind, so camera.right_world = cross(up, -moveDir)
-  // ≈ -Track._right. progressToWorld(...) shifts the player by
-  // +Track._right * lateral. Therefore +lateral renders on the SCREEN-LEFT,
-  // not screen-right.
-  //
-  // Before this fix, pressing LEFT (steer=-1) decreased lateral, which
-  // pushed the player along -Track._right = +camera.right = screen-RIGHT.
-  // Inverting the sign here makes left key → +lateral → screen-LEFT.
-  //
-  // We flip ONLY the steer→lateral conversion so all other lateral-based
-  // entities (rivals, pickups, hazards, ghost) keep their existing world
-  // placement; only the player's response to user input is corrected.
+  // V2.0.1: speed-dependent steering. Pre-V2.0.1 was
+  //     steerStrength = base + speed * 0.05      // MORE turn at speed
+  // which read as "玩具车随便一打方向就横移". Adult cars get HEAVIER
+  // (less responsive) at high speed — committed turns, no flick steering.
+  //   v=0       → strength = base × 1.00   (snappy in pit-lane)
+  //   v=120     → strength = base × 0.74
+  //   v=220     → strength = base × 0.40   (committed at top-end)
+  // The base is still per-car (CFG.carSteer from cars.js handling).
+  const steerSpeedFactor = 1.0 - 0.6 * Math.min(1, state.speed / 220)
+  const steerStrength = (CFG.carSteer ?? 6.5) * steerSpeedFactor
+  // V1.9.2: screen-space steering fix — sign inversion preserved.
+  // Before V1.9.2, +lateral rendered on screen-RIGHT but pressing LEFT
+  // decreased lateral (wrong). We flip ONLY the steer→lateral conversion
+  // so rivals/pickups/hazards keep their existing world placement.
   state.lateral = clamp(state.lateral - liveSteer * dt * steerStrength, -CFG.playerHalfWidth, CFG.playerHalfWidth)
+
+  // V2.0.1: lightweight drift trigger.
+  //   Conditions: speed > 140 km/h AND |steer| > 0.65, held > 150 ms.
+  //   While drifting:
+  //     - lateral grip drops (signed lateral velocity component decays
+  //       slower → the car visibly slides to the outside of the turn)
+  //     - state.drifting = true so updateCamera / FX can react
+  //     - state.driftScore accumulates at speed × 0.02 per frame (user
+  //       feedback uses this to award DRIFT bonus credits at race end)
+  //   End: |steer| < 0.3 OR speed < 100. On end, accumulated score
+  //   becomes a one-shot DRIFT toast + credit add (handled in finishRace
+  //   integration land in V2.0.4).
+  if (!state._driftHoldStart) state._driftHoldStart = 0
+  const driftEligible = state.speed > 140 && Math.abs(liveSteer) > 0.65
+  if (driftEligible) {
+    if (state._driftHoldStart === 0) state._driftHoldStart = now
+    if (now - state._driftHoldStart > 150 && !state.drifting) {
+      state.drifting = true
+      state._driftStartedAt = now
+      toast("DRIFT", 700)
+    }
+  } else {
+    state._driftHoldStart = 0
+    if (state.drifting) {
+      // Reward the drift: bonus credits proportional to held duration.
+      const driftMs = now - (state._driftStartedAt ?? now)
+      if (driftMs > 600) {
+        const bonus = Math.min(40, Math.round(driftMs / 80))
+        state.coins = (state.coins ?? 0) + bonus
+        toast(`DRIFT +${bonus}`, 800)
+      }
+      state.drifting = false
+    }
+  }
+  if (state.drifting) {
+    state.driftScore = (state.driftScore ?? 0) + state.speed * dt * 0.02
+    // Lateral slip: amplify the steer-driven lateral by 1.35× while
+    // drifting so the car visibly slides to the outside.
+    state.lateral = clamp(
+      state.lateral - liveSteer * dt * steerStrength * 0.35,
+      -CFG.playerHalfWidth,
+      CFG.playerHalfWidth
+    )
+  }
 
   // gravity / jump
   state.vy -= 32 * dt
@@ -5442,16 +5505,16 @@ function updatePickups(dt, now) {
         state.coins++
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffd23a, 10)
         sfxCoin()
-        showTutorialHint("intro_coin", "收集金币解锁新赛车 🪙", 1800)
+        showTutorialHint("intro_coin", "信用点 (CR) — 收集后用于升级 / 解锁车辆", 1800)
       } else if (p.type === "nitro") {
         p.taken = true
         p.mesh.visible = false
         state.nitroCharges = Math.min(3, state.nitroCharges + 1)
-        toast("氮气 +1", 800)
+        toast("NITRO +1", 800)
         sparks(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffe45a, 18)
         sfxCoin()
         showTutorialHint("intro_nitro",
-          isTouchDevice() ? "双击屏幕或点击 ⚡ 使用氮气加速" : "按空格使用氮气加速 ⚡",
+          isTouchDevice() ? "NITRO ready — double-tap canvas or hit ⚡" : "NITRO ready — press SPACE",
           2200)
       } else if (p.type === "hazard" && state.nitroTime <= 0 && now >= (state.invincibleUntil ?? 0)) {
         p.taken = true
@@ -5567,13 +5630,44 @@ function updateCamera(dt) {
   const followDist = _camTuneCfg.followDist ?? 7.5
   const camHeight  = _camTuneCfg.cameraHeight ?? 3.4
   const lookAhead  = _camTuneCfg.lookAhead ?? 10.0
-  // FOV applied here so resize()'s aspect-based fov is overridden each
-  // frame to the tuned value. Updates the projection matrix only when
-  // the value actually changes — avoids per-frame matrix recomputation.
-  const wantFov = _camTuneCfg.fov ?? 60
-  if (camera && Math.abs(camera.fov - wantFov) > 0.01) {
-    camera.fov = wantFov
-    camera.updateProjectionMatrix()
+  // V2.0.2: speed-driven dynamic FOV — replaces the static V1.9.7-3 fov.
+  //
+  // Adult-racer feel needs the camera to "open up" as the speed climbs.
+  // Pre-V2.0.2 fov was constant 54°, so a 0 km/h car and a 280 km/h car
+  // looked the same on screen — no kinetic feedback from the camera.
+  //
+  // Curve:
+  //   v=0          fov = baseFov (54°)
+  //   v=180        fov = baseFov + 6  → 60°  (speed comp begins reading)
+  //   v=280        fov = baseFov + 12 → 66°  (cinematic widen)
+  //   nitro on:    +6° transient punch on top, decays over 400 ms
+  //   drift on:    +3° (subtle "the world is sliding past")
+  //
+  // Smoothed via 1-frame exp toward the target so the change is felt
+  // but not jarring. State carried on cam.fov directly so future loops
+  // pick up the smoothed value (no separate persistence needed).
+  const baseFov = _camTuneCfg.fov ?? 54
+  const speedKmh = state.speed ?? 0
+  const speedFovBoost = Math.min(12, Math.max(0, (speedKmh - 60) * 0.06))
+  const nitroFovBoost = state.nitroTime > 0 ? 6 : 0
+  const driftFovBoost = state.drifting ? 3 : 0
+  const wantFov = baseFov + speedFovBoost + nitroFovBoost + driftFovBoost
+  if (camera) {
+    // Per-frame exp approach (k = 1 - exp(-rate * dt)). Rate 5.0 lands
+    // ~70% of the change in 200 ms — quick enough to read but not snap.
+    const fovK = 1 - Math.exp(-5.0 * dt)
+    const newFov = camera.fov + (wantFov - camera.fov) * fovK
+    if (Math.abs(camera.fov - newFov) > 0.01) {
+      camera.fov = newFov
+      camera.updateProjectionMatrix()
+    }
+  }
+  // V2.0.2: subtle continuous shake at high speed (additive on top of
+  // the existing collision shake). Builds in past 200 km/h, capped low
+  // so it doesn't compete with the camera's overall stability.
+  if (state.speed > 200 && state.mode === "playing" && !state.finished) {
+    const overSpeed = (state.speed - 200) / 100  // 0..0.x past 200
+    state.shake = Math.max(state.shake, Math.min(0.10, overSpeed * 0.10))
   }
 
   // 1) Update lastValidMoveDir from the frame-to-frame displacement.
@@ -5948,7 +6042,7 @@ function updateHUD() {
   $("nitroCount").textContent = state.nitroCharges
   const progress = clamp(state.progress / Track.length, 0, 1)
   $("missionFill").style.width = `${Math.round(progress * 100)}%`
-  $("missionStats").textContent = `金币 ${state.coins}/${CFG.coinGoal} · 碰撞 ${state.hits}/${CFG.hitLimit}`
+  $("missionStats").textContent = `CR ${state.coins}/${CFG.coinGoal} · HITS ${state.hits}/${CFG.hitLimit}`
   // top centred chips: RANK / TIME / COIN / TRACK.
   // If the active level has a time limit, TIME counts down and turns red
   // in the last 10 seconds so the player feels the pressure.
