@@ -54,23 +54,8 @@ const HOLD_BUTTON_STYLE: React.CSSProperties = {
   WebkitTapHighlightColor: 'transparent',
 }
 
-const DPAD_BUTTON_STYLE: React.CSSProperties = {
-  width: 64,
-  height: 64,
-  borderRadius: 14,
-  border: '1.5px solid rgba(255,255,255,0.4)',
-  background: 'rgba(20,28,48,0.55)',
-  color: 'white',
-  fontSize: 28,
-  fontWeight: 800,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  userSelect: 'none',
-  touchAction: 'none',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.18)',
-  WebkitTapHighlightColor: 'transparent',
-}
+// V3 D1 (T2) deleted DPAD_BUTTON_STYLE — was used by the 4-button +
+// shape D-pad we replaced with two big circular turn buttons.
 
 type ActionKey = 'forward' | 'backward' | 'left' | 'right' | 'boost' | 'brake'
 
@@ -188,18 +173,21 @@ export function TouchControls(): JSX.Element | null {
   if (!isTouch) return null
   if (!ready) return null
 
-  // Anchor the buttons via top/left/right relative to visualViewport
-  // dimensions so both real iPhone (vh = innerHeight, vw = innerWidth)
-  // and Chromium emulation (mismatched) land them inside the visible
-  // 0..vw × 0..vh band.
-  const dpadTop = Math.max(0, vh - 220)
-  const actionsTop = Math.max(0, vh - 290)
-  const dpadLeft = 16
-  const actionsRight = 16
-  // For the right action stack, compute LEFT instead of using `right`
-  // so we don't depend on innerWidth when emulating.
-  const ACTIONS_COL_WIDTH = 110 // widest button (GAS = 96) + 14 padding
-  const actionsLeft = Math.max(0, vw - ACTIONS_COL_WIDTH - actionsRight)
+  // V3 D1 (T2): simplified to 5 buttons total.
+  //   LEFT bottom: ← / →   each 84×84
+  //   RIGHT bottom stack: GAS (110×110) + DRIFT (74×74) + NITRO (74×74)
+  // No brake button — release-throttle decay + DRIFT (cannon brake) cover it.
+  // No backward button — pmndrs's reverse is rarely useful and adds clutter.
+  const TURN_SIZE = 84
+  const GAS_SIZE = 110
+  const SMALL_SIZE = 74
+  const SAFE = 16
+  const turnGap = 14
+  const turnY = Math.max(0, vh - TURN_SIZE - SAFE)
+  const gasY = Math.max(0, vh - GAS_SIZE - SAFE)
+  const driftX = Math.max(0, vw - GAS_SIZE - SAFE - 12 - SMALL_SIZE)
+  const driftY = Math.max(0, vh - GAS_SIZE - SAFE - 8) // align bottom roughly with gas
+  const nitroY = Math.max(0, driftY - SMALL_SIZE - 12)
 
   const containerBase: React.CSSProperties = {
     position: 'fixed',
@@ -209,77 +197,107 @@ export function TouchControls(): JSX.Element | null {
     touchAction: 'none',
   }
 
+  const baseTurn: React.CSSProperties = {
+    width: TURN_SIZE,
+    height: TURN_SIZE,
+    borderRadius: '50%',
+    border: '1.5px solid rgba(207, 224, 255, 0.55)',
+    background: 'rgba(8, 14, 28, 0.55)',
+    color: 'white',
+    fontSize: 36,
+    fontWeight: 800,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    userSelect: 'none',
+    touchAction: 'none',
+    boxShadow: '0 6px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 18px rgba(38,214,255,0.10)',
+    WebkitTapHighlightColor: 'transparent',
+  }
+
   return (
     <>
-      {/* LEFT D-pad — 3-row + shape */}
-      <div
-        data-testid="touch-dpad"
-        style={{
-          ...containerBase,
-          top: dpadTop,
-          left: dpadLeft,
-          display: 'grid',
-          gridTemplateColumns: '64px 64px 64px',
-          gridTemplateRows: '64px 64px 64px',
-          gap: 6,
-        }}
-      >
-        <div />
-        <HoldButton testid="touch-up" label="↑" action="forward" style={DPAD_BUTTON_STYLE} />
-        <div />
-        <HoldButton testid="touch-left" label="←" action="left" style={DPAD_BUTTON_STYLE} />
-        <div />
-        <HoldButton testid="touch-right" label="→" action="right" style={DPAD_BUTTON_STYLE} />
-        <div />
-        <HoldButton testid="touch-down" label="↓" action="backward" style={DPAD_BUTTON_STYLE} />
-        <div />
+      {/* LEFT — turn buttons */}
+      <div data-testid="touch-turn-left-wrap" style={{ ...containerBase, top: turnY, left: SAFE }}>
+        <HoldButton testid="touch-left" label="←" action="left" style={baseTurn} />
+      </div>
+      <div data-testid="touch-turn-right-wrap" style={{ ...containerBase, top: turnY, left: SAFE + TURN_SIZE + turnGap }}>
+        <HoldButton testid="touch-right" label="→" action="right" style={baseTurn} />
       </div>
 
-      {/* RIGHT action stack — GAS / NITRO / DRIFT */}
-      <div
-        data-testid="touch-actions"
-        style={{
-          ...containerBase,
-          top: actionsTop,
-          left: actionsLeft,
-          width: ACTIONS_COL_WIDTH,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          alignItems: 'flex-end',
-        }}
-      >
-        <HoldButton
-          testid="touch-nitro"
-          label="NITRO"
-          action="boost"
-          style={{
-            background: 'linear-gradient(180deg, rgba(38,214,255,0.55), rgba(8,40,90,0.85))',
-            border: '1.5px solid rgba(120,220,255,0.85)',
-            color: '#eaf6ff',
-          }}
-        />
-        <HoldButton
-          testid="touch-drift"
-          label="DRIFT"
-          action="brake"
-          style={{
-            background: 'linear-gradient(180deg, rgba(255,212,0,0.6), rgba(120,80,0,0.9))',
-            border: '1.5px solid rgba(255,228,90,0.9)',
-            color: '#fff7d8',
-          }}
-        />
+      {/* RIGHT — GAS (big) + NITRO + DRIFT */}
+      <div data-testid="touch-gas-wrap" style={{ ...containerBase, top: gasY, left: Math.max(0, vw - GAS_SIZE - SAFE) }}>
         <HoldButton
           testid="touch-gas"
-          label="GAS"
+          label="油门"
           action="forward"
           style={{
-            width: 96,
-            height: 96,
-            background: 'linear-gradient(180deg, rgba(80,255,120,0.55), rgba(20,80,30,0.9))',
-            border: '1.5px solid rgba(120,255,160,0.9)',
-            color: '#f1ffe6',
-            fontSize: 18,
+            width: GAS_SIZE,
+            height: GAS_SIZE,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle at 30% 30%, rgba(120,255,200,0.85), rgba(12,80,60,0.95) 70%)',
+            border: '2px solid rgba(150,255,200,0.95)',
+            color: '#eafff5',
+            fontSize: 22,
+            fontWeight: 900,
+            letterSpacing: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            userSelect: 'none',
+            touchAction: 'none',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.5), 0 0 28px rgba(80,255,180,0.35), inset 0 2px 0 rgba(255,255,255,0.2)',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        />
+      </div>
+      <div data-testid="touch-drift-wrap" style={{ ...containerBase, top: driftY, left: driftX }}>
+        <HoldButton
+          testid="touch-drift"
+          label="漂移"
+          action="brake"
+          style={{
+            width: SMALL_SIZE,
+            height: SMALL_SIZE,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle at 30% 30%, rgba(255,180,80,0.85), rgba(120,50,0,0.95) 70%)',
+            border: '2px solid rgba(255,200,100,0.95)',
+            color: '#fff7e0',
+            fontSize: 16,
+            fontWeight: 900,
+            letterSpacing: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            userSelect: 'none',
+            touchAction: 'none',
+            boxShadow: '0 5px 14px rgba(0,0,0,0.5), 0 0 22px rgba(255,180,60,0.3), inset 0 2px 0 rgba(255,255,255,0.18)',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        />
+      </div>
+      <div data-testid="touch-nitro-wrap" style={{ ...containerBase, top: nitroY, left: driftX }}>
+        <HoldButton
+          testid="touch-nitro"
+          label="氮气"
+          action="boost"
+          style={{
+            width: SMALL_SIZE,
+            height: SMALL_SIZE,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle at 30% 30%, rgba(120,220,255,0.9), rgba(0,60,140,0.95) 70%)',
+            border: '2px solid rgba(150,230,255,0.95)',
+            color: '#eafaff',
+            fontSize: 16,
+            fontWeight: 900,
+            letterSpacing: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            userSelect: 'none',
+            touchAction: 'none',
+            boxShadow: '0 5px 14px rgba(0,0,0,0.5), 0 0 22px rgba(80,200,255,0.35), inset 0 2px 0 rgba(255,255,255,0.18)',
+            WebkitTapHighlightColor: 'transparent',
           }}
         />
       </div>

@@ -32,9 +32,14 @@ export function App(): JSX.Element {
   return (
     <Intro>
       <Canvas key={`${dpr}${shadows}`} dpr={[1, dpr]} shadows={shadows} camera={{ position: [0, 5, 15], fov: 50 }}>
-        <fog attach="fog" args={['white', 0, 500]} />
-        <Sky sunPosition={[100, 10, 100]} distance={1000} />
-        <ambientLight layers={layers} intensity={0.1} />
+        {/* V3 D1 T5: cool-night palette. Pre-V3 was warm-orange-desert
+            (fog 'white' + Sky default sunPosition baked a peach gradient).
+            New: deep navy-purple fog matching a city-night vibe + lower
+            sun so the dome trends violet/blue. Heightmap geometry is
+            still the canyon mesh — full city-building swap is D3 work. */}
+        <fog attach="fog" args={['#1a1633', 60, 380]} />
+        <Sky sunPosition={[-80, -5, 120]} distance={1000} mieCoefficient={0.005} mieDirectionalG={0.9} rayleigh={3} turbidity={12} />
+        <ambientLight layers={layers} intensity={0.18} color="#7090c0" />
         <directionalLight
           ref={setLight}
           layers={layers}

@@ -554,11 +554,11 @@ button {
     transform: scale(0.78) !important;
     transform-origin: bottom left !important;
   }
-  /* Help button stays top-right but bigger so it's tappable. */
-  .help button {
-    width: 44px !important;
-    height: 44px !important;
-    font-size: 20px !important;
+  /* V3 D1 (T3): hide the desktop help "i" button + popup entirely on
+     mobile. The popup is just a keyboard-mapping table the player
+     can't use anyway. */
+  .help {
+    display: none !important;
   }
   /* Sound button — increase tap area. */
   .sound {
