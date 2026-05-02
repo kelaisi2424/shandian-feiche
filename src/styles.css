@@ -3911,3 +3911,52 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
 :root[data-layout-mode="ultra-compact"] .hud-stats .hud-chip b {
   font-size: 13px;
 }
+
+/* ============================================================
+   V1.9.6-4: hero poster fallback
+   ============================================================
+   Pre-fix on real phones / WeChat WebView, hero-visual could show as
+   a flat dark/violet rectangle while the GLB was loading or if Three
+   silently failed (slow CDN, GPU stall on first webgl context).
+   That blank read as "the page is broken".
+
+   Fix: a CSS-painted SVG car silhouette + the car name as a fallback
+   poster. Initially hidden — heroScene.js adds .hero-poster-show 600
+   ms after start IF carRoot still null, then removes the class once
+   the GLB mounts (CSS transitions opacity 1 → 0 over 400 ms). The
+   poster never replaces the 3D — it's purely a placeholder. */
+.hero-poster {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;                /* below the canvas (z-1 in V1.9.4-2) */
+}
+.hero-poster.hero-poster-show {
+  opacity: 1;
+}
+.hero-poster-svg {
+  width: 80%;
+  max-width: 320px;
+  height: auto;
+  filter: drop-shadow(0 8px 24px rgba(38, 214, 255, 0.35));
+  animation: hero-poster-bob 3.4s ease-in-out infinite;
+}
+@keyframes hero-poster-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+.hero-poster-label {
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: #ffd31a;
+  font-weight: 800;
+  text-shadow: 0 0 12px rgba(255, 212, 0, 0.5);
+}

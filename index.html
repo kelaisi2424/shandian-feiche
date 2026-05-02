@@ -108,6 +108,34 @@
                  can lay them side-by-side without overlap. desktop-full
                  keeps both layers absolutely positioned (V1.9.0 showroom). -->
             <div class="hero-visual" id="heroVisual">
+              <!-- V1.9.6-4: poster fallback for slow / failed 3D paths.
+                   Hidden by default; heroScene.js shows it (.hero-poster-show)
+                   600 ms after start if the GLB hasn't landed, and fades
+                   it out once the canvas mounts. -->
+              <div class="hero-poster" id="heroPoster" aria-hidden="true">
+                <svg class="hero-poster-svg" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="hpGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#26d6ff" stop-opacity="0.5"/>
+                      <stop offset="1" stop-color="#ffd31a" stop-opacity="0.4"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- stylised low-slung car silhouette -->
+                  <path d="M40 120 Q60 90 110 86 L160 80 Q200 78 230 88 L275 100 Q295 108 295 122 L295 135 Q295 142 285 142 L40 142 Q30 142 30 135 L30 130 Q30 122 40 120 Z"
+                        fill="url(#hpGrad)" stroke="#26d6ff" stroke-width="1.8" opacity="0.92"/>
+                  <!-- canopy -->
+                  <path d="M115 86 Q140 64 180 64 L210 70 Q235 78 235 92 L120 92 Q108 92 115 86 Z"
+                        fill="rgba(8, 22, 48, 0.85)" stroke="rgba(38, 214, 255, 0.6)" stroke-width="1.2"/>
+                  <!-- wheels -->
+                  <circle cx="92" cy="142" r="14" fill="#0a1428" stroke="#ffd31a" stroke-width="1.5"/>
+                  <circle cx="92" cy="142" r="6" fill="#26d6ff" opacity="0.75"/>
+                  <circle cx="248" cy="142" r="14" fill="#0a1428" stroke="#ffd31a" stroke-width="1.5"/>
+                  <circle cx="248" cy="142" r="6" fill="#26d6ff" opacity="0.75"/>
+                  <!-- headlight glow -->
+                  <ellipse cx="280" cy="118" rx="10" ry="4" fill="#ffe45a" opacity="0.7"/>
+                </svg>
+                <span class="hero-poster-label" id="heroPosterLabel">LIGHTNING S1</span>
+              </div>
               <!-- 3D hero car preview. heroScene.js mounts its own canvas
                    inside #heroCarMount. -->
               <div id="heroCarMount" class="hero-car-mount" aria-hidden="true"></div>

@@ -3583,6 +3583,9 @@ function refreshHeroCard() {
   if (ac) ac.textContent = `${(car.accel0to100 ?? 0).toFixed(1)}s`
   const hd = $("heroStatHandling")
   if (hd) hd.textContent = String(car.handling ?? 0)
+  // V1.9.6-4: keep the poster label in sync with the selected car.
+  const pl = $("heroPosterLabel")
+  if (pl) pl.textContent = car.name
   refreshHeroCar({ carId: car.id, assetName: car.asset })
 }
 

@@ -372,6 +372,27 @@ function setCarFromGLB(srcScene) {
   // Apply current layout-mode tuning immediately so the first paint
   // already reflects mobile-full overrides if applicable.
   updateHeroLayout()
+  // V1.9.6-4: GLB just landed → fade out the poster (if it was shown).
+  hidePosterFallback()
+}
+
+// V1.9.6-4: poster fallback for slow / failed 3D paths. Shown 600 ms
+// after startHeroScene() if carRoot is still null. Hidden once
+// setCarFromGLB completes successfully. Implementation is just two
+// classList toggles on #heroPoster — CSS does the opacity transition.
+function showPosterFallback() {
+  const el = document.getElementById("heroPoster")
+  if (!el) return
+  el.classList.add("hero-poster-show")
+}
+function hidePosterFallback() {
+  const el = document.getElementById("heroPoster")
+  if (!el) return
+  el.classList.remove("hero-poster-show")
+}
+function refreshPosterLabel(carName) {
+  const el = document.getElementById("heroPosterLabel")
+  if (el && carName) el.textContent = carName
 }
 
 // V1.9.4-3: per-layoutMode camera FOV + car scale/position. Re-applied
@@ -477,6 +498,18 @@ export function startHeroScene({ mountId = "heroCarMount", carId, assetName } = 
   ensureRendererForMount(mount)
   if (carId && assetName && (!STATE.carRoot || STATE._pendingCarId !== carId)) {
     STATE._pendingCarId = carId
+    // V1.9.6-4: schedule poster fallback. If the GLB hasn't landed within
+    // 600 ms (slow CDN, WebView GPU stall, network hiccup) the poster
+    // SVG fades in. setCarFromGLB calls hidePosterFallback() the moment
+    // the car is actually mounted, so a 1.2 s load shows poster from
+    // 600 ms onward and fades it back out at 1.2 s with a clean
+    // transition both ways.
+    if (typeof window !== "undefined" && STATE._posterTimer) {
+      clearTimeout(STATE._posterTimer)
+    }
+    STATE._posterTimer = setTimeout(() => {
+      if (!STATE.carRoot) showPosterFallback()
+    }, 600)
     loadCarGLB(carId, assetName).then((src) => {
       if (STATE._pendingCarId === carId) setCarFromGLB(src)
     })
