@@ -1785,6 +1785,55 @@ canvas,
   background: radial-gradient(circle at 30% 30%, #fff 0 25%, #16d6ff 60%, #0a4a8a 100%);
   border-color: #16d6ff;
 }
+/* V1.9.7-4: cooldown styling — button dimmed + non-tappable while
+   nitroTime > 0. Class is added in fireNitro() and removed by a timer
+   matched to the boost duration. */
+.nitro-wrap.cooling .nitro-btn {
+  filter: grayscale(0.6) brightness(0.55);
+  pointer-events: none;
+}
+.nitro-wrap.cooling::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgba(38, 214, 255, 0.4) 0%, transparent 100%);
+  animation: nitro-cooldown-sweep 2.4s linear forwards;
+  pointer-events: none;
+}
+@keyframes nitro-cooldown-sweep {
+  0%   { background: conic-gradient(rgba(38, 214, 255, 0.4) 0deg, transparent 0deg); }
+  100% { background: conic-gradient(rgba(38, 214, 255, 0.4) 360deg, transparent 360deg); }
+}
+
+/* V1.9.7-4: speed-box pulse on nitro fire. .speed-pulse class added
+   (remove + reflow + add) so keyframes re-run each tap. */
+.speed-pulse {
+  animation: speed-pulse 360ms ease-out 1;
+}
+@keyframes speed-pulse {
+  0%   { transform: skew(-6deg) scale(0.78); }
+  35%  { transform: skew(-6deg) scale(1.08); filter: brightness(1.4); }
+  100% { transform: skew(-6deg) scale(0.78); filter: brightness(1); }
+}
+/* desktop default scale = 1.0 (no V1.9.6-1 transform); separate keyframes. */
+.hud .speed-box.speed-pulse {
+  animation: speed-pulse 360ms ease-out 1;
+}
+
+/* V1.9.7-4: screen-edge blue flash for nitro. Inset shadow glow that
+   pulses bright then decays. */
+.screen-fx.nitro-edge-flash {
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 80px 28px rgba(38, 214, 255, 0.55),
+    inset 0 0 200px 60px rgba(38, 214, 255, 0.18);
+  animation: nitro-edge-flash 600ms ease-out forwards;
+}
+@keyframes nitro-edge-flash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
 .nitro-wrap.empty .nitro-btn {
   filter: grayscale(0.65) brightness(0.6);
   animation: none;

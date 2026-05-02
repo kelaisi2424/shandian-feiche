@@ -3515,7 +3515,28 @@ function bindControls() {
   hold($("rightBtn"), () => (state.steer = 1), () => (state.steer = 0))
   hold($("gasBtn"), () => (state.gas = 1), () => (state.gas = 0))
   hold($("brakeBtn"), () => (state.brake = 1), () => (state.brake = 0))
-  hold($("nitroBtn"), fireNitro, () => {})
+  // V1.9.7-4: nitro input hardening. Bind pointerdown / touchstart /
+  // click all at once so any of them fires the action; add a 200 ms
+  // lock so a single tap that fires multiple events doesn't burn two
+  // charges. fireNitro itself early-returns when nitroTime>0 so the
+  // lock only matters within a single tap-burst.
+  const nitroBtnEl = $("nitroBtn")
+  if (nitroBtnEl) {
+    let _nitroLockUntil = 0
+    const tryFireNitro = (e) => {
+      // touchstart fires before pointerdown on some Android stocks;
+      // both reach us. preventDefault stops the synthetic mouse event
+      // chain (avoids the 300 ms click delay too).
+      if (e && e.cancelable) e.preventDefault()
+      const now = performance.now()
+      if (now < _nitroLockUntil) return
+      _nitroLockUntil = now + 200
+      fireNitro()
+    }
+    nitroBtnEl.addEventListener("pointerdown", tryFireNitro)
+    nitroBtnEl.addEventListener("touchstart", tryFireNitro, { passive: false })
+    nitroBtnEl.addEventListener("click", tryFireNitro)
+  }
 
   addEventListener("keydown", (e) => {
     if (e.code === "ArrowLeft" || e.code === "KeyA") state.steer = -1
@@ -4531,6 +4552,41 @@ function fireNitro() {
   sfxNitro()
   flashWhite()       // hard white flash on activation
   flashFx("nitro")   // cyan halo follows
+  // V1.9.7-4: six explicit feedback channels so a tap is unmissable.
+  // 1) Speed-number pulse via .speed-pulse class on .speed-box.
+  //    The CSS keyframes scale 1 → 1.18 → 1 over 360 ms. Toggling
+  //    requires a remove + reflow + add so the animation re-runs.
+  const speedBox = document.querySelector(".speed-box")
+  if (speedBox) {
+    speedBox.classList.remove("speed-pulse")
+    void speedBox.offsetWidth
+    speedBox.classList.add("speed-pulse")
+  }
+  // 2) Screen-edge blue flash overlay — adds .nitro-edge-flash to
+  //    #screenFx for a 600 ms inset glow.
+  const fx = document.getElementById("screenFx")
+  if (fx) {
+    fx.classList.remove("nitro-edge-flash")
+    void fx.offsetWidth
+    fx.classList.add("nitro-edge-flash")
+    setTimeout(() => fx?.classList.remove("nitro-edge-flash"), 700)
+  }
+  // 3) Haptic vibration on supporting devices. iOS Safari ignores it
+  //    silently which is fine — Android + most Chinese WebViews honour it.
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try { navigator.vibrate(40) } catch (_) {}
+  }
+  // 4) Cooldown styling on the button: .nitro-wrap gains .cooling for
+  //    the duration of the boost; CSS dims the button + blocks pointer.
+  const wrap = document.querySelector(".nitro-wrap")
+  if (wrap) {
+    wrap.classList.add("cooling")
+    setTimeout(() => wrap?.classList.remove("cooling"), Math.round(dur * 1000))
+  }
+  // 5) Charge counter is decremented above (state.nitroCharges--); the
+  //    HUD spans pick it up next frame in updateHUD via setHudNitro.
+  // 6) Tail trail / nitroPlume keeps emitting via updateNitroFlames as
+  //    long as state.nitroTime > 0 — already wired V1.7+.
 }
 
 function finishRace(success = true) {
