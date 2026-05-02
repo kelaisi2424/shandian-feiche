@@ -3744,3 +3744,147 @@ body.is-portrait:not(.gate-dismissed) .rotate-gate #rotateAck::after {
 :root[data-layout-mode="mobile-full"] .reset-btn {
   transform: scale(0.85);
 }
+
+/* ============================================================
+   V1.9.6-1: in-race HUD relocation — clear the central upper view
+   ============================================================
+   Pre-fix layout had .hud-stats as a 4-chip horizontal bar at
+   top-CENTER, sitting right over the road's vanishing point. The
+   speed-box was at top-left at full size, and .mission-box sat
+   below it. Player feedback: the centered chip row was dropping
+   onto the racing line and obscuring upcoming hazards / corners.
+
+   Fix: relocate to a corner-only HUD.
+     - speed-box      stays top-left, shrunk by ~22% so it doesn't
+                      crowd the mission-box below it.
+     - mission-box    pulled up + slightly thinner so it tucks
+                      tightly under the smaller speed-box.
+     - hud-stats      moved from top-center horizontal bar to a
+                      top-right vertical COLUMN. RANK / TIME / COIN
+                      stack as small chips along the right edge.
+     - hud-chip-rank  shrunk into a small badge instead of a tall
+                      italic-numeral card.
+     - hud-chip-track fades out 2.5 s after the HUD becomes active
+                      so it shows the track name briefly at race
+                      start and then frees vertical space.
+   The center of the upper screen is now empty — the road's
+   vanishing point + checkpoints render unobstructed. */
+
+/* Speed box: 78% size, still skewed (preserve V1.8 visual identity). */
+.hud .speed-box {
+  transform: skew(-6deg) scale(0.78);
+  transform-origin: top left;
+}
+
+/* Mission box: tighter padding + smaller text + sit under the
+   shrunken speed-box. Original top: 7.6 ui; we pull up to 5.8 ui
+   to follow the new speed-box bottom edge. */
+.hud .mission-box {
+  top: calc(var(--ui) * 5.6);
+  width: calc(var(--ui) * 13);
+  padding: calc(var(--ui) * 0.5) calc(var(--ui) * 0.85) calc(var(--ui) * 0.55);
+}
+.hud .mission-box b {
+  font-size: calc(var(--ui) * 1.05);
+  margin-bottom: calc(var(--ui) * 0.32);
+}
+.hud .mission-bar { height: calc(var(--ui) * 0.5); }
+.hud .mission-box small {
+  font-size: calc(var(--ui) * 0.85);
+  margin-top: calc(var(--ui) * 0.32);
+}
+
+/* hud-stats: top-right vertical column (overrides the V1.8 wide
+   centered bar). RANK / TIME / COIN / TRACK stack along the right
+   edge in DOM order. */
+.hud .hud-stats {
+  left: auto;
+  right: calc(var(--ui) * 1.2);
+  top: calc(var(--ui) * 2);
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: calc(var(--ui) * 0.4);
+  width: auto;
+}
+.hud .hud-stats .hud-chip {
+  flex-direction: row;       /* label inline with value, not stacked */
+  align-items: center;
+  gap: calc(var(--ui) * 0.5);
+  padding: calc(var(--ui) * 0.32) calc(var(--ui) * 0.7);
+  min-width: calc(var(--ui) * 6);
+  border-radius: calc(var(--ui) * 0.6);
+}
+.hud .hud-stats .hud-chip-label {
+  font-size: calc(var(--ui) * 0.65);
+  letter-spacing: 1.5px;
+}
+.hud .hud-stats .hud-chip b {
+  font-size: calc(var(--ui) * 1.15);
+}
+.hud .hud-stats .hud-chip-coin b {
+  font-size: calc(var(--ui) * 1.15);
+}
+
+/* RANK shrinks to a small badge — was a tall italic-numeral card. */
+.hud .hud-stats .hud-chip-rank {
+  padding: calc(var(--ui) * 0.28) calc(var(--ui) * 0.6);
+  min-width: calc(var(--ui) * 4.6);
+}
+.hud .hud-stats .hud-chip-rank b {
+  font-size: calc(var(--ui) * 1.4);
+  letter-spacing: 0;
+}
+.hud .hud-stats .hud-chip-rank b sup {
+  font-size: 0.55em;
+  margin-left: 1px;
+  top: -0.4em;
+}
+
+/* TRACK chip: visible at race start, fades out after 2.5 s.
+   The animation re-runs each time .hud gains .active (i.e. each
+   race start) because the keyframes rule only matches while the
+   parent has .active — toggling the class restarts it. */
+.hud.active .hud-chip-track {
+  animation: hud-track-fade 2.5s ease forwards;
+}
+@keyframes hud-track-fade {
+  0%, 70% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+    visibility: hidden;
+  }
+}
+
+/* mobile-full / compact / ultra-compact: replace V1.9.4-4's
+   transform: scale(0.78) on .hud-stats. The scale interacted with
+   the new corner layout by visually shrinking the column without
+   actually freeing space. Use a smaller font/padding instead so
+   the column claims less width AND less height. */
+:root[data-layout-mode="mobile-full"] .hud-stats,
+:root[data-layout-mode="compact"] .hud-stats,
+:root[data-layout-mode="ultra-compact"] .hud-stats {
+  transform: none;
+  gap: calc(var(--ui) * 0.3);
+}
+:root[data-layout-mode="mobile-full"] .hud-stats .hud-chip,
+:root[data-layout-mode="compact"] .hud-stats .hud-chip,
+:root[data-layout-mode="ultra-compact"] .hud-stats .hud-chip {
+  padding: 3px 8px;
+  min-width: 70px;
+}
+:root[data-layout-mode="mobile-full"] .hud-stats .hud-chip-label,
+:root[data-layout-mode="compact"] .hud-stats .hud-chip-label,
+:root[data-layout-mode="ultra-compact"] .hud-stats .hud-chip-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+:root[data-layout-mode="mobile-full"] .hud-stats .hud-chip b,
+:root[data-layout-mode="compact"] .hud-stats .hud-chip b,
+:root[data-layout-mode="ultra-compact"] .hud-stats .hud-chip b {
+  font-size: 13px;
+}
