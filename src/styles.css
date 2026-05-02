@@ -506,3 +506,87 @@ button {
     opacity: 0;
   }
 }
+
+/* ============================================================
+   V3 D1: mobile-shape viewport overrides
+   ============================================================
+   Targets pointer:coarse (touch screens) AND narrow viewports.
+   The pmndrs splash + in-game HUD are designed for desktop and
+   render unusably on a 390 × 844 phone:
+     - .keys-row table is wider than the viewport → horizontal scroll
+     - .clock at 60/60 with 5em font crashes into the canvas centre
+     - .help button is 24×24 and unreachable
+   The rules below restyle the splash for portrait phones and resize
+   the in-race HUD so the touch buttons (added by TouchControls) own
+   the bottom 25% of the screen unobstructed. */
+@media (max-width: 768px), (pointer: coarse) {
+  /* Splash: hide the desktop "Forward / Backward / Left / …" key
+     table (no keyboard on phone), keep the loading text + start CTA. */
+  .fullscreen .intro-keys > div:first-child {
+    display: none;
+  }
+  .fullscreen .start-link {
+    width: auto;
+    font-size: 22px;
+    padding: 14px 28px;
+    border: 1.5px solid rgba(255, 212, 26, 0.65);
+    border-radius: 24px;
+    background: rgba(8, 14, 28, 0.6);
+    letter-spacing: 2px;
+  }
+  /* Stack the splash columns vertically so Auth doesn't push the CTA off-screen. */
+  .fullscreen .stack {
+    flex-direction: column;
+    gap: 24px;
+  }
+  /* In-race HUD: shrink clock so it doesn't dominate the road view. */
+  .clock {
+    top: 16px;
+    left: 16px;
+    font-size: 2.6em;
+    letter-spacing: -2px;
+  }
+  /* Speedometer: pmndrs places the gauge bottom-left; with our touch
+     D-pad in the same corner they collide. Move gauge up a bit. */
+  .speed {
+    bottom: max(220px, env(safe-area-inset-bottom)) !important;
+    left: 12px !important;
+    transform: scale(0.78) !important;
+    transform-origin: bottom left !important;
+  }
+  /* Help button stays top-right but bigger so it's tappable. */
+  .help button {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 20px !important;
+  }
+  /* Sound button — increase tap area. */
+  .sound {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  /* The pmndrs leaderboard / pickcolor sidebars are desktop chrome —
+     hide on small. They're toggled by keyboard 'l' / 'p' which the
+     player doesn't have anyway. */
+  .leaderboard,
+  .pickcolor {
+    display: none !important;
+  }
+}
+
+/* Landscape mobile: D-pad eats the left edge. Pull gauge to top-right
+   so it doesn't fight the touch surfaces at the bottom. */
+@media (max-width: 768px) and (orientation: landscape),
+       (pointer: coarse) and (orientation: landscape) {
+  .clock {
+    top: 8px;
+    left: 12px;
+    font-size: 2em;
+  }
+  .speed {
+    bottom: 16px !important;
+    left: 50% !important;
+    transform: translateX(-50%) scale(0.7) !important;
+    transform-origin: bottom center !important;
+  }
+}

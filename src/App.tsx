@@ -6,7 +6,7 @@ import { Sky, Environment, PerspectiveCamera, OrbitControls, Stats } from '@reac
 
 import type { DirectionalLight } from 'three'
 
-import { HideMouse, Keyboard } from './controls'
+import { HideMouse, Keyboard, TouchControls } from './controls'
 import { Cameras } from './effects'
 import { BoundingBox, Ramp, Track, Vehicle, Goal, Train, Heightmap } from './models'
 import { angularVelocity, levelLayer, position, rotation, useStore } from './store'
@@ -80,6 +80,7 @@ export function App(): JSX.Element {
       <PickColor />
       <HideMouse />
       <Keyboard />
+      <TouchControls />
     </Intro>
   )
 }
