@@ -109,6 +109,16 @@ export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = 
     [maxSpeed],
   )
 
+  // V3 D3 (B): keep mutation.position / .rotation in sync so the resume
+  // snapshot writer (App.tsx setInterval) and Hud.pause can read live
+  // chassis state. cannon v6's useBox ref doesn't auto-update, so we
+  // mirror via subscribe. cannon emits rotation as
+  // [x, y, z, EulerOrder] — slice to 3 numbers because anything that
+  // consumes mutation.rotation (resume snapshot, then Intro's
+  // api.rotation.set) only wants the angles.
+  useLayoutEffect(() => api.position.subscribe((p) => (mutation.position = [p[0], p[1], p[2]])), [api])
+  useLayoutEffect(() => api.rotation.subscribe((r) => (mutation.rotation = [r[0], r[1], r[2]])), [api])
+
   let camera: Camera
   let controls: Controls
   useFrame((_, delta) => {

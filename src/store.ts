@@ -250,6 +250,14 @@ interface Mutation {
   sliding: boolean
   speed: number
   velocity: [number, number, number]
+  // V3 D3 (B): chassis world position + rotation, kept up-to-date by
+  // Chassis.tsx via api.position.subscribe / api.rotation.subscribe.
+  // The ref returned by useBox in @react-three/cannon v6 does not
+  // auto-write position back to the Object3D, so reading
+  // chassisBody.current.position gives spawn coords forever. The
+  // resume snapshot writer (App.tsx) reads from here instead.
+  position: [number, number, number]
+  rotation: [number, number, number]
 }
 
 export const mutation: Mutation = {
@@ -259,6 +267,8 @@ export const mutation: Mutation = {
   sliding: false,
   speed: 0,
   velocity: [0, 0, 0],
+  position: [position[0], position[1], position[2]],
+  rotation: [rotation[0], rotation[1], rotation[2]],
 }
 
 // Make the store shallow compare by default

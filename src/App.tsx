@@ -31,17 +31,18 @@ export function App(): JSX.Element {
   }
 
   // V3 D3 (B): periodic 1500 ms snapshot writer. Active only while
-  // ready=true and !finished. Reads chassis position via the store
-  // refs, plus mutation.speed / mutation.boost for live values.
+  // ready=true and !finished. Reads chassis position from
+  // mutation.position / mutation.rotation, which Chassis.tsx keeps
+  // in sync via api.position.subscribe / api.rotation.subscribe.
+  // (cannon v6's useBox ref doesn't auto-update, so chassisBody.current
+  // .position would always be the spawn coord.)
   useEffect(() => {
     if (!ready || finished) return
     const id = setInterval(() => {
       const s = getState()
-      const chassis = s.chassisBody?.current
-      if (!chassis) return
       saveResumeSnapshot({
-        pos: [chassis.position.x, chassis.position.y, chassis.position.z],
-        rot: [chassis.rotation.x, chassis.rotation.y, chassis.rotation.z],
+        pos: [...mutation.position] as [number, number, number],
+        rot: [...mutation.rotation] as [number, number, number],
         speed: mutation.speed,
         boost: mutation.boost,
         elapsedMs: s.start ? Math.max(0, Date.now() - s.start) : 0,

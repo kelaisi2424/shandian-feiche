@@ -47,21 +47,27 @@ export function Hud(): JSX.Element | null {
     // store; if they're missing (race not really running) we still
     // write a tiny snapshot the home flow can decode-or-discard.
     const s = getState()
-    const chassis = s.chassisBody?.current
-    let pos: [number, number, number] | undefined
-    let rot: [number, number, number] | undefined
-    if (chassis) {
-      pos = [chassis.position.x, chassis.position.y, chassis.position.z]
-      rot = [chassis.rotation.x, chassis.rotation.y, chassis.rotation.z]
-    }
+    // V3 D3 (B): read live chassis state from mutation, NOT from
+    // chassisBody.current — see App.tsx setInterval comment.
     const elapsedMs = s.start ? Math.max(0, Date.now() - s.start) : 0
     saveResumeSnapshot({
-      pos,
-      rot,
+      pos: [...mutation.position] as [number, number, number],
+      rot: [...mutation.rotation] as [number, number, number],
       speed: mutation.speed,
       boost: mutation.boost,
       elapsedMs,
     })
+    // V3 D3 (B): release auto-throttle and brake the car. Without this
+    // the engine keeps applying force during pause-and-resume, so by
+    // the time the resume teleport fires the chassis has already
+    // drifted hundreds of units along the track.
+    s.actions.forward(false)
+    s.actions.left(false)
+    s.actions.right(false)
+    s.actions.boost(false)
+    s.actions.brake(false)
+    s.api?.velocity.set(0, 0, 0)
+    s.api?.angularVelocity.set(0, 0, 0)
     // Drop `ready` — Intro renders the splash again with a 继续本局 CTA.
     set({ ready: false })
   }
