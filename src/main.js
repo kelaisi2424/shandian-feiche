@@ -5296,10 +5296,23 @@ function updateCamera(dt) {
   // in front of the car). Deriving direction from displacement is
   // immune to whichever +Z/-Z convention the visual chain ends up at.
   //
-  // Tunables (per spec):
-  const followDist = 7.5
-  const camHeight  = 3.4
-  const lookAhead  = 10.0
+  // V1.9.7-3: tunables now sourced from window.__camTune so DevTools
+  // edits + per-mode tweaks land without a rebuild. Defaults below
+  // match the pre-V1.9.7 hard-coded constants if __camTune is missing.
+  // The new values from cameraTune.js (followDist 11.5 / camHeight 3.0
+  // / lookAhead 5.0) push the player car to ~13% screen width.
+  const _camTuneCfg = (typeof window !== "undefined" && window.__camTune) || {}
+  const followDist = _camTuneCfg.followDist ?? 7.5
+  const camHeight  = _camTuneCfg.cameraHeight ?? 3.4
+  const lookAhead  = _camTuneCfg.lookAhead ?? 10.0
+  // FOV applied here so resize()'s aspect-based fov is overridden each
+  // frame to the tuned value. Updates the projection matrix only when
+  // the value actually changes — avoids per-frame matrix recomputation.
+  const wantFov = _camTuneCfg.fov ?? 60
+  if (camera && Math.abs(camera.fov - wantFov) > 0.01) {
+    camera.fov = wantFov
+    camera.updateProjectionMatrix()
+  }
 
   // 1) Update lastValidMoveDir from the frame-to-frame displacement.
   if (_camLastPlayerPosInit) {
