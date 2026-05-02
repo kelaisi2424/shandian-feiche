@@ -57,6 +57,12 @@ import "./utils/layoutMode.js"
 // Side-effect import that mounts window.__camTune. updateCamera reads
 // it every frame so console edits take effect on the next tick.
 import "./utils/cameraTune.js"
+// V1.9.7-5: in-race resume snapshot helpers.
+import {
+  saveResumeSnapshot,
+  readResumeSnapshot,
+  clearResumeSnapshot,
+} from "./utils/resume.js"
 import "./styles.css"
 
 // ────────────────────────────────────────────────────────────────────
@@ -2356,6 +2362,27 @@ function applyTrack() {
   }
 }
 
+// V1.9.7-5: write a resume snapshot every 1.5 s while the race is
+// running. Cheap — six numbers + a timestamp. Cleared on finish /
+// return-to-menu / restart so the home page only offers a resume
+// when there's an unfinished race actually pending.
+function maybeWriteResumeSnapshot(now) {
+  if (state.mode !== "playing") return
+  if (state.finished) return
+  if (state.countdown > 0) return            // no point saving the start grid
+  if ((state._resumeLast ?? 0) + 1500 > now) return
+  state._resumeLast = now
+  const elapsedMs = Math.max(0, now - (state.startedAt ?? now) - (state.pauseAcc ?? 0))
+  saveResumeSnapshot({
+    levelId: state.level?.id ?? null,
+    progress: state.progress ?? 0,
+    coins: state.coins ?? 0,
+    hits: state.hits ?? 0,
+    elapsedMs,
+    nitroCharges: state.nitroCharges ?? 0,
+  })
+}
+
 // V1.9.7-2: tripwire. If a future code path mutates scene.fog or
 // scene.background mid-race we want a console.warn so the regression
 // shows up in playtest. Cheap — runs once per second, not per frame.
@@ -3467,12 +3494,42 @@ function spawnCheckpoints() {
 // controls
 // ────────────────────────────────────────────────────────────────────
 function bindControls() {
-  $("startGame").addEventListener("click", startRace)
+  // V1.9.7-5: home CTA routes to resume vs fresh start based on whether
+  // refreshHomeResumeUI saw a valid snapshot. cta.dataset.resume === '1'
+  // means the snapshot is current; click → startResumeRace.
+  $("startGame").addEventListener("click", () => {
+    const cta = $("startGame")
+    if (cta?.dataset?.resume === "1") {
+      startResumeRace()
+    } else {
+      startRace()
+    }
+  })
+  // V1.9.7-5: 重新开始 alongside the resume CTA — drops the snapshot
+  // and starts the level fresh (startRace clears resume on entry).
+  if ($("resumeRestartBtn")) {
+    $("resumeRestartBtn").addEventListener("click", () => {
+      clearResumeSnapshot()
+      refreshHomeResumeUI()
+      startRace()
+    })
+  }
   $("pauseBtn").addEventListener("click", pauseRace)
   $("resumeBtn").addEventListener("click", resumeRace)
-  $("homeBtn").addEventListener("click", () => setMode("menu"))
+  $("homeBtn").addEventListener("click", () => {
+    // V1.9.7-5: leaving via the pause panel's 返回首页 confirms the
+    // user is done with this run — drop the resume so the home page
+    // doesn't offer to come back to a race they intentionally exited.
+    clearResumeSnapshot()
+    refreshHomeResumeUI()
+    setMode("menu")
+  })
   $("againBtn").addEventListener("click", startRace)
-  $("resultHomeBtn").addEventListener("click", () => setMode("menu"))
+  $("resultHomeBtn").addEventListener("click", () => {
+    clearResumeSnapshot()
+    refreshHomeResumeUI()
+    setMode("menu")
+  })
   $("resetBtn").addEventListener("click", startRace)
   // V1.8.8: in-pause restart / return-to-levels / return-home
   if ($("pauseRestartBtn")) {
@@ -3660,8 +3717,36 @@ function setMode(mode) {
     refreshTopPlayerInfo()
     refreshHeroCard()
     refreshUltraCompactStrip()
+    refreshHomeResumeUI()
   } else {
     stopHeroScene()
+  }
+}
+
+// V1.9.7-5: when the home screen is shown, check for a valid resume
+// snapshot. If present, swap the main CTA's text to "继续本局" and
+// expose a #resumeRestartBtn that lets the user start the level over
+// from scratch. If no resume, fall back to the V1.9.1 "开始比赛" CTA.
+function refreshHomeResumeUI() {
+  const cta = $("startGame")
+  if (!cta) return
+  const main = cta.querySelector(".hero-cta-main")
+  const sub = cta.querySelector(".hero-cta-sub")
+  const resumeRow = $("homeResumeRow")
+  const restartBtn = $("resumeRestartBtn")
+  const snap = readResumeSnapshot()
+  if (snap && snap.levelId) {
+    if (main) main.textContent = "继续本局"
+    if (sub) sub.textContent = "RESUME RACE"
+    cta.dataset.resume = "1"
+    if (resumeRow) resumeRow.style.display = ""
+    if (restartBtn) restartBtn.style.display = ""
+  } else {
+    if (main) main.textContent = "开始比赛"
+    if (sub) sub.textContent = "START RACE"
+    delete cta.dataset.resume
+    if (resumeRow) resumeRow.style.display = "none"
+    if (restartBtn) restartBtn.style.display = "none"
   }
 }
 
@@ -4368,7 +4453,86 @@ function bindAudioUnlock() {
   addEventListener("keydown", handler, { once: false })
 }
 
+// V1.9.7-5: resume an unfinished race from a localStorage snapshot.
+// Same setup path as startRace (rebuild car, apply level, spawn world)
+// then apply the snapshot deltas: progress, coins, hits, elapsedMs,
+// nitroCharges. The countdown is shorter (1 s) since the player just
+// rejoined a race they were already running.
+function startResumeRace() {
+  const snap = readResumeSnapshot()
+  if (!snap || !snap.levelId) {
+    // Stale or missing snapshot — fall back to a clean start.
+    return startRace()
+  }
+  // Make sure the level the snapshot references is still the current
+  // level (the player may have changed selection in between). Switch
+  // to the snapshot's level so applyLevel picks it up.
+  Save.set({ currentLevel: snap.levelId })
+  // Run the regular setup path. We can't reuse startRace directly
+  // because it overwrites the resume fields we want to restore.
+  rebuildPlayerCar()
+  applyLevel()
+  buildTrack()
+  buildScenery()
+  spawnPickups()
+  spawnRamps()
+  spawnCheckpoints()
+  spawnRivals()
+  spawnGhost()
+  // Reset run state, then patch in the snapshot.
+  state.speed = 0
+  state.lateral = 0
+  state.progress = Math.max(0, snap.progress ?? 0)
+  _camLatSmoothed = 0
+  _camLastPlayerPosInit = false
+  state.y = 0.22
+  state.vy = 0
+  state.steer = 0
+  state.gas = 0
+  state.brake = 0
+  state.nitroCharges = Math.max(0, snap.nitroCharges ?? 1)
+  state.nitroTime = 0
+  state.coins = Math.max(0, snap.coins ?? 0)
+  state.hits = Math.max(0, snap.hits ?? 0)
+  state.shake = 0
+  state.countdown = 1                       // shorter: just GO
+  // startedAt is computed so that "now - startedAt - pauseAcc" equals
+  // snap.elapsedMs immediately after countdown finishes.
+  const elapsed = snap.elapsedMs ?? 0
+  state.startedAt = performance.now() + 1000 - elapsed
+  state.pauseAcc = 0
+  state.finished = false
+  state.finishedAt = 0
+  state.lastRivalHit = 0
+  state.airborne = false
+  state.topSpeed = 0
+  state._finalRank = null
+  state.beatGhost = false
+  state.timedOut = false
+  state._lastRank = null
+  state._lastOvertakeAt = 0
+  pickups.forEach((p) => {
+    p.taken = false
+    p.mesh.visible = true
+  })
+  ramps.forEach((r) => (r.used = false))
+  checkpoints.forEach((c) => (c.passed = false))
+  // Place player at the resumed progress, not at 0.
+  const startPos = progressToWorld(state.progress, 0, state.y)
+  player.position.copy(startPos)
+  player.rotation.set(0, 0, 0)
+  $("hud")?.classList.remove("hud-finishing")
+  setMode("playing")
+  runCountdown()
+  toast("继续本局", 800)
+}
+
 function startRace() {
+  // V1.9.7-5: a fresh-start path always invalidates the resume so a
+  // mid-race exit + 重新开始 click doesn't keep offering to resume the
+  // race the user just abandoned.
+  clearResumeSnapshot()
+  refreshHomeResumeUI()
   // apply currently-selected car + level BEFORE resetting world. applyLevel
   // sets state.level, plugs the level's curve/length/density into CFG and
   // updates the cosmetic backdrop. All subsequent build/spawn calls then
@@ -4595,6 +4759,9 @@ function finishRace(success = true) {
   state.finishedAt = performance.now()
   state._finalRank = computeRank()
   if (success) sfxCheckpoint()
+  // V1.9.7-5: race ended cleanly → drop the resume snapshot so the
+  // home page won't offer to resume a finished run.
+  clearResumeSnapshot()
   // V1.9.2-4: drop the bottom controls (left/right/gas/brake/nitro)
   // out of view immediately on finish so the 1.1 s grade-compute window
   // doesn't leave them visible. The HUD chips/timer up top stay
@@ -4868,6 +5035,7 @@ function loop(now) {
     updateNitroFlames()
     updateAuditGuard()
     checkEnvironmentLock(now)
+    maybeWriteResumeSnapshot(now)
   } else if (state.mode === "menu" || state.mode === "boot") {
     updateMenuCamera(now)
   } else if (state.mode === "paused" || state.mode === "result") {

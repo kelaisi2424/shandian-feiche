@@ -163,11 +163,15 @@
                   <small>操控</small>
                 </div>
               </div>
-              <!-- Bottom: single primary CTA. -->
+              <!-- Bottom: single primary CTA. V1.9.7-5: text swaps to
+                   "继续本局" when a valid resume snapshot is detected;
+                   the secondary 重新开始 button appears beside it to
+                   let the player drop the resume and start fresh. -->
               <button id="startGame" class="hero-cta-btn" aria-label="start race">
                 <span class="hero-cta-main">开始比赛</span>
                 <span class="hero-cta-sub">START RACE</span>
               </button>
+              <button id="resumeRestartBtn" class="hero-secondary-btn" style="display:none" aria-label="restart">重新开始</button>
             </div>
           </section>
 

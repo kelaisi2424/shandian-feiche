@@ -1834,6 +1834,29 @@ canvas,
   0%   { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* V1.9.7-5: home secondary CTA — "重新开始" sits beside the resume
+   CTA when a snapshot is detected. Smaller, ghost-style so the
+   primary 继续本局 still owns the hierarchy. Hidden by default
+   (display:none from inline style); refreshHomeResumeUI flips it. */
+.hero-secondary-btn {
+  margin-top: 8px;
+  height: 36px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(207, 224, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: calc(var(--ui) * 0.6);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.hero-secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(38, 214, 255, 0.4);
+}
 .nitro-wrap.empty .nitro-btn {
   filter: grayscale(0.65) brightness(0.6);
   animation: none;
