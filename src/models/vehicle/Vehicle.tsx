@@ -74,10 +74,24 @@ export function Vehicle({ angularVelocity, children, position, rotation }: Vehic
       controls.forward || controls.backward ? force * (controls.forward && !controls.backward ? (isBoosting ? -1.5 : -1) : 1) : 0,
       delta * 20,
     )
-    steeringValue = lerp(steeringValue, controls.left || controls.right ? steer * (controls.left && !controls.right ? 1 : -1) : 0, delta * 20)
+    // V3 D4: high-speed steering attenuation. Pre-D4 the same `steer`
+    // value (0.28) was applied at 5 km/h and at 130 km/h, so any sharp
+    // input near max speed snapped the car sideways and flipped it.
+    // Now scales 1.0 at low speed → 0.35 at high speed.
+    const steerSpeedFactor = Math.max(0.35, 1 - Math.min(speed / (maxSpeed * 0.7), 0.65))
+    const steerTarget = controls.left || controls.right ? steer * steerSpeedFactor * (controls.left && !controls.right ? 1 : -1) : 0
+    steeringValue = lerp(steeringValue, steerTarget, delta * 20)
     for (i = 2; i < 4; i++) api.applyEngineForce(speed < maxSpeed ? engineValue : 0, i)
     for (i = 0; i < 2; i++) api.setSteeringValue(steeringValue, i)
-    for (i = 2; i < 4; i++) api.setBrake(controls.brake ? (controls.forward ? maxBrake / 1.5 : maxBrake) : 0, i)
+    // V3 D4: low-speed drift gate. Below 18 mph (~30 km/h) the brake
+    // key acts as a soft slowdown only (25 % of maxBrake). This stops
+    // a stationary or near-stationary car from locking the rear wheels
+    // and pivot-flipping when the player taps "漂移". Above the
+    // threshold the original full-brake drift behaviour kicks in.
+    const driftActive = speed >= 18
+    const brakeRaw = controls.brake ? (controls.forward ? maxBrake / 1.5 : maxBrake) : 0
+    const brakeForce = controls.brake ? (driftActive ? brakeRaw : maxBrake * 0.25) : 0
+    for (i = 2; i < 4; i++) api.setBrake(brakeForce, i)
 
     if (!editor) {
       if (camera === 'FIRST_PERSON') {

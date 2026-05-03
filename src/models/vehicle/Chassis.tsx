@@ -67,12 +67,18 @@ const gears = 10
 const c = new Color()
 const v = new Vector3()
 
-// V3 D3 (C): mass 500 → 820. See store.ts vehicleConfig comment for
-// the matching engine-force/brake bumps. Heavier chassis settles
-// faster on suspension and resists tipping at speed — it also makes
-// AutoRecover's tilt threshold less hair-trigger because the car's
-// own inertia keeps it upright through small bumps.
-export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = [2, 1.1, 4.7], mass = 820, children, ...props }, ref) => {
+// V3 D3 (C) → V3 D4: chassis collision tuning for anti-flip.
+//   - mass 500 → 820 (D3) — heavier inertia.
+//   - args height 1.1 → 0.8 (D4) — lower box, width:height ratio
+//     1.82 → 2.5, much harder to roll. Wheels still raycast from
+//     wheelInfo.chassisConnectionPointLocal so geometry is fine.
+//   - linearDamping 0.01 → 0.18 (D4) — kills the floaty post-collide
+//     slide that caused the chassis to keep tumbling for half a second.
+//   - angularDamping 0.01 → 0.55 (D4) — hugely reduces how quickly a
+//     side-bump turns into a barrel roll. This is the single biggest
+//     anti-flip lever; combined with the lower box it stops the
+//     "one tap of drift = on the roof" failure mode.
+export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = [2, 0.8, 4.7], mass = 820, children, ...props }, ref) => {
   const glass = useRef<MaterialMesh>(null!)
   const brake = useRef<MaterialMesh>(null!)
   const wheel = useRef<Group>(null)
@@ -91,7 +97,7 @@ export const Chassis = forwardRef<Group, PropsWithChildren<BoxProps>>(({ args = 
     [],
   )
 
-  const [, api] = useBox(() => ({ mass, args, allowSleep: false, onCollide, ...props }), ref)
+  const [, api] = useBox(() => ({ mass, args, allowSleep: false, onCollide, linearDamping: 0.18, angularDamping: 0.55, ...props }), ref)
 
   useEffect(() => {
     setState({ api })

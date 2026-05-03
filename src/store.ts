@@ -213,7 +213,28 @@ const useStoreImpl = create<IState>((set: SetState<IState>, get: GetState<IState
         state.api?.rotation.set(...rotation)
         state.api?.velocity.set(0, 0, 0)
 
-        return { ...state, finished: 0, start: 0 }
+        // V3 D4: re-engage auto-throttle and clear stuck inputs. The
+        // user-reported failure mode was "翻车恢复后车停住不动" —
+        // root cause was that AutoRecover called reset() but
+        // controls.forward had been turned off somewhere upstream
+        // (e.g. Hud.pause path, lost Touch pointer, or the user briefly
+        // toggling backward). reset() now is the canonical "ready to
+        // race" state: forward true, every other input clean.
+        return {
+          ...state,
+          finished: 0,
+          start: 0,
+          controls: {
+            ...state.controls,
+            forward: true,
+            backward: false,
+            brake: false,
+            left: false,
+            right: false,
+            boost: false,
+            honk: false,
+          },
+        }
       })
     },
   }
